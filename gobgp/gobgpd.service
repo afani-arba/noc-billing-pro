@@ -1,0 +1,35 @@
+[Unit]
+Description=GoBGP Daemon — NOC Billing Pro BGP Content Steering
+Documentation=https://github.com/osrg/gobgp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+
+# Jalankan gobgpd dengan config di /etc/gobgpd/gobgpd.conf
+# --api-hosts: gRPC API untuk gobgp CLI (lokal only)
+# --log-level: info untuk produksi, debug saat troubleshooting
+ExecStart=/usr/local/bin/gobgpd \
+    -f /etc/gobgpd/gobgpd.conf \
+    --api-hosts 0.0.0.0:50051 \
+    --log-level info
+
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -SIGTERM $MAINPID
+
+KillMode=process
+Restart=always
+RestartSec=5
+
+# Log ke file terpisah agar mudah dimonitor
+StandardOutput=append:/var/log/gobgpd.log
+StandardError=append:/var/log/gobgpd.log
+
+# Limit resource
+LimitNPROC=512
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

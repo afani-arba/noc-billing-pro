@@ -1,0 +1,15 @@
+[Unit]
+Description=GoBGP Daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/gobgpd -f /etc/gobgpd/mini.conf --api-hosts 127.0.0.1:50051 --log-level info
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/gobgpd.log
+StandardError=append:/var/log/gobgpd.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+VENDOR MikroTik 14988
+BEGIN-VENDOR MikroTik
+
+ATTRIBUTE MikroTik-Recv-Limit 1 integer
+ATTRIBUTE MikroTik-Xmit-Limit 2 integer
+ATTRIBUTE MikroTik-Group 3 string
+ATTRIBUTE MikroTik-Wireless-Forward 4 integer
+ATTRIBUTE MikroTik-Wireless-Skip-Dot1x 5 integer
+ATTRIBUTE MikroTik-Wireless-Enc-Algo 6 integer
+ATTRIBUTE MikroTik-Wireless-Enc-Key 7 string
+ATTRIBUTE MikroTik-Rate-Limit 8 string
+ATTRIBUTE MikroTik-Realm 9 string
+
+END-VENDOR MikroTik

@@ -1,0 +1,76 @@
+[global.config]
+  as = 65000
+  router-id = "10.254.254.254"
+
+[[neighbors]]
+  [neighbors.config]
+    neighbor-address = "10.254.254.251"
+    peer-as = 65004
+    description = "MikroTik-251"
+  [neighbors.ebgp-multihop.config]
+    enabled = true
+    multihop-ttl = 10
+  [neighbors.apply-policy.config]
+    default-import-policy = "accept-route"
+    default-export-policy = "accept-route"
+    export-policy-list = ["policy-251"]
+  [[neighbors.afi-safis]]
+    [neighbors.afi-safis.config]
+      afi-safi-name = "ipv4-unicast"
+
+[[neighbors]]
+  [neighbors.config]
+    neighbor-address = "10.254.254.252"
+    peer-as = 65005
+    description = "MikroTik-252"
+  [neighbors.ebgp-multihop.config]
+    enabled = true
+    multihop-ttl = 10
+  [neighbors.apply-policy.config]
+    default-import-policy = "accept-route"
+    default-export-policy = "accept-route"
+    export-policy-list = ["policy-252"]
+  [[neighbors.afi-safis]]
+    [neighbors.afi-safis.config]
+      afi-safi-name = "ipv4-unicast"
+
+[defined-sets]
+  [[defined-sets.bgp-community-sets]]
+    community-set-name = "comm-251"
+    community-list = ["65000:251"]
+  [[defined-sets.bgp-community-sets]]
+    community-set-name = "comm-252"
+    community-list = ["65000:252"]
+  [[defined-sets.bgp-community-sets]]
+    community-set-name = "all-steering"
+    community-list = ["65000:251", "65000:252"]
+
+[[policy-definitions]]
+  name = "policy-251"
+  [[policy-definitions.statements]]
+    name = "allow-my-community"
+    [policy-definitions.statements.conditions.bgp-conditions]
+      community-set = "comm-251"
+    [policy-definitions.statements.actions]
+      route-disposition = "accept-route"
+  [[policy-definitions.statements]]
+    name = "reject-other-steering"
+    [policy-definitions.statements.conditions.bgp-conditions]
+      community-set = "all-steering"
+    [policy-definitions.statements.actions]
+      route-disposition = "reject-route"
+
+[[policy-definitions]]
+  name = "policy-252"
+  [[policy-definitions.statements]]
+    name = "allow-my-community"
+    [policy-definitions.statements.conditions.bgp-conditions]
+      community-set = "comm-252"
+    [policy-definitions.statements.actions]
+      route-disposition = "accept-route"
+  [[policy-definitions.statements]]
+    name = "reject-other-steering"
+    [policy-definitions.statements.conditions.bgp-conditions]
+      community-set = "all-steering"
+    [policy-definitions.statements.actions]
+      route-disposition = "reject-route"

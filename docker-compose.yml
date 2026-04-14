@@ -1,0 +1,285 @@
+# NOC-Billing-Pro — docker-compose.yml
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  NOC-Billing-Pro                                                          ║
+# ║  Edition  : BILLING PRO (Enterprise Full — excl. SD-WAN & Routing)       ║
+# ║  Services : Backend, Frontend, MongoDB, GenieACS, noc-updater             ║
+# ║                                                                           ║
+# ║  Fitur Aktif:                                                             ║
+# ║    1.  Dashboard Interface                                                ║
+# ║    2.  Device Hub                                                         ║
+# ║    3.  GenieACS + ZTP (TR-069)                                            ║
+# ║    4.  RADIUS Server                                                      ║
+# ║    5.  Billing PPPoE                                                      ║
+# ║    6.  Billing Hotspot                                                    ║
+# ║    7.  Laporan Keuangan                                                   ║
+# ║    8.  CS Command Center (WA)                                             ║
+# ║    9.  Portal Pelanggan                                                   ║
+# ║    10. Sentinel Peering Eye                                               ║
+# ║    11. BGP Content Steering                                               ║
+# ║    12. Pengaturan Platform                                                ║
+# ║    13. Integrasi & Otomasi                                                ║
+# ║    14. User Management                                                    ║
+# ║    15. Update Aplikasi                                                    ║
+# ║    16. Lisensi Sistem                                                     ║
+# ║                                                                           ║
+# ║  PORT MAPPING (tidak konflik dengan master & billing-lite):               ║
+# ║    Frontend    : 8082                                                     ║
+# ║    Backend API : 8002                                                     ║
+# ║    Syslog UDP  : 5142                                                     ║
+# ║    RADIUS Auth : 1816  → container:1812                                   ║
+# ║    RADIUS Acct : 1817  → container:1813                                   ║
+# ║    GenieACS CWMP: 7548 → container:7547                                   ║
+# ║    GenieACS NBI : 7558 → container:7557                                   ║
+# ║    GenieACS FS  : 7568 → container:7567                                   ║
+# ║    GenieACS UI  : 3001 → container:3000                                   ║
+# ║                                                                           ║
+# ║  Usage:                                                                   ║
+# ║    docker compose pull && docker compose up -d                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+services:
+  # ═════════════════════════════════════════════════════════════════
+  # 1. NOC BILLING PRO — BACKEND
+  # ═════════════════════════════════════════════════════════════════
+  noc-backend:
+    image: ghcr.io/afani-arba/noc-sentinel-v3-backend:latest
+    container_name: noc-billing-pro-backend
+    restart: always
+    logging: *default-logging
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/nocbillingpro
+      # ── Edition Enterprise (aktifkan semua fitur billing) ─────────
+      - APP_EDITION=enterprise
+      # ── Billing ───────────────────────────────────────────────────
+      - ENABLE_BILLING_SCHEDULER=true
+      - ENABLE_ISOLIR=true
+      - ENABLE_HOTSPOT_CLEANUP=true
+      # ── Core Monitoring ───────────────────────────────────────────
+      - ENABLE_POLLING=true
+      - ENABLE_SSE=true
+      - ENABLE_SYSLOG=true
+      - ENABLE_BACKUP=true
+      - ENABLE_ROUTING_ALERTS=true
+      - ENABLE_SPEEDTEST=true
+      - ENABLE_SESSION_CACHE=true
+      - ENABLE_SNMP_POLLER=true
+      # ── RADIUS Server (Hotspot Auth) ──────────────────────────────
+      - ENABLE_RADIUS=true
+      # ── GenieACS Sync (TR-069 / ZTP) ─────────────────────────────
+      - ENABLE_GENIEACS_SYNC=true
+      - GENIEACS_URL=http://genieacs-nbi:7557
+      - GENIEACS_USERNAME=admin
+      # ── GoBGP: daemon berjalan di HOST, backend connect via nsenter ─────
+      # GoBGP TIDAK dijalankan sebagai container — install di HOST Ubuntu
+      # menggunakan: sudo bash gobgp/install-gobgp.sh
+      - GOBGPD_HOST=172.17.0.1         # Docker bridge gateway ke host
+      - ENABLE_BGP_STEERING=true
+      # ── Features DISABLED (tidak diperlukan di Billing Pro) ───────
+      - ENABLE_ROUTE_OPTIMIZER=false   # SD-WAN Advanced Route Optimizer
+      - ENABLE_NETWATCH_POLLER=false   # Netwatch (sudah digest by polling)
+      - ENABLE_NETFLOW=false           # NetFlow (tidak diperlukan)
+      # ── Ports ─────────────────────────────────────────────────────
+      - SYSLOG_PORT=5142
+      - FIREBASE_CREDENTIALS_PATH=/app/firebase-service-account.json
+    ports:
+      - "8002:8000"         # Backend API (8002 = Pro, 8001 = Lite, 8000 = Master)
+      - "5142:5142/udp"     # Syslog UDP
+
+      # ── RADIUS Server Ports ──────────────────────────────────────────────────
+      # SKENARIO A (VPS Terpisah): ubah ke 1812:1812/udp dan 1813:1813/udp
+      # Konfigurasi MikroTik: /radius add address=IP-VPS secret=... port=1812
+      #
+      # SKENARIO B (VPS Sama, default): port 1816/1817 agar tidak konflik
+      # Konfigurasi MikroTik: /radius add address=IP-VPS secret=... port=1816
+      - "1816:1812/udp"     # RADIUS Auth — host:1816 → container:1812
+      - "1817:1813/udp"     # RADIUS Acct — host:1817 → container:1813
+
+      # ── BGP Port ─────────────────────────────────────────────────────────────
+      # Port 179/tcp TIDAK di-mapping di sini karena GoBGP berjalan di HOST
+      # Ubuntu langsung (bukan container). GoBGP sudah listen 0.0.0.0:179
+      # secara langsung. Pastikan UFW/iptables membuka port 179:
+      #   sudo ufw allow 179/tcp
+    privileged: true
+    pid: "host"             # Diperlukan agar backend bisa nsenter ke GoBGP di host
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json
+      - noc_billing_pro_update_data:/update-data
+      - ./:/app-host:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      genieacs-nbi:
+        condition: service_started
+
+  # ═════════════════════════════════════════════════════════════════
+  # 2. NOC BILLING PRO — FRONTEND
+  # ═════════════════════════════════════════════════════════════════
+  noc-frontend:
+    image: ghcr.io/afani-arba/noc-sentinel-v3-frontend:latest
+    container_name: noc-billing-pro-frontend
+    restart: always
+    logging: *default-logging
+    ports:
+      - "8082:80"             # Dashboard Web → http://IP:8082
+    depends_on:
+      - noc-backend
+
+  # ═════════════════════════════════════════════════════════════════
+  # 3. DATABASE MONGODB
+  # ═════════════════════════════════════════════════════════════════
+  mongodb:
+    image: mongo:7.0
+    container_name: noc-billing-pro-mongodb
+    restart: always
+    logging: *default-logging
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.75"]
+    mem_limit: 1500m
+    memswap_limit: 2g
+    volumes:
+      - noc_billing_pro_mongodb_data:/data/db
+    expose:
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ═════════════════════════════════════════════════════════════════
+  # 4. GENIEACS — TR-069 ACS Server (Fitur #3: GenieACS + ZTP)
+  # ═════════════════════════════════════════════════════════════════
+
+  # GenieACS CWMP — antarmuka CPE (router) TR-069
+  genieacs-cwmp:
+    image: drumsergio/genieacs:latest
+    container_name: noc-billing-pro-genieacs-cwmp
+    restart: always
+    logging: *default-logging
+    command: genieacs-cwmp
+    environment:
+      - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/cwmp-access.log
+      - GENIEACS_DEBUG=false
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_NBI_URL=http://genieacs-nbi:7557
+    ports:
+      - "7548:7547"           # CWMP (port standar 7547 geser ke 7548 untuk tidak konflik)
+    volumes:
+      - noc_billing_pro_genieacs_logs:/var/log/genieacs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # GenieACS NBI — North Bound Interface (API backend NOC ↔ GenieACS)
+  genieacs-nbi:
+    image: drumsergio/genieacs:latest
+    container_name: noc-billing-pro-genieacs-nbi
+    restart: always
+    logging: *default-logging
+    command: genieacs-nbi
+    environment:
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_DEBUG=false
+    expose:
+      - "7557"                # Internal only — diakses oleh noc-backend
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # GenieACS FS — File Server (untuk firmware & config provisioning ZTP)
+  genieacs-fs:
+    image: drumsergio/genieacs:latest
+    container_name: noc-billing-pro-genieacs-fs
+    restart: always
+    logging: *default-logging
+    command: genieacs-fs
+    environment:
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_DEBUG=false
+    ports:
+      - "7568:7567"           # File Server (port standar 7567 geser ke 7568)
+    volumes:
+      - noc_billing_pro_genieacs_logs:/var/log/genieacs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # GenieACS UI — Web interface manajemen GenieACS
+  genieacs-ui:
+    image: drumsergio/genieacs:latest
+    container_name: noc-billing-pro-genieacs-ui
+    restart: always
+    logging: *default-logging
+    command: genieacs-ui
+    environment:
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_NBI_URL=http://genieacs-nbi:7557
+      - GENIEACS_DEBUG=false
+    ports:
+      - "3001:3000"           # GenieACS UI → http://IP:3001 (3000 = master)
+    depends_on:
+      - genieacs-nbi
+
+  # ═════════════════════════════════════════════════════════════════
+  # 5. CLOUDFLARE TUNNEL (Opsional — uncomment & isi TOKEN)
+  # ═════════════════════════════════════════════════════════════════
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: noc-billing-pro-cloudflared
+  #   restart: always
+  #   command: tunnel run
+  #   environment:
+  #     - TUNNEL_TOKEN=ISI_TOKEN_CLOUDFLARE_ANDA
+
+  # ═════════════════════════════════════════════════════════════════
+  # 6. NOC UPDATER — Auto-update via UI Dashboard
+  # ═════════════════════════════════════════════════════════════════
+  noc-updater:
+    image: docker:27-cli
+    container_name: noc-billing-pro-updater
+    restart: always
+    logging: *default-logging
+    working_dir: /app-host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/app-host
+      - noc_billing_pro_update_data:/update-data
+      - /root/.docker/config.json:/root/.docker/config.json:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "noc-billing-pro updater siap memantau trigger update..."
+        while true; do
+          if [ -f /update-data/.update-trigger ]; then
+            echo "Trigger update terdeteksi!"
+            rm -f /update-data/.update-trigger
+            echo '{"done":false,"success":null}' > /update-data/.update-running
+
+            CF="/app-host/docker-compose.yml"
+
+            docker compose -f "$$CF" pull noc-backend noc-frontend
+            PE=$$?
+
+            if [ $$PE -eq 0 ]; then
+              docker compose -f "$$CF" up -d --force-recreate noc-backend noc-frontend
+              echo '{"done":true,"success":true}' > /update-data/.update-running
+              echo "Update NOC Billing Pro selesai!"
+            else
+              printf '{"done":true,"success":false,"error":"pull failed: exit %s"}' "$$PE" > /update-data/.update-running
+            fi
+          fi
+          sleep 5
+        done
+
+volumes:
+  noc_billing_pro_mongodb_data:
+  noc_billing_pro_update_data:
+  noc_billing_pro_genieacs_logs:
