@@ -238,6 +238,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"BGP Steering error: {e}")
 
+    # App Traffic Metrics Poller (Global ISP per-App bandwidth counter)
+    if _svc("ENABLE_BGP_STEERING"):
+        try:
+            from services.app_metrics_poller import app_metrics_loop
+            t = asyncio.create_task(app_metrics_loop())
+            _background_tasks.append(t)
+            logger.info("App Traffic Metrics poller started (5-min interval)")
+        except Exception as e:
+            logger.error(f"App Metrics Poller error: {e}")
+
     # GenieACS Sync
     if _svc("ENABLE_GENIEACS_SYNC"):
         try:

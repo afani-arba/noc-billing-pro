@@ -2669,3 +2669,175 @@ async def ix_lookup(
         "prefixes": prefixes,
         "ix_count": len(pdb_info.get("ix_list", [])),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Global App Traffic Meter (BGP Queue-based — level ISP)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _fmt_bytes_local(b: int) -> str:
+    """Format bytes ke human-readable string."""
+    if b >= 1_000_000_000:
+        return f"{b/1_000_000_000:.2f} GB"
+    if b >= 1_000_000:
+        return f"{b/1_000_000:.2f} MB"
+    if b >= 1_000:
+        return f"{b/1_000:.1f} KB"
+    return f"{b} B"
+
+
+@router.get("/app-traffic/summary")
+async def get_app_traffic_summary(
+    days: int = Query(1, ge=1, le=30, description="Rentang hari (1-30)"),
+    user=Depends(get_current_user),
+):
+    """
+    Rekapan traffic bandwidth per Aplikasi (YouTube, Facebook, TikTok, dll)
+    di level Global ISP untuk dibuatkan Pie Chart di Dashboard.
+
+    Data bersumber dari Simple Queue MikroTik bernama 'GLOBAL_APP_<PlatformName>'.
+    Queue tersebut harus dibuat terlebih dahulu via endpoint /app-traffic/setup-script.
+
+    Return: [{platform, total_bytes, bytes_rx, bytes_tx, percent, bytes_fmt, color, icon}]
+    """
+    try:
+        from services.app_metrics_poller import get_app_traffic_summary as _get_summary
+        db = get_db()
+        data = await _get_summary(days=days)
+
+        # Enrichment: tambahkan icon + color dari catalog BGP Steering
+        catalog_map = {p["name"]: p for p in STEERING_PLATFORM_CATALOG}
+        for item in data:
+            cat = catalog_map.get(item["platform"], {})
+            item["color"] = cat.get("color", "#6366f1")
+            item["icon"]  = cat.get("icon", "🌐")
+            item["bytes_rx_fmt"]    = _fmt_bytes_local(item.get("bytes_rx", 0))
+            item["bytes_tx_fmt"]    = _fmt_bytes_local(item.get("bytes_tx", 0))
+            item["total_bytes_fmt"] = _fmt_bytes_local(item.get("total_bytes", 0))
+
+        total = sum(i.get("total_bytes", 0) for i in data)
+        return {
+            "days": days,
+            "total_bytes": total,
+            "total_bytes_fmt": _fmt_bytes_local(total),
+            "platform_count": len(data),
+            "platforms": data,
+            "note": (
+                "Data ini berasal dari Simple Queue MikroTik. "
+                "Jika kosong, pastikan Queue 'GLOBAL_APP_*' sudah dibuat via /app-traffic/setup-script."
+            ) if not data else None,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Gagal ambil data App Traffic: {e}")
+
+
+@router.get("/app-traffic/history")
+async def get_app_traffic_history(
+    platform: str = Query(..., description="Nama platform (misal: YouTube)"),
+    days: int = Query(7, ge=1, le=30, description="Rentang hari (1-30)"),
+    user=Depends(get_current_user),
+):
+    """
+    Data historis per jam untuk satu platform tertentu (untuk Line Chart).
+    Return: [{period_hour, total_bytes}]
+    """
+    try:
+        from services.app_metrics_poller import get_app_traffic_history as _get_history
+        data = await _get_history(platform=platform, days=days)
+        return {
+            "platform": platform,
+            "days": days,
+            "data_points": len(data),
+            "history": data,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Gagal ambil history App Traffic: {e}")
+
+
+@router.get("/app-traffic/setup-script")
+async def get_app_traffic_setup_script(
+    user=Depends(get_current_user),
+):
+    """
+    Generate Script MikroTik (.rsc) untuk membuat Mangle + Simple Queue tracker
+    berdasarkan BGP Steering Policies yang aktif.
+
+    Copy-paste output script ini ke Terminal Winbox MikroTik Anda.
+    Setelah Queue terbuat, poller backend akan otomatis mengambil statistiknya.
+    """
+    db = get_db()
+    policies = await db.bgp_steering_policies.find(
+        {"enabled": True}, {"_id": 0, "platform_name": 1, "color": 1}
+    ).to_list(50)
+
+    if not policies:
+        return {
+            "script": "# Tidak ada BGP Steering Policy yang aktif. Buat policy terlebih dahulu.",
+            "platform_count": 0,
+        }
+
+    catalog_map = {p["name"]: p for p in STEERING_PLATFORM_CATALOG}
+    lines = [
+        "# ═══════════════════════════════════════════════════════════════",
+        "# NOC Billing Pro — Global App Traffic Tracker Setup Script",
+        f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+        "# Copy-paste seluruh script ini ke Terminal Winbox MikroTik Anda.",
+        "# ═══════════════════════════════════════════════════════════════",
+        "",
+        "# ── STEP 1: Buat Address List dari BGP (sudah otomatis via BGP Steering) ──",
+        "# Address List bernama BGPAPP_<NamaPlatform> diisi oleh rute BGP dari GoBGP.",
+        "# Tidak perlu konfigurasi manual jika BGP Steering sudah berjalan.",
+        "",
+        "# ── STEP 2: Buat Mangle Rules untuk menandai paket per-aplikasi ──",
+    ]
+
+    for policy in policies:
+        pname = policy.get("platform_name", "")
+        safe_name = pname.replace(" ", "_").replace("/", "_")
+        lines.append(
+            f'/ip firewall mangle add chain=forward '
+            f'dst-address-list=BGPAPP_{safe_name} '
+            f'action=mark-packet new-packet-mark=PKT_{safe_name} '
+            f'passthrough=yes '
+            f'comment="NOC App Tracker: {pname}"'
+        )
+
+    lines += [
+        "",
+        "# ── STEP 3: Buat Simple Queue sebagai Traffic Counter per-aplikasi ──",
+        "# Queue ini TIDAK membatasi kecepatan (limit=0 = unlimited).",
+        "# Fungsinya hanya sebagai COUNTER untuk NOC Billing Pro membaca statistik.",
+    ]
+
+    for policy in policies:
+        pname = policy.get("platform_name", "")
+        safe_name = pname.replace(" ", "_").replace("/", "_")
+        lines.append(
+            f'/queue simple add name="GLOBAL_APP_{pname}" '
+            f'packet-marks=PKT_{safe_name} '
+            f'max-limit=0/0 '
+            f'target=0.0.0.0/0 '
+            f'comment="NOC App Counter: {pname} (DO NOT DELETE)"'
+        )
+
+    lines += [
+        "",
+        "# ── Verifikasi ──",
+        "/queue simple print where name~\"GLOBAL_APP_\"",
+        "",
+        "# Script selesai. NOC Billing Pro akan membaca queue ini setiap 5 menit.",
+    ]
+
+    script_text = "\n".join(lines)
+    return {
+        "script": script_text,
+        "platform_count": len(policies),
+        "platforms": [p.get("platform_name") for p in policies],
+        "instructions": [
+            "1. Buka Winbox → New Terminal",
+            "2. Copy seluruh script di atas",
+            "3. Paste di terminal MikroTik, tekan Enter",
+            "4. Tunggu 5-10 menit agar poller NOC Billing Pro mengambil data pertama",
+            "5. Lihat grafik di Dashboard → Peering Eye → App Traffic",
+        ],
+    }
