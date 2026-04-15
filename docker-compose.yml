@@ -56,8 +56,8 @@ services:
       - ./backend/.env
     environment:
       - MONGO_URI=mongodb://mongodb:27017/nocbillingpro
-      # ── Edition Enterprise (aktifkan semua fitur billing) ─────────
-      - APP_EDITION=enterprise
+      # ── Edition Billing Pro (license key format: ArBa-BP-XXXX-XXXX) ──
+      - APP_EDITION=billing_pro
       # ── Billing ───────────────────────────────────────────────────
       - ENABLE_BILLING_SCHEDULER=true
       - ENABLE_ISOLIR=true
@@ -229,15 +229,16 @@ services:
       - genieacs-nbi
 
   # ═════════════════════════════════════════════════════════════════
-  # 5. CLOUDFLARE TUNNEL (Opsional — uncomment & isi TOKEN)
+  # 5. CLOUDFLARE TUNNEL (Opsional — diaktifkan otomatis oleh install script jika TOKEN diisi)
   # ═════════════════════════════════════════════════════════════════
   # cloudflared:
   #   image: cloudflare/cloudflared:latest
   #   container_name: noc-billing-pro-cloudflared
   #   restart: always
+  #   network_mode: "host"
   #   command: tunnel run
   #   environment:
-  #     - TUNNEL_TOKEN=ISI_TOKEN_CLOUDFLARE_ANDA
+  #     - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
 
   # ═════════════════════════════════════════════════════════════════
   # 6. NOC UPDATER — Auto-update via UI Dashboard

@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies (untuk traceroute, ping, tzdata, dll)
+# Install system dependencies (untuk traceroute, ping, tzdata, VPN tools, dll)
 RUN apt-get update && apt-get install -y \
     traceroute \
     iputils-ping \
@@ -8,16 +8,18 @@ RUN apt-get update && apt-get install -y \
     sudo \
     sstp-client \
     ppp \
+    xl2tpd \
+    strongswan \
     iproute2 \
     iptables \
     kmod \
     procps \
     util-linux \
     wget \
-    && wget -q https://github.com/osrg/gobgp/releases/download/v3.25.0/gobgp_3.25.0_linux_amd64.tar.gz \
-    && tar -xzf gobgp_3.25.0_linux_amd64.tar.gz \
+    && wget -q https://github.com/osrg/gobgp/releases/download/v3.26.0/gobgp_3.26.0_linux_amd64.tar.gz \
+    && tar -xzf gobgp_3.26.0_linux_amd64.tar.gz \
     && mv gobgp /usr/local/bin/ \
-    && rm -f gobgpd gobgp_3.25.0_linux_amd64.tar.gz \
+    && rm -f gobgpd gobgp_3.26.0_linux_amd64.tar.gz \
     && rm -rf /var/lib/apt/lists/*
 
 # Set timezone ke WIB (Asia/Jakarta)

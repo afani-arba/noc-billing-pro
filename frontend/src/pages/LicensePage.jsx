@@ -36,32 +36,28 @@ export default function LicensePage() {
     const key = keyInput.trim();
 
     // ── LAYER 1: Validasi format client-side ───────────────────────────────────
-    const proPattern  = /^ArBa-Pro-[A-F0-9]{4}-[A-F0-9]{4}$/i;
-    const entPattern  = /^ArBa-ENT-[A-F0-9]{4}-[A-F0-9]{4}$/i;
-    const legacyNOC   = /^NOC-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/i;  // Support key lama
+    // NOC-Billing-Pro menggunakan format: ArBa-BP-XXXX-XXXX
+    const bpPattern   = /^ArBa-BP-[A-F0-9]{4}-[A-F0-9]{4}$/i;   // Billing Pro (format resmi)
+    const entPattern  = /^ArBa-ENT-[A-F0-9]{4}-[A-F0-9]{4}$/i;  // Enterprise (legacy compat)
+    const proPattern  = /^ArBa-Pro-[A-F0-9]{4}-[A-F0-9]{4}$/i;  // Pro (reject dengan pesan)
+    const legacyNOC   = /^NOC-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}$/i; // Legacy format
 
-    if (!proPattern.test(key) && !entPattern.test(key) && !legacyNOC.test(key)) {
+    if (!bpPattern.test(key) && !entPattern.test(key) && !proPattern.test(key) && !legacyNOC.test(key)) {
       toast.error(
-        `Format key tidak valid. Gunakan: ${edition === 'enterprise' ? 'ArBa-ENT-XXXX-XXXX' : 'ArBa-Pro-XXXX-XXXX'}`,
+        "Format key tidak valid. Gunakan: ArBa-BP-XXXX-XXXX (contoh: ArBa-BP-1A2B-3C4D)",
         { duration: 5000 }
       );
       return;
     }
 
-    // Edition mismatch check (frontend enforcement)
-    if (edition === "enterprise" && proPattern.test(key)) {
+    // Pro key tidak berlaku di Billing Pro
+    if (proPattern.test(key)) {
       toast.error(
-        "Anda menggunakan NOC-Sentinel Enterprise. " +
-        "Lisensi Pro (ArBa-Pro-...) tidak dapat digunakan di sini. " +
-        "Hubungi admin untuk mendapatkan lisensi ArBa-ENT-XXXX-XXXX.",
+        "Lisensi NOC-Sentinel Pro (ArBa-Pro-...) tidak dapat digunakan di NOC-Billing-Pro. " +
+        "Hubungi admin untuk mendapatkan lisensi ArBa-BP-XXXX-XXXX.",
         { duration: 7000 }
       );
       return;
-    }
-
-    if (edition === "pro" && entPattern.test(key)) {
-      // Enterprise key DI-IZINKAN di Pro — beri info saja
-      toast.info("Menggunakan lisensi Enterprise di edisi Pro. Melanjutkan aktivasi...");
     }
 
     if (!key) return;
@@ -210,20 +206,17 @@ export default function LicensePage() {
             <form onSubmit={handleActivate} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">License Key</label>
-                <Input 
-                  placeholder={edition === 'enterprise' ? 'ArBa-ENT-XXXX-XXXX' : 'ArBa-Pro-XXXX-XXXX'}
+                <Input
+                  placeholder="ArBa-BP-XXXX-XXXX"
                   value={keyInput}
                   onChange={e => setKeyInput(e.target.value)}
                   className="font-mono"
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format untuk edisi ini: <code className="text-primary font-mono text-xs">{
-                    edition === 'enterprise' ? 'ArBa-ENT-XXXX-XXXX' : 'ArBa-Pro-XXXX-XXXX'
-                  }</code>
-                  {edition === 'enterprise' && (
-                    <span className="text-yellow-500 ml-1">— Key Pro tidak dapat digunakan di Edisi Enterprise</span>
-                  )}
+                  Format lisensi NOC-Billing-Pro:{" "}
+                  <code className="text-primary font-mono text-xs">ArBa-BP-XXXX-XXXX</code>
+                  <span className="text-yellow-500 ml-1">— Pastikan menggunakan kunci Billing Pro</span>
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>

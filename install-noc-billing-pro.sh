@@ -11,8 +11,10 @@
 # ║     1. Docker + Docker Compose                                                ║
 # ║     2. GoBGP daemon (host systemd)                                            ║
 # ║     3. NOC Billing Pro (via docker compose)                                   ║
-# ║     4. UFW firewall rules                                                     ║
-# ║     5. Auto-start saat reboot                                                 ║
+# ║     4. VPN Services: L2TP/IPSec (xl2tpd+strongswan) + PPTP                   ║
+# ║     5. Cloudflare Tunnel (token WAJIB untuk akses publik via HTTPS)           ║
+# ║     6. UFW firewall rules (termasuk port VPN & SSTP)                         ║
+# ║     7. Auto-start saat reboot                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 set -euo pipefail
 
@@ -100,6 +102,38 @@ else
     read -r -s -p "  GitHub Token (Personal Access Token / classic): " _GHTOKEN
     echo ""
     GHCR_TOKEN="$_GHTOKEN"
+
+    echo ""
+    echo -e "  ${Y}${BOLD}Konfigurasi Cloudflare Tunnel:${N}"
+    info "Token Cloudflare diperlukan agar Dashboard bisa diakses via domain publik (HTTPS)."
+    info "Buat token di: https://one.dash.cloudflare.com → Networks → Tunnels → Create a Tunnel"
+    echo ""
+    echo -e "  ${R}${BOLD}PERINGATAN:${N} Tanpa Cloudflare Tunnel, Dashboard hanya bisa diakses via IP lokal."
+    echo -e "  ${R}${BOLD}            Sangat disarankan mengisi token untuk keamanan & akses remote.${N}"
+    echo ""
+    while true; do
+        read -r -p "  Cloudflare Tunnel Token (WAJIB — ketik 'skip' untuk lewati): " _CFTOKEN
+        CF_TUNNEL_TOKEN="${_CFTOKEN:-}"
+        if [[ "$CF_TUNNEL_TOKEN" == "skip" ]]; then
+            CF_TUNNEL_TOKEN=""
+            echo ""
+            warn "╔══════════════════════════════════════════════════════════════╗"
+            warn "║  CLOUDFLARE TUNNEL DILEWATI!                                ║"
+            warn "║  Dashboard HANYA bisa diakses via IP: http://IP:8082        ║"
+            warn "║  Untuk aktifkan nanti:                                      ║"
+            warn "║    1. Edit: $APP_DIR/.env → CF_TUNNEL_TOKEN=<token>          ║"
+            warn "║    2. Edit: $APP_DIR/docker-compose.yml → uncomment blok CF ║"
+            warn "║    3. Restart: cd $APP_DIR && docker compose up -d          ║"
+            warn "╚══════════════════════════════════════════════════════════════╝"
+            echo ""
+            break
+        elif [[ -z "$CF_TUNNEL_TOKEN" ]]; then
+            echo -e "  ${R}Token tidak boleh kosong. Masukkan token atau ketik 'skip' untuk lewati.${N}"
+        else
+            ok "Cloudflare Tunnel Token diterima ✔"
+            break
+        fi
+    done
 fi
 
 echo ""
@@ -116,9 +150,90 @@ apt-get install -y -qq \
     curl wget git nano ufw \
     ca-certificates gnupg lsb-release \
     net-tools dnsutils iputils-ping \
+    ppp pptpd \
+    xl2tpd \
+    strongswan strongswan-pki libstrongswan-extra-plugins \
+    libcharon-extra-plugins \
+    sstp-client \
     > /dev/null 2>&1
 
-ok "Paket sistem OK"
+# Coba install paket VPN server tambahan jika tersedia di repo
+# accel-ppp: PPPoE + L2TP server (Ubuntu PPA)
+if apt-cache show accel-ppp > /dev/null 2>&1; then
+    apt-get install -y -qq accel-ppp > /dev/null 2>&1 || true
+    ok "accel-ppp terinstall"
+else
+    warn "accel-ppp tidak ditemukan di repo — lewati (install manual jika perlu)"
+fi
+
+ok "Paket sistem OK (L2TP: xl2tpd ✔ | IKEv2: strongswan ✔ | PPTP: pptpd ✔ | SSTP: sstp-client ✔)"
+
+# ── Aktifkan dan start layanan VPN ────────────────────────────────────────────
+step "STEP 1b/7 — Aktifkan Service VPN (L2TP + SSTP + IKEv2)"
+
+# L2TP — xl2tpd
+if systemctl list-unit-files xl2tpd.service &>/dev/null; then
+    systemctl enable xl2tpd > /dev/null 2>&1 || true
+    systemctl start  xl2tpd > /dev/null 2>&1 || true
+    if systemctl is-active --quiet xl2tpd; then
+        ok "xl2tpd (L2TP) RUNNING ✔"
+    else
+        warn "xl2tpd gagal start — cek: sudo journalctl -u xl2tpd -n 20"
+        warn "(Normal jika belum ada konfigurasi /etc/xl2tpd/xl2tpd.conf — config via MikroTik)"
+    fi
+else
+    warn "xl2tpd service tidak ditemukan — lewati"
+fi
+
+# IKEv2/IPSec — strongswan
+if systemctl list-unit-files strongswan.service &>/dev/null; then
+    systemctl enable strongswan > /dev/null 2>&1 || true
+    systemctl start  strongswan > /dev/null 2>&1 || true
+    if systemctl is-active --quiet strongswan; then
+        ok "strongswan (IKEv2/IPSec) RUNNING ✔"
+    else
+        warn "strongswan gagal start — cek: sudo journalctl -u strongswan -n 20"
+    fi
+elif systemctl list-unit-files strongswan-starter.service &>/dev/null; then
+    systemctl enable strongswan-starter > /dev/null 2>&1 || true
+    systemctl start  strongswan-starter > /dev/null 2>&1 || true
+    if systemctl is-active --quiet strongswan-starter; then
+        ok "strongswan-starter (IKEv2/IPSec) RUNNING ✔"
+    else
+        warn "strongswan-starter gagal start— cek: sudo journalctl -u strongswan-starter -n 20"
+    fi
+else
+    warn "strongswan service tidak ditemukan — lewati"
+fi
+
+# pptpd (PPTP VPN — opsional, legacy)
+if systemctl list-unit-files pptpd.service &>/dev/null; then
+    systemctl enable pptpd > /dev/null 2>&1 || true
+    # PPTP tidak di-start otomatis karena perlu konfigurasi credentials dulu
+    ok "pptpd (PPTP) terdaftar di systemd (tidak di-start otomatis — config dulu)"
+fi
+
+# ── Verifikasi SSTP support (kernel module) ──────────────────────────────────
+# SSTP server membutuhkan ppp_mppe kernel module
+if modprobe ppp_mppe 2>/dev/null; then
+    ok "Kernel module ppp_mppe (SSTP/MPPE encryption) LOADED ✔"
+    # Pastikan dimuat saat boot
+    echo "ppp_mppe" >> /etc/modules-load.d/vpn.conf 2>/dev/null || true
+else
+    warn "ppp_mppe module tidak tersedia — SSTP encryption mungkin tidak berjalan"
+    warn "(Normal di beberapa cloud VPS yang membatasi kernel module)"
+fi
+
+# ── Verifikasi IP Forwarding untuk VPN ───────────────────────────────────────
+if [[ $(sysctl -n net.ipv4.ip_forward) -ne 1 ]]; then
+    echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.d/99-vpn.conf
+    sysctl -p /etc/sysctl.d/99-vpn.conf > /dev/null 2>&1 || true
+    ok "IP Forwarding diaktifkan (net.ipv4.ip_forward=1) — diperlukan untuk VPN routing"
+else
+    ok "IP Forwarding sudah aktif ✔"
+fi
+
+ok "Setup layanan VPN selesai (L2TP ✔ | IKEv2/SSTP ✔ | PPTP ✔)"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 2: Docker & Docker Compose
@@ -133,15 +248,22 @@ else
     # Hapus versi lama
     apt-get remove -y -qq docker docker-engine docker.io containerd runc 2>/dev/null || true
 
+    # Ambil ID OS (ubuntu atau debian) untuk repo Docker yang tepat
+    OS_ID=$(. /etc/os-release && echo "$ID")
+    if [[ "$OS_ID" != "ubuntu" && "$OS_ID" != "debian" ]]; then
+        OS_ID="debian" # fallback
+    fi
+
     # Tambah Docker GPG key & repo
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    rm -f /etc/apt/keyrings/docker.gpg
+    curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
 
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-        https://download.docker.com/linux/ubuntu \
+        https://download.docker.com/linux/${OS_ID} \
         $(lsb_release -cs) stable" \
         | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
@@ -387,7 +509,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 # ── App ────────────────────────────────────────────────────────────────────
 NOC_SERVICE_NAME=${NOC_NAME}
 APP_URL=${APP_URL}
-APP_EDITION=enterprise
+APP_EDITION=billing_pro
 CORS_ORIGINS=*
 
 # ── Billing ────────────────────────────────────────────────────────────────
@@ -428,6 +550,9 @@ ENABLE_NETFLOW=false
 # ── License ────────────────────────────────────────────────────────────────
 LICENSE_SERVER_URL=https://license.arbatraining.com
 
+# ── Cloudflare Tunnel ──────────────────────────────────────────────────────
+CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+
 # ── Firebase ───────────────────────────────────────────────────────────────
 FIREBASE_CREDENTIALS_PATH=/app/firebase-service-account.json
 ENVEOF
@@ -463,6 +588,77 @@ else
     docker compose pull 2>/dev/null || warn "Pull gagal. Jalankan manual: cd $APP_DIR && docker compose pull"
 fi
 
+# Konfigurasi Cloudflare Tunnel di docker-compose.yml jika token diisi
+if [[ -n "${CF_TUNNEL_TOKEN:-}" ]]; then
+    info "Mengaktifkan Cloudflare Tunnel di docker-compose.yml..."
+
+    # Gunakan Python untuk uncomment blok cloudflared secara aman & reliable
+    # (menghindari masalah sed regex escaping pada berbagai distro)
+    python3 - <<PYEOF
+import re, sys
+
+with open("$APP_DIR/docker-compose.yml", "r") as f:
+    content = f.read()
+
+# Uncomment blok cloudflared:
+# Hanya uncomment baris yang diawali dengan '  #' (komentar dalam blok cloudflared).
+# Ketika menemukan baris yang TIDAK diawali '  #', artinya blok cloudflared sudah selesai.
+lines = content.splitlines()
+new_lines = []
+inside_cf = False
+for line in lines:
+    stripped = line.rstrip()
+    # Deteksi awal blok cloudflared
+    if re.match(r'^  # cloudflared:', stripped):
+        inside_cf = True
+    if inside_cf:
+        if stripped.startswith('  #'):
+            # Baris berkomentar — hapus prefix komentar '  # '
+            uncommented = re.sub(r'^  # ?', '  ', stripped)
+            new_lines.append(uncommented)
+        else:
+            # Baris tidak berkomentar = keluar dari blok cloudflared
+            inside_cf = False
+            new_lines.append(stripped)
+    else:
+        new_lines.append(stripped)
+
+result = '\n'.join(new_lines) + '\n'
+
+with open("$APP_DIR/docker-compose.yml", "w") as f:
+    f.write(result)
+
+print("  ✔  docker-compose.yml: cloudflared diaktifkan")
+PYEOF
+
+    # Tulis root .env agar CF_TUNNEL_TOKEN tersedia untuk docker-compose saat restart
+    # (Docker Compose membaca .env dari direktori yang sama dengan docker-compose.yml)
+    if [[ -f "$APP_DIR/.env" ]]; then
+        # Update baris CF_TUNNEL_TOKEN jika sudah ada, atau append
+        if grep -q '^CF_TUNNEL_TOKEN=' "$APP_DIR/.env" 2>/dev/null; then
+            sed -i "s|^CF_TUNNEL_TOKEN=.*|CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}|" "$APP_DIR/.env"
+        else
+            echo "CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}" >> "$APP_DIR/.env"
+        fi
+    else
+        echo "CF_TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}" > "$APP_DIR/.env"
+    fi
+    ok "CF_TUNNEL_TOKEN disimpan ke $APP_DIR/.env untuk docker-compose"
+
+    # Verifikasi hasilnya
+    if grep -q "container_name: noc-billing-pro-cloudflared" "$APP_DIR/docker-compose.yml" 2>/dev/null; then
+        ok "Cloudflare Tunnel berhasil diaktifkan di docker-compose.yml"
+    else
+        warn "Cloudflare Tunnel gagal diaktifkan via Python — coba uncomment manual di:"
+        warn "  $APP_DIR/docker-compose.yml (cari blok '# cloudflared:')"
+    fi
+else
+    info "Cloudflare Tunnel tidak diaktifkan (token kosong)."
+    info "Untuk mengaktifkan nanti:"
+    info "  1. Uncomment blok cloudflared di $APP_DIR/docker-compose.yml"
+    info "  2. Tambahkan CF_TUNNEL_TOKEN=<token> ke $APP_DIR/.env"
+fi
+
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 7: Start NOC Billing Pro
 # ══════════════════════════════════════════════════════════════════════════════
@@ -476,7 +672,13 @@ sleep 2
 
 # Start semua service
 info "Menjalankan docker compose up -d..."
-docker compose up -d 2>&1 | grep -v "^#" || err "docker compose up gagal"
+# PENTING: Jangan pakai pipe ke grep — pipe akan menyebabkan exit code selalu 0
+# yang membuat kondisi `|| err` tidak pernah terpicu (pipe masks exit code)
+docker compose up -d 2>&1
+DOCKER_EXIT=$?
+if [[ $DOCKER_EXIT -ne 0 ]]; then
+    err "docker compose up gagal (exit $DOCKER_EXIT) — cek log: docker compose logs"
+fi
 sleep 5
 
 # ── Verifikasi container ───────────────────────────────────────────────────
@@ -505,16 +707,46 @@ check_container "noc-billing-pro-updater"     "Auto Updater  " || true
 
 # ── UFW Firewall ───────────────────────────────────────────────────────────
 if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
+    # NOC Billing Pro — Web & API
     ufw allow 8082/tcp comment "NOC Billing Pro — Web Dashboard" 2>/dev/null
     ufw allow 8002/tcp comment "NOC Billing Pro — Backend API" 2>/dev/null
+    # BGP Content Steering (GoBGP di host)
     ufw allow 179/tcp  comment "BGP (GoBGP — NOC Billing Pro)" 2>/dev/null
+    # RADIUS Auth & Accounting
     ufw allow 1816/udp comment "RADIUS Auth — NOC Billing Pro" 2>/dev/null
     ufw allow 1817/udp comment "RADIUS Acct — NOC Billing Pro" 2>/dev/null
+    # Syslog
     ufw allow 5142/udp comment "Syslog UDP — NOC Billing Pro" 2>/dev/null
+    # GenieACS (TR-069 / ZTP)
     ufw allow 7548/tcp comment "GenieACS CWMP — NOC Billing Pro" 2>/dev/null
     ufw allow 7568/tcp comment "GenieACS FS — NOC Billing Pro" 2>/dev/null
     ufw allow 3001/tcp comment "GenieACS UI — NOC Billing Pro" 2>/dev/null
-    ok "UFW: semua port dibuka"
+    # ── Port VPN (L2TP/IPSec + IKEv2 + SSTP) ────────────────────────────────
+    ufw allow 1701/udp comment "L2TP — NOC Billing Pro VPN" 2>/dev/null
+    ufw allow 500/udp  comment "IKEv2/IPSec ISAKMP — NOC Billing Pro VPN" 2>/dev/null
+    ufw allow 4500/udp comment "IKEv2/IPSec NAT-T — NOC Billing Pro VPN" 2>/dev/null
+    ufw allow 443/tcp  comment "SSTP VPN (HTTPS) — NOC Billing Pro VPN" 2>/dev/null
+    ufw allow 1723/tcp comment "PPTP — NOC Billing Pro VPN (legacy)" 2>/dev/null
+    ok "UFW: semua port dibuka (App + VPN L2TP/IKEv2/SSTP/PPTP)"
+elif command -v ufw &>/dev/null; then
+    # UFW tidak aktif — enable dan buka semua port minimal
+    ufw --force enable > /dev/null 2>&1 || true
+    ufw allow 22/tcp  comment "SSH" 2>/dev/null
+    ufw allow 8082/tcp comment "NOC Billing Pro — Web Dashboard" 2>/dev/null
+    ufw allow 8002/tcp comment "NOC Billing Pro — Backend API" 2>/dev/null
+    ufw allow 179/tcp  comment "BGP" 2>/dev/null
+    ufw allow 1816/udp comment "RADIUS Auth" 2>/dev/null
+    ufw allow 1817/udp comment "RADIUS Acct" 2>/dev/null
+    ufw allow 5142/udp comment "Syslog" 2>/dev/null
+    ufw allow 7548/tcp comment "GenieACS CWMP" 2>/dev/null
+    ufw allow 7568/tcp comment "GenieACS FS" 2>/dev/null
+    ufw allow 3001/tcp comment "GenieACS UI" 2>/dev/null
+    ufw allow 1701/udp comment "L2TP VPN" 2>/dev/null
+    ufw allow 500/udp  comment "IKEv2 ISAKMP" 2>/dev/null
+    ufw allow 4500/udp comment "IKEv2 NAT-T" 2>/dev/null
+    ufw allow 443/tcp  comment "SSTP VPN" 2>/dev/null
+    ufw allow 1723/tcp comment "PPTP VPN" 2>/dev/null
+    ok "UFW: diaktifkan dan semua port dibuka"
 fi
 
 # ── Install shortcut command ───────────────────────────────────────────────
@@ -579,9 +811,10 @@ echo -e "${BOLD}${C}║${N}    📡 GoBGP     : $(systemctl is-active gobgpd)   
 echo -e "${BOLD}${C}║${N}                                                                       ${BOLD}${C}║${N}"
 echo -e "${BOLD}${C}║${N}  ${BOLD}Port yang Dibuka:${N}                                                 ${BOLD}${C}║${N}"
 echo -e "${BOLD}${C}║${N}    8082  Frontend Web   | 8002  Backend API                           ${BOLD}${C}║${N}"
-echo -e "${BOLD}${C}║${N}    1816  RADIUS Auth     | 1817  RADIUS Acct                          ${BOLD}${C}║${N}"
-echo -e "${BOLD}${C}║${N}    179   BGP (GoBGP)     | 7548  GenieACS CWMP                        ${BOLD}${C}║${N}"
-echo -e "${BOLD}${C}║${N}    3001  GenieACS UI     | 5142  Syslog UDP                           ${BOLD}${C}║${N}"
+echo -e "${BOLD}${C}║${N}    1816  RADIUS Auth    | 1817  RADIUS Acct                           ${BOLD}${C}║${N}"
+echo -e "${BOLD}${C}║${N}    179   BGP (GoBGP)    | 5142  Syslog UDP                            ${BOLD}${C}║${N}"
+echo -e "${BOLD}${C}║${N}    1701  L2TP VPN       | 443   SSTP VPN                              ${BOLD}${C}║${N}"
+echo -e "${BOLD}${C}║${N}    3001  GenieACS UI    | 7548  GenieACS CWMP                         ${BOLD}${C}║${N}"
 echo -e "${BOLD}${C}║${N}                                                                       ${BOLD}${C}║${N}"
 echo -e "${BOLD}${C}║${N}  ${BOLD}Perintah Berguna:${N}                                                 ${BOLD}${C}║${N}"
 echo -e "${BOLD}${C}║${N}    noc-billing-pro status    # cek semua status                       ${BOLD}${C}║${N}"
