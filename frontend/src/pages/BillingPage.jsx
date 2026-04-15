@@ -1,4 +1,4 @@
-﻿﻿﻿import { useState, useEffect, useCallback, useRef } from "react";
+﻿﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -1561,7 +1561,6 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
     payment_status: "belum_bayar",
     payment_method: "transfer",
     auth_method: initial?.auth_method || "radius",
-    pppoe_password: "",
   });
   const [devices, setDevices] = useState([]);
   const [saving, setSaving] = useState(false);
