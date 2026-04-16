@@ -59,3 +59,42 @@ async def kick_pppoe_user(req: KickRequest, user=Depends(require_write)):
     except Exception as e:
         logger.error(f"[pppoe-monitoring] Failed to kick {req.username}: {e}")
         raise HTTPException(500, str(e))
+
+@router.get("/pppoe-users")
+async def get_pppoe_users(device_id: str, user=Depends(get_current_user)):
+    db = get_db()
+    device = await db.devices.find_one({"id": device_id})
+    if not device:
+        raise HTTPException(404, "Device not found")
+        
+    try:
+        from mikrotik_api import get_api_client
+        mt = get_api_client(device)
+        return await mt.list_pppoe_secrets()
+    except Exception as e:
+        logger.error(f"[pppoe-users] Failed: {e}")
+        raise HTTPException(500, str(e))
+
+@router.get("/pppoe-settings")
+async def get_pppoe_settings(user=Depends(get_current_user)):
+    db = get_db()
+    settings = await db.settings.find_one({"_id": "pppoe_settings"})
+    return settings or {}
+
+class PppoeSettingsUpdate(BaseModel):
+    pppoe_pool_name: str
+    pppoe_profile_name: str
+    pppoe_local_address: str
+    dns1: str
+    dns2: str
+
+@router.post("/pppoe-setup-pool")
+async def setup_pppoe_pool(req: PppoeSettingsUpdate, user=Depends(require_write)):
+    db = get_db()
+    # Save settings to DB
+    await db.settings.update_one(
+        {"_id": "pppoe_settings"},
+        {"$set": req.model_dump()},
+        upsert=True
+    )
+    return {"status": "success", "message": "Konfigurasi PPPoE berhasil disimpan."}
