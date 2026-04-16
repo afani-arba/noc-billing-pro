@@ -48,7 +48,7 @@ services:
   # 1. NOC BILLING PRO — BACKEND
   # ═════════════════════════════════════════════════════════════════
   noc-backend:
-    image: ghcr.io/afani-arba/noc-sentinel-v3-backend:latest
+    image: ghcr.io/afani-arba/noc-billing-pro-backend:latest
     container_name: noc-billing-pro-backend
     restart: always
     logging: *default-logging
@@ -123,7 +123,7 @@ services:
   # 2. NOC BILLING PRO — FRONTEND
   # ═════════════════════════════════════════════════════════════════
   noc-frontend:
-    image: ghcr.io/afani-arba/noc-sentinel-v3-frontend:latest
+    image: ghcr.io/afani-arba/noc-billing-pro-frontend:latest
     container_name: noc-billing-pro-frontend
     restart: always
     logging: *default-logging
