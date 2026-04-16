@@ -71,21 +71,23 @@ if [ -f "$PROVISIONS_FILE" ]; then
 import json, urllib.request, urllib.parse
 
 genie_url = "$GENIE_URL"
-with open("$PROVISIONS_FILE") as f:
-    provisions = json.load(f)
-
-for p in provisions:
-    pid = p["_id"]
-    data = {"script": p.get("script", "")}
-    url = f"{genie_url}/provisions/{urllib.parse.quote(pid, safe='')}"
-    req = urllib.request.Request(url, method="PUT",
-          data=json.dumps(data).encode(),
-          headers={"Content-Type": "application/json"})
-    try:
-        resp = urllib.request.urlopen(req)
-        print(f"  [OK] provision: {pid}")
-    except Exception as e:
-        print(f"  [WARN] provision {pid}: {e}")
+try:
+    with open("$PROVISIONS_FILE") as f:
+        provisions = json.load(f)
+    for p in provisions:
+        pid = p["_id"]
+        script_text = p.get("script", "")
+        # GenieACS Provisions expecting string body not JSON
+        url = f"{genie_url}/provisions/{urllib.parse.quote(pid, safe='')}"
+        req = urllib.request.Request(url, method="PUT",
+              data=script_text.encode("utf-8"))
+        try:
+            resp = urllib.request.urlopen(req)
+            print(f"  [OK] provision: {pid}")
+        except Exception as e:
+            print(f"  [WARN] provision {pid}: {e}")
+except Exception as e:
+    print(f"  [WARN] Failed to parse provisions.json: {e}")
 PYEOF
 else
     warn "provisions.json tidak ditemukan di $SCRIPT_DIR"
@@ -100,22 +102,24 @@ if [ -f "$PRESETS_FILE" ]; then
 import json, urllib.request, urllib.parse
 
 genie_url = "$GENIE_URL"
-with open("$PRESETS_FILE") as f:
-    presets = json.load(f)
-
-for p in presets:
-    pid = p["_id"]
-    # Hapus _id dari body (GenieACS tidak perlu _id di body)
-    data = {k: v for k, v in p.items() if k != "_id"}
-    url = f"{genie_url}/presets/{urllib.parse.quote(pid, safe='')}"
-    req = urllib.request.Request(url, method="PUT",
-          data=json.dumps(data).encode(),
-          headers={"Content-Type": "application/json"})
-    try:
-        resp = urllib.request.urlopen(req)
-        print(f"  [OK] preset: {pid}")
-    except Exception as e:
-        print(f"  [WARN] preset {pid}: {e}")
+try:
+    with open("$PRESETS_FILE") as f:
+        presets = json.load(f)
+    for p in presets:
+        pid = p["_id"]
+        # Hapus _id dari body (GenieACS tidak perlu _id di body)
+        data = {k: v for k, v in p.items() if k != "_id"}
+        url = f"{genie_url}/presets/{urllib.parse.quote(pid, safe='')}"
+        req = urllib.request.Request(url, method="PUT",
+              data=json.dumps(data).encode("utf-8"),
+              headers={"Content-Type": "application/json"})
+        try:
+            resp = urllib.request.urlopen(req)
+            print(f"  [OK] preset: {pid}")
+        except Exception as e:
+            print(f"  [WARN] preset {pid}: {e}")
+except Exception as e:
+    print(f"  [WARN] Failed to parse presets.json: {e}")
 PYEOF
 else
     warn "presets.json tidak ditemukan di $SCRIPT_DIR"
@@ -125,32 +129,34 @@ fi
 echo ""
 echo "--- Import Virtual Parameters ---"
 VP_FILE="$SCRIPT_DIR/virtual-parameters.json"
-if [ -f "$VP_FILE" ]; then
+if [ -f "$VP_FILE" ] && grep -q "{" "$VP_FILE"; then
     python3 << PYEOF
 import json, urllib.request, urllib.parse
 
 genie_url = "$GENIE_URL"
-with open("$VP_FILE") as f:
-    vps = json.load(f)
+try:
+    with open("$VP_FILE") as f:
+        vps = json.load(f)
 
-if isinstance(vps, list) and len(vps) > 0:
-    for vp in vps:
-        vpid = vp["_id"]
-        data = {"script": vp.get("script", "")}
-        url = f"{genie_url}/virtual-parameters/{urllib.parse.quote(vpid, safe='')}"
-        req = urllib.request.Request(url, method="PUT",
-              data=json.dumps(data).encode(),
-              headers={"Content-Type": "application/json"})
-        try:
-            resp = urllib.request.urlopen(req)
-            print(f"  [OK] virtual-parameter: {vpid}")
-        except Exception as e:
-            print(f"  [WARN] virtual-parameter {vpid}: {e}")
-else:
-    print("  [INFO] Tidak ada virtual-parameter untuk di-import")
+    if isinstance(vps, list) and len(vps) > 0:
+        for vp in vps:
+            vpid = vp["_id"]
+            script_text = vp.get("script", "")
+            url = f"{genie_url}/virtual-parameters/{urllib.parse.quote(vpid, safe='')}"
+            req = urllib.request.Request(url, method="PUT",
+                  data=script_text.encode("utf-8"))
+            try:
+                resp = urllib.request.urlopen(req)
+                print(f"  [OK] virtual-parameter: {vpid}")
+            except Exception as e:
+                print(f"  [WARN] virtual-parameter {vpid}: {e}")
+    else:
+        print("  [INFO] Tidak ada virtual-parameter untuk di-import")
+except Exception as e:
+    print(f"  [INFO] Skip virtual-parameters (Invalid JSON or 404): {e}")
 PYEOF
 else
-    warn "virtual-parameters.json tidak ditemukan di $SCRIPT_DIR"
+    warn "Skip virtual-parameters (no valid JSON found)"
 fi
 
 # ── 4. CONFIG (UI settings penting saja) ──────────────────────────────────────
@@ -162,29 +168,6 @@ if [ -f "$CONFIG_FILE" ]; then
 import json, urllib.request, urllib.parse
 
 genie_url = "$GENIE_URL"
-with open("$CONFIG_FILE") as f:
-    configs = json.load(f)
-
-# Import hanya config penting: cwmp.* dan ui.pageSize
-IMPORTANT_KEYS = {
-    "cwmp.connectionRequestAllowBasicAuth",
-    "cwmp.datetimeMilliseconds",
-    "ui.pageSize",
-}
-imported = 0
-for c in configs:
-    cid = c["_id"]
-    # Hanya import config yang ada di whitelist atau dimulai dengan cwmp./ui.
-    if cid not in IMPORTANT_KEYS and not cid.startswith("cwmp.") and not cid.startswith("ui."):
-        continue
-    val = c.get("value", "")
-    url = f"{genie_url}/config/{urllib.parse.quote(cid, safe='')}"
-    req = urllib.request.Request(url, method="PUT",
-          data=json.dumps({"value": val}).encode(),
-          headers={"Content-Type": "application/json"})
-    try:
-        resp = urllib.request.urlopen(req)
-        imported += 1
     except Exception as e:
         pass  # Config UI opsional, skip error
 
