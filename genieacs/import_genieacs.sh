@@ -168,10 +168,36 @@ if [ -f "$CONFIG_FILE" ]; then
 import json, urllib.request, urllib.parse
 
 genie_url = "$GENIE_URL"
-    except Exception as e:
-        pass  # Config UI opsional, skip error
+try:
+    with open("$CONFIG_FILE") as f:
+        configs = json.load(f)
 
-print(f"  [OK] Imported {imported} config entries")
+    # Import hanya config penting: cwmp.* dan ui.pageSize
+    IMPORTANT_KEYS = {
+        "cwmp.connectionRequestAllowBasicAuth",
+        "cwmp.datetimeMilliseconds",
+        "ui.pageSize",
+    }
+    imported = 0
+    for c in configs:
+        cid = c["_id"]
+        # Hanya import config yang ada di whitelist atau dimulai dengan cwmp./ui.
+        if cid not in IMPORTANT_KEYS and not cid.startswith("cwmp.") and not cid.startswith("ui."):
+            continue
+        val = c.get("value", "")
+        url = f"{genie_url}/config/{urllib.parse.quote(cid, safe='')}"
+        req = urllib.request.Request(url, method="PUT",
+              data=json.dumps({"value": val}).encode("utf-8"),
+              headers={"Content-Type": "application/json"})
+        try:
+            resp = urllib.request.urlopen(req)
+            imported += 1
+        except Exception as e:
+            pass  # Config UI opsional, skip error
+
+    print(f"  [OK] Imported {imported} config entries")
+except Exception as e:
+    print(f"  [WARN] Failed to read config.json: {e}")
 PYEOF
 else
     warn "config.json tidak ditemukan di $SCRIPT_DIR"
