@@ -160,15 +160,16 @@ services:
 
   # GenieACS CWMP — antarmuka CPE (router) TR-069
   genieacs-cwmp:
-    image: drumsergio/genieacs:latest
+    image: ghcr.io/afani-arba/noc-sentinel-v3-genieacs:latest
     container_name: noc-billing-pro-genieacs-cwmp
     restart: always
     logging: *default-logging
     command: genieacs-cwmp
     environment:
-      - GENIEACS_CWMP_ACCESS_LOG_FILE=/var/log/genieacs/cwmp-access.log
-      - GENIEACS_DEBUG=false
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_CWMP_INTERFACE=0.0.0.0
+      - GENIEACS_CWMP_PORT=7547
+      - GENIEACS_DEBUG=false
       - GENIEACS_NBI_URL=http://genieacs-nbi:7557
     ports:
       - "7548:7547"           # CWMP (port standar 7547 geser ke 7548 untuk tidak konflik)
@@ -180,13 +181,15 @@ services:
 
   # GenieACS NBI — North Bound Interface (API backend NOC ↔ GenieACS)
   genieacs-nbi:
-    image: drumsergio/genieacs:latest
+    image: ghcr.io/afani-arba/noc-sentinel-v3-genieacs:latest
     container_name: noc-billing-pro-genieacs-nbi
     restart: always
     logging: *default-logging
     command: genieacs-nbi
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_NBI_INTERFACE=0.0.0.0
+      - GENIEACS_NBI_PORT=7557
       - GENIEACS_DEBUG=false
     expose:
       - "7557"                # Internal only — diakses oleh noc-backend
@@ -196,13 +199,15 @@ services:
 
   # GenieACS FS — File Server (untuk firmware & config provisioning ZTP)
   genieacs-fs:
-    image: drumsergio/genieacs:latest
+    image: ghcr.io/afani-arba/noc-sentinel-v3-genieacs:latest
     container_name: noc-billing-pro-genieacs-fs
     restart: always
     logging: *default-logging
     command: genieacs-fs
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
+      - GENIEACS_FS_INTERFACE=0.0.0.0
+      - GENIEACS_FS_PORT=7567
       - GENIEACS_DEBUG=false
     ports:
       - "7568:7567"           # File Server (port standar 7567 geser ke 7568)
@@ -214,14 +219,16 @@ services:
 
   # GenieACS UI — Web interface manajemen GenieACS
   genieacs-ui:
-    image: drumsergio/genieacs:latest
+    image: ghcr.io/afani-arba/noc-sentinel-v3-genieacs:latest
     container_name: noc-billing-pro-genieacs-ui
     restart: always
     logging: *default-logging
     command: genieacs-ui
     environment:
       - GENIEACS_MONGODB_CONNECTION_URL=mongodb://mongodb:27017/genieacs_billing_pro
-      - GENIEACS_NBI_URL=http://genieacs-nbi:7557
+      - GENIEACS_UI_JWT_SECRET=genieacs_billing_pro_jwt_s3cr3t_2026
+      - GENIEACS_UI_INTERFACE=0.0.0.0
+      - GENIEACS_UI_PORT=3000
       - GENIEACS_DEBUG=false
     ports:
       - "3001:3000"           # GenieACS UI → http://IP:3001 (3000 = master)

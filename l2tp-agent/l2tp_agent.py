@@ -21,7 +21,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
 LISTEN_HOST = "0.0.0.0"
-LISTEN_PORT = 8002
+LISTEN_PORT = 8011   # Port 8011 — 8002 sudah dipakai noc-backend Docker container
 VPN_IFACE = "VPN_L2TP"
 
 logging.basicConfig(

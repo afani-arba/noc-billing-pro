@@ -75,6 +75,8 @@ from routers.wa_customer_service import router as wa_cs_router
 from routers.genieacs import router as genieacs_router
 # 10. Sentinel Peering Eye (includes BGP Content Steering)
 from routers.peering_eye import router as peering_eye_router
+# VPN Agent proxy (L2TP + SSTP)
+from routers.vpn import router as vpn_router
 # Payment Gateway Voucher PDF
 from routers.voucher_pdf import router as voucher_pdf_router
 
@@ -413,6 +415,9 @@ api.include_router(devices_router)
 
 # ── 3. GenieACS + ZTP ─────────────────────────────────────────────────────
 api.include_router(genieacs_router)
+
+# ── VPN (L2TP + SSTP Agent Proxy) ─────────────────────────────────────────
+api.include_router(vpn_router)
 
 # ── 4. RADIUS (via hotspot router) ────────────────────────────────────────
 # (hotspot_router disabled since Hotspot Users legacy feature is removed)
