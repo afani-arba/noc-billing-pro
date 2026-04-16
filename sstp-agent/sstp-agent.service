@@ -1,0 +1,16 @@
+[Unit]
+Description=NOC Billing Pro SSTP Agent
+Documentation=https://github.com/afani-arba/noc-billing-pro-v3
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /opt/sstp-agent/sstp_agent.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

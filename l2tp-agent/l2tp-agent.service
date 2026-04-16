@@ -1,0 +1,12 @@
+[Unit]
+Description=NOC Billing Pro L2TP Agent (Native Ubuntu)
+After=network.target xl2tpd.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/l2tp-agent/l2tp_agent.py
+WorkingDirectory=/opt/l2tp-agent
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
