@@ -118,6 +118,24 @@ async def lifespan(app: FastAPI):
             }
             await db.system_settings.insert_one(default_ga)
             logger.info("GenieACS default config seeded.")
+
+        # Default Admin Seeding
+        admin_count = await db.admin_users.count_documents({})
+        if admin_count == 0:
+            import uuid
+            from core.auth import pwd_context
+            from datetime import datetime, timezone
+            default_admin = {
+                "id": str(uuid.uuid4()),
+                "username": "admin",
+                "password": pwd_context.hash("admin123"),
+                "name": "Administrator",
+                "role": "administrator",
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.admin_users.insert_one(default_admin)
+            logger.info("Default admin user (admin/admin123) seeded.")
     except Exception as e:
         logger.error(f"DB init error: {e}")
 
