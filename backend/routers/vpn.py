@@ -109,11 +109,25 @@ async def l2tp_get_config():
 
 @router.put("/l2tp/config")
 async def l2tp_save_config(body: VpnConfig):
-    """Simpan konfigurasi L2TP ke database."""
+    """Simpan konfigurasi L2TP ke database dan connect/disconnect."""
     db = get_db()
     data = body.dict()
     data["_id"] = "vpn_l2tp_config"
     await db.system_settings.replace_one({"_id": "vpn_l2tp_config"}, data, upsert=True)
+    
+    if body.enabled:
+        # Trigger connect di agent
+        resp = await _proxy_post(
+            f"{L2TP_AGENT_URL}/connect",
+            {"server": body.server, "username": body.username,
+             "password": body.password, "auto_routes": body.auto_routes}
+        )
+        if not resp.get("ok"):
+            raise HTTPException(status_code=500, detail=resp.get("error", "Gagal memulai l2tp-agent"))
+    else:
+        # Trigger disconnect di agent
+        await _proxy_post(f"{L2TP_AGENT_URL}/disconnect", {})
+
     return {"ok": True, "message": "Konfigurasi L2TP disimpan"}
 
 
@@ -161,11 +175,24 @@ async def sstp_get_config():
 
 @router.put("/sstp/config")
 async def sstp_save_config(body: VpnConfig):
-    """Simpan konfigurasi SSTP ke database."""
+    """Simpan konfigurasi SSTP ke database dan connect/disconnect."""
     db = get_db()
     data = body.dict()
     data["_id"] = "vpn_sstp_config"
     await db.system_settings.replace_one({"_id": "vpn_sstp_config"}, data, upsert=True)
+    
+    if body.enabled:
+        # Trigger connect di agent
+        resp = await _proxy_post(
+            f"{SSTP_AGENT_URL}/connect",
+            {"server": body.server, "username": body.username, "password": body.password}
+        )
+        if not resp.get("ok"):
+            raise HTTPException(status_code=500, detail=resp.get("error", "Gagal memulai sstp-agent"))
+    else:
+        # Trigger disconnect di agent
+        await _proxy_post(f"{SSTP_AGENT_URL}/disconnect", {})
+
     return {"ok": True, "message": "Konfigurasi SSTP disimpan"}
 
 
