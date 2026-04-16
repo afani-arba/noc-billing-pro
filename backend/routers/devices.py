@@ -934,10 +934,10 @@ async def bandwidth_history_range(
     interval_ms = {
         "1h":    60_000,        # 1-menit bucket  -> 60 titik
         "12h":   300_000,       # 5-menit bucket  -> 144 titik
-        "24h":   60_000,        # 1-menit bucket  -> 1440 titik (continuous per menit)
+        "24h":   300_000,       # 5-menit bucket  -> 288 titik (lebih efisien, hemat memory)
         "week":  3_600_000,     # 1-jam bucket    -> 168 titik
         "month": 10_800_000,    # 3-jam bucket    -> 240 titik
-    }.get(range, 60_000)
+    }.get(range, 300_000)
 
     base_match: dict = {"timestamp": {"$gte": start_str, "$lte": end_str}}
     if device_id:
