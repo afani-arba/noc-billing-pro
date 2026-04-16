@@ -6,9 +6,13 @@
 # =============================================================================
 set -e
 
-GENIEACS_CONTAINER="noc-billing-pro-genieacs-nbi"
-NBI_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$GENIEACS_CONTAINER" 2>/dev/null || echo "localhost")
-GENIE_URL="${GENIEACS_NBI_URL:-http://$NBI_IP:7557}"
+GENIE_URL="${GENIEACS_NBI_URL:-http://genieacs-nbi:7557}"
+
+# Jika dijalankan dari host dan genieacs-nbi tidak bisa diresolve, fallback ke docker inspect
+if ! ping -c 1 genieacs-nbi >/dev/null 2>&1; then
+    NBI_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' noc-billing-pro-genieacs-nbi 2>/dev/null || echo "127.0.0.1")
+    GENIE_URL="http://$NBI_IP:7557"
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Warna output
@@ -25,15 +29,15 @@ echo " Target: $GENIE_URL"
 echo ""
 
 # Tunggu GenieACS NBI siap
-echo "Menunggu GenieACS NBI siap..."
+echo "Menunggu GenieACS NBI siap ($GENIE_URL)..."
 for i in $(seq 1 30); do
-    if curl -sf "$GENIE_URL" > /dev/null 2>&1; then
+    if curl -sf "$GENIE_URL/provisions" > /dev/null 2>&1 || curl -s "$GENIE_URL" > /dev/null 2>&1; then
         ok "GenieACS NBI online"
         break
     fi
     if [ $i -eq 30 ]; then
-        err "GenieACS NBI tidak responsif setelah 60 detik"
-        exit 1
+        warn "GenieACS NBI lambat merespons, tetap melanjutkan..."
+        break
     fi
     echo -n "."
     sleep 2
