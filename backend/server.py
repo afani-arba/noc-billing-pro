@@ -79,6 +79,8 @@ from routers.peering_eye import router as peering_eye_router
 from routers.vpn import router as vpn_router
 # Payment Gateway Voucher PDF
 from routers.voucher_pdf import router as voucher_pdf_router
+# 6. Billing Hotspot — voucher, sales, profiles, RADIUS status
+from routers.hotspot import router as hotspot_router
 
 _background_tasks: list = []
 
@@ -456,7 +458,7 @@ api.include_router(customers_router)
 api.include_router(voucher_pdf_router)      # Voucher Hotspot PDF Generator
 
 # ── 6. Billing Hotspot ─────────────────────────────────────────────────────
-# (legacy hotspot endpoints removed)
+api.include_router(hotspot_router)   # /hotspot-vouchers, /hotspot-sales, /hotspot-settings ...
 
 # ── 7. Laporan Keuangan ────────────────────────────────────────────────────
 api.include_router(reports_router)

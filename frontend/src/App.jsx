@@ -17,10 +17,22 @@ import React, {
 } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Layout from "@/components/Layout";
 import api from "@/lib/api";
 import { ThemeProvider } from "@/context/ThemeContext";
+
+// ─── React Query Client (singleton) ───────────────────────────────────────────
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
 const LoginPage               = lazy(() => import("@/pages/LoginPage"));
@@ -147,6 +159,7 @@ export default function App() {
   };
 
   return (
+    <QueryClientProvider client={queryClient}>
     <AuthContext.Provider value={{ token, user, login, logout }}>
       <EditionContext.Provider value={editionData}>
         <ThemeProvider>
@@ -261,5 +274,6 @@ export default function App() {
       </ThemeProvider>
       </EditionContext.Provider>
     </AuthContext.Provider>
+    </QueryClientProvider>
   );
 }
