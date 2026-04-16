@@ -285,6 +285,34 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Peering cache error: {e}")
 
+    # ── Auto-reconnect L2TP VPN saat startup (jika sudah dikonfigurasi) ───────
+    # Fresh install: DB kosong → tidak ada config → skip (tidak auto-connect)
+    # Setelah setup: config ada di DB → reconnect otomatis dengan credentials benar
+    try:
+        import httpx as _httpx
+        from core.db import get_db as _get_db
+        _db = _get_db()
+        _l2tp_cfg = await _db.system_settings.find_one({"_id": "vpn_l2tp_config"})
+        if _l2tp_cfg and _l2tp_cfg.get("enabled") and _l2tp_cfg.get("server"):
+            _gw = os.environ.get("VPN_AGENT_HOST", "172.18.0.1")
+            _agent_url = os.environ.get("L2TP_AGENT_URL", f"http://{_gw}:8002")
+            async with _httpx.AsyncClient(timeout=_httpx.Timeout(30.0)) as _c:
+                _r = await _c.post(f"{_agent_url}/connect", json={
+                    "server":      _l2tp_cfg["server"],
+                    "username":    _l2tp_cfg["username"],
+                    "password":    _l2tp_cfg["password"],
+                    "auto_routes": _l2tp_cfg.get("auto_routes", ""),
+                })
+            _data = _r.json()
+            if _data.get("ok"):
+                logger.info(f"L2TP VPN auto-reconnected: {_data.get('message','')}")
+            else:
+                logger.warning(f"L2TP auto-reconnect failed: {_data.get('error','unknown')}")
+        else:
+            logger.info("L2TP VPN: tidak ada config / disabled — skip auto-connect (fresh install OK)")
+    except Exception as _e:
+        logger.warning(f"L2TP auto-reconnect error: {_e}")
+
     # License verification
     from services.license_service import license_check_loop
     t = asyncio.create_task(license_check_loop())

@@ -33,8 +33,9 @@ router = APIRouter(prefix="", tags=["VPN"])
 
 # Agent URLs — menggunakan Docker bridge gateway ke host
 # 172.17.0.1 = docker0 gateway (selalu ada sebagai IP host dari dalam container)
-_DOCKER_GATEWAY = os.environ.get("VPN_AGENT_HOST", "172.17.0.1")
-L2TP_AGENT_URL  = os.environ.get("L2TP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8011")
+# Port 8002 = L2TP Agent (l2tp_agent.py), Port 8001 = SSTP Agent (sstp_agent.py)
+_DOCKER_GATEWAY = os.environ.get("VPN_AGENT_HOST", "172.18.0.1")
+L2TP_AGENT_URL  = os.environ.get("L2TP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8002")
 SSTP_AGENT_URL  = os.environ.get("SSTP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8001")
 
 TIMEOUT = httpx.Timeout(25.0)
@@ -86,16 +87,21 @@ async def _proxy_post(url: str, data: dict) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/l2tp/health")
+@router.get("/l2tp/agent-health")  # alias
 async def l2tp_health():
     return await _proxy_get(f"{L2TP_AGENT_URL}/health")
 
 
 @router.get("/l2tp/status")
 async def l2tp_status():
+    """Ambil status koneksi L2TP dari agent.
+    Jika belum dikonfigurasi (fresh install), return disabled.
+    """
     db = get_db()
     cfg = await db.system_settings.find_one({"_id": "vpn_l2tp_config"})
     if not cfg or not cfg.get("enabled"):
-        return {"status": "disabled"}
+        # Fresh install / belum dikonfigurasi → tampilkan status disabled (bukan error)
+        return {"status": "disabled", "endpoint": "", "rx_bytes": 0, "tx_bytes": 0}
     return await _proxy_get(f"{L2TP_AGENT_URL}/status")
 
 
