@@ -33,9 +33,9 @@ router = APIRouter(prefix="", tags=["VPN"])
 
 # Agent URLs — menggunakan Docker bridge gateway ke host
 # 172.17.0.1 = docker0 gateway (selalu ada sebagai IP host dari dalam container)
-# Port 8002 = L2TP Agent (l2tp_agent.py), Port 8001 = SSTP Agent (sstp_agent.py)
+# Port 8011 = L2TP Agent (l2tp_agent.py), Port 8001 = SSTP Agent (sstp_agent.py)
 _DOCKER_GATEWAY = os.environ.get("VPN_AGENT_HOST", "172.18.0.1")
-L2TP_AGENT_URL  = os.environ.get("L2TP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8002")
+L2TP_AGENT_URL  = os.environ.get("L2TP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8011")
 SSTP_AGENT_URL  = os.environ.get("SSTP_AGENT_URL",  f"http://{_DOCKER_GATEWAY}:8001")
 
 TIMEOUT = httpx.Timeout(25.0)

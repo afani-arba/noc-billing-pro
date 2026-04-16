@@ -295,7 +295,7 @@ async def lifespan(app: FastAPI):
         _l2tp_cfg = await _db.system_settings.find_one({"_id": "vpn_l2tp_config"})
         if _l2tp_cfg and _l2tp_cfg.get("enabled") and _l2tp_cfg.get("server"):
             _gw = os.environ.get("VPN_AGENT_HOST", "172.18.0.1")
-            _agent_url = os.environ.get("L2TP_AGENT_URL", f"http://{_gw}:8002")
+            _agent_url = os.environ.get("L2TP_AGENT_URL", f"http://{_gw}:8011")
             async with _httpx.AsyncClient(timeout=_httpx.Timeout(30.0)) as _c:
                 _r = await _c.post(f"{_agent_url}/connect", json={
                     "server":      _l2tp_cfg["server"],
