@@ -44,19 +44,19 @@ const navItems = [
   // ── NOC & INFRASTRUCTURE ──
   { separator: true, label: "NOC Infrastructure", nocOnly: false /* some are visible to helpdesk */ },
   { to: "/devices",        icon: Server,          label: "Devices Hub",            serviceKey: "devices",        nocOnly: true },
-  { to: "/topology",       icon: GitBranch,       label: "Network Map",            serviceKey: "topology" },
+  { to: "/topology",       icon: GitBranch,       label: "Network Map",            serviceKey: "topology",       billingProHide: true },
 
-  { to: "/ping",           icon: Activity,        label: "Network Ping Tool",      serviceKey: "ping" },
-  { to: "/sla",            icon: BarChart2,       label: "SLA Monitor",            serviceKey: "sla" },
+  { to: "/ping",           icon: Activity,        label: "Network Ping Tool",      serviceKey: "ping",           billingProHide: true },
+  { to: "/sla",            icon: BarChart2,       label: "SLA Monitor",            serviceKey: "sla",            billingProHide: true },
 
-  { to: "/incidents",      icon: AlertTriangle,   label: "Incidents",              serviceKey: "incidents" },
+  { to: "/incidents",      icon: AlertTriangle,   label: "Incidents",              serviceKey: "incidents",      billingProHide: true },
 
   // ── ADVANCED ROUTING ──
   { separator: true, label: "Routing & Peering", nocOnly: true },
-  { to: "/routing",        icon: Route,           label: "OSPF / Routes",          serviceKey: "routing",        nocOnly: true },
+  { to: "/routing",        icon: Route,           label: "OSPF / Routes",          serviceKey: "routing",        nocOnly: true, billingProHide: true },
   { to: "/peering-eye",    icon: Radar,           label: "Sentinel Peering-Eye",   serviceKey: "peering_eye" },
 
-  { to: "/sdwan",          icon: Zap,             label: "Load Balance",           serviceKey: "sdwan",          nocOnly: true },
+  { to: "/sdwan",          icon: Zap,             label: "Load Balance",           serviceKey: "sdwan",          nocOnly: true, billingProHide: true },
 
   // ── SYSTEM ADMINISTRATION ──
   { separator: true, label: "Administration", adminOnly: true },
@@ -87,7 +87,7 @@ function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
         {!collapsed && (
           <div className="overflow-hidden">
             <h1 className="text-sm font-bold tracking-tight text-foreground">ARBA</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Monitoring System</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Billing Pro</p>
           </div>
         )}
       </NavLink>
@@ -131,11 +131,13 @@ function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
         {/* Edition Badge */}
         {!collapsed && (
           <div className={`mb-2 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest text-center ${
-            edition === "enterprise"
+            edition === "billing_pro"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : edition === "enterprise"
               ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-              : "bg-primary/10 text-primary border border-primary/20"
+              : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
           }`}>
-            {edition === "enterprise" ? "⚡ Enterprise" : "🔵 Pro"}
+            {edition === "billing_pro" ? "💼 Billing Pro" : edition === "enterprise" ? "⚡ Enterprise" : "🔵 Pro"}
           </div>
         )}
         {/* Role badge */}
@@ -216,6 +218,8 @@ export default function Layout() {
   };
 
   const filteredNav = navItems.filter((item) => {
+    // billingProHide: hide items that are NOC Sentinel specific (not in Billing Pro)
+    if (item.billingProHide && edition === "billing_pro") return false;
     // enterpriseOnly: hide if billing feature not available
     if (item.enterpriseOnly && !isBillingEnabled) return false;
     

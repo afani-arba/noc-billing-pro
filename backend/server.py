@@ -381,7 +381,7 @@ api = APIRouter(prefix="/api")
 @api.get("/edition", tags=["system"])
 async def get_edition_info():
     return {
-        "edition": "enterprise",
+        "edition": "billing_pro",
         "edition_name": "NOC-Billing-Pro",
         "is_enterprise": True,
         "is_pro": False,
@@ -397,7 +397,7 @@ async def get_edition_info():
             "client_portal": True,
             "n8n_integration": True,
         },
-        "disabled_features": ["sdwan", "routing_monitor", "topology", "sla", "incidents"],
+        "disabled_features": ["sdwan", "routing_monitor", "topology", "sla", "incidents", "ping"],
         "billing_enabled": True,
         "version": "1.0.0",
     }

@@ -54,7 +54,7 @@ export const useAuth = () => useContext(AuthContext);
 
 // ─── Edition Context ──────────────────────────────────────────────────────────
 const EditionContext = createContext({
-  edition: "enterprise",
+  edition: "billing_pro",
   edition_name: "NOC-Billing-Pro",
   features: {
     billing: true,
@@ -105,7 +105,7 @@ export default function App() {
 
   // ── Edition state (fetched from backend, default = full billing_pro set) ────
   const [editionData, setEditionData] = useState({
-    edition: "enterprise",
+    edition: "billing_pro",
     edition_name: "NOC-Billing-Pro",
     features: {
       billing: true,
