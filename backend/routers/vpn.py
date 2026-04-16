@@ -29,7 +29,7 @@ from core.db import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/vpn", tags=["VPN"])
+router = APIRouter(prefix="", tags=["VPN"])
 
 # Agent URLs — menggunakan Docker bridge gateway ke host
 # 172.17.0.1 = docker0 gateway (selalu ada sebagai IP host dari dalam container)
