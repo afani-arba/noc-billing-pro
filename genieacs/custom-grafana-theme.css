@@ -17,6 +17,14 @@
   --grafana-warning: #fffa00;
   --grafana-danger: #FF2400;
   --grafana-orange: #E08736;
+
+  /* Override Native GenieACS Variables */
+  --color1: #303133 !important;
+  --color2: #8e99a8 !important;
+  --color3: #181b1f !important;
+  --color4: #E08736 !important;
+  --color5: #c7d0d9 !important;
+  --base-font-size: 14px !important;
 }
 
 /* Global Body */
@@ -27,16 +35,25 @@ body, html {
 }
 
 /* Base Top Navigation Bar / Header */
-.layout-header {
+#header {
   background-color: var(--grafana-panel-bg) !important;
   border-bottom: 1px solid var(--grafana-border) !important;
 }
-.layout-header .logo {
-  filter: brightness(0) invert(1) opacity(0.8);
+#header > .logo > img {
+  display: none !important;
 }
-.navbar {
-  background-color: var(--grafana-panel-bg) !important;
-  border: none !important;
+#header > .logo::after {
+  content: "[ Arba-System-Monitoring ]";
+  display: inline-block;
+  color: #c7d0d9;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 18px 20px 0 20px;
+  vertical-align: top;
+  letter-spacing: 0.5px;
+}
+#header > nav {
+  bottom: -2px !important;
 }
 
 /* Headings over everything */
