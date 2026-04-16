@@ -81,6 +81,8 @@ from routers.vpn import router as vpn_router
 from routers.voucher_pdf import router as voucher_pdf_router
 # 6. Billing Hotspot — voucher, sales, profiles, RADIUS status
 from routers.hotspot import router as hotspot_router
+# monitoring pppoe
+from routers.pppoe_monitoring import router as pppoe_monitoring_router
 
 _background_tasks: list = []
 
@@ -456,6 +458,7 @@ api.include_router(vpn_router)
 api.include_router(billing_router)
 api.include_router(customers_router)
 api.include_router(voucher_pdf_router)      # Voucher Hotspot PDF Generator
+api.include_router(pppoe_monitoring_router) # PPPoE Active Sessions Monitoring
 
 # ── 6. Billing Hotspot ─────────────────────────────────────────────────────
 api.include_router(hotspot_router)   # /hotspot-vouchers, /hotspot-sales, /hotspot-settings ...
