@@ -8,6 +8,7 @@ from typing import Optional
 import httpx
 import asyncio
 import logging
+import json
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
 from pydantic import BaseModel
 from core.db import get_db
@@ -186,8 +187,27 @@ class BillingSettingsUpdate(BaseModel):
     auto_isolir_method: Optional[str] = None
     auto_isolir_time: Optional[str] = None
     auto_isolir_grace_days: Optional[int] = None
-    n8n_webhook_url: Optional[str] = None
     moota_webhook_secret: Optional[str] = None
+    # ── Payment Gateway Settings ──────────────────────────────────────
+    payment_gateway_enabled: Optional[bool] = None
+    default_payment_provider: Optional[str] = None  # xendit | bca | bri
+    # Xendit
+    xendit_secret_key: Optional[str] = None
+    xendit_webhook_token: Optional[str] = None
+    xendit_va_bank: Optional[str] = None              # BNI | BCA | BRI | MANDIRI | PERMATA
+    xendit_enabled: Optional[bool] = None
+    # BCA SNAP
+    bca_client_id: Optional[str] = None
+    bca_client_secret: Optional[str] = None
+    bca_company_code: Optional[str] = None
+    bca_api_key: Optional[str] = None
+    bca_api_secret: Optional[str] = None
+    bca_enabled: Optional[bool] = None
+    # BRI BRIVA
+    bri_client_id: Optional[str] = None
+    bri_client_secret: Optional[str] = None
+    bri_institution_code: Optional[str] = None
+    bri_enabled: Optional[bool] = None
 
 @router.get("/settings")
 async def get_billing_settings(user=Depends(get_current_user)):
@@ -214,7 +234,6 @@ async def get_billing_settings(user=Depends(get_current_user)):
             "auto_isolir_method": "whatsapp",
             "auto_isolir_time": "00:05",
             "auto_isolir_grace_days": 1,
-            "n8n_webhook_url": "",
             "moota_webhook_secret": "",
         }
         await db.billing_settings.insert_one(settings)
@@ -1381,52 +1400,6 @@ async def send_invoice_wa(invoice_id: str, background_tasks: BackgroundTasks, us
     return {"message": "Permintaan kirim WhatsApp berhasil dibuat (Background)"}
 
 
-async def _bg_trigger_n8n_webhook(invoice_id: str):
-    """Trigger N8N webhook dengan data invoice setelah dibayar."""
-    db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-    n8n_url = settings.get("n8n_webhook_url")
-    if not n8n_url:
-        return
-
-    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
-    if not inv:
-        inv_hotspot = await db.hotspot_invoices.find_one({"id": invoice_id}, {"_id": 0})
-        if not inv_hotspot: return
-        inv = inv_hotspot
-    
-    customer = {}
-    if inv.get("customer_id"):
-        customer = await db.customers.find_one({"id": inv.get("customer_id")}, {"_id": 0}) or {}
-        
-    pkg = await db.billing_packages.find_one({"id": inv.get("package_id")}, {"_id": 0}) or {}
-    device = await db.devices.find_one({"id": customer.get("device_id", "")}, {"id": 0, "name": 1}) or {}
-
-
-    payload = {
-        "event": "invoice_paid",
-        "invoice_number": inv.get("invoice_number"),
-        "customer_name": inv.get("customer_name") or customer.get("name"),
-        "customer_phone": inv.get("customer_phone") or customer.get("phone"),
-        "service_type": inv.get("service_type") or customer.get("service_type", "pppoe"),
-        "username": inv.get("voucher_username") or customer.get("username"),
-        "password": inv.get("voucher_password") or customer.get("password"),
-        "package_name": inv.get("package_name") or pkg.get("name"),
-        "device_name": device.get("name", "N/A"),
-        "total": inv.get("total"),
-        "amount": inv.get("amount"),
-        "period_start": inv.get("period_start"),
-        "period_end": inv.get("period_end"),
-        "payment_method": inv.get("payment_method"),
-        "paid_at": inv.get("paid_at")
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(n8n_url, json=payload)
-    except Exception as e:
-        logger.error(f"[N8N Webhook] Gagal mengirim integrasi untuk {invoice_id}: {e}")
-
 @router.patch("/invoices/{invoice_id}/pay")
 async def mark_paid(invoice_id: str, data: PaymentUpdate, background_tasks: BackgroundTasks, user=Depends(require_write)):
     """Tandai invoice sebagai lunas dan auto-enable user MikroTik jika sebelumnya di-disable."""
@@ -1461,13 +1434,101 @@ async def mark_paid(invoice_id: str, data: PaymentUpdate, background_tasks: Back
     # Auto re-aktivasi terpusat via helper — enable MikroTik + restore SSID
     mt_msg = await _after_paid_actions(invoice_id, db)
 
-    # Trigger N8N
-    background_tasks.add_task(_bg_trigger_n8n_webhook, invoice_id)
-
     # ── Trigger WA Lunas ──
     background_tasks.add_task(_bg_send_whatsapp_paid, invoice_id)
 
     return {"message": f"Invoice ditandai lunas{mt_msg}", "paid_at": paid_at}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAYMENT GATEWAY — Buat VA / QRIS / E-Wallet
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CreatePaymentRequest(BaseModel):
+    provider: str                   # "xendit" | "bca" | "bri"
+    payment_type: str = "virtual_account"  # "virtual_account" | "qris" | "ewallet"
+    bank_code: Optional[str] = None       # Untuk VA Xendit: BNI, BCA, BRI, MANDIRI
+    ewallet_type: Optional[str] = None   # GOPAY | OVO | DANA | SHOPEEPAY
+
+
+@router.post("/invoices/{invoice_id}/create-payment")
+async def create_payment_for_invoice(
+    invoice_id: str,
+    data: CreatePaymentRequest,
+    user=Depends(require_write),
+):
+    """
+    Buat instruksi pembayaran (VA/QRIS/E-Wallet) untuk invoice yang belum lunas.
+    Hasil berupa nomor VA atau QR string yang ditampilkan di UI.
+    """
+    db = get_db()
+    inv = await db.invoices.find_one({"id": invoice_id})
+    if not inv:
+        raise HTTPException(404, "Invoice tidak ditemukan")
+    if inv.get("status") == "paid":
+        raise HTTPException(400, "Invoice sudah lunas")
+
+    customer = await db.customers.find_one({"id": inv.get("customer_id", "")}) or {}
+    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+
+    if not settings.get("payment_gateway_enabled"):
+        raise HTTPException(503, "Payment gateway belum diaktifkan. Aktifkan di menu Pengaturan Billing.")
+
+    try:
+        from services.payment_gateway import create_payment, PaymentGatewayError
+        result = await create_payment(
+            provider=data.provider,
+            payment_type=data.payment_type,
+            invoice=inv,
+            customer=customer,
+            settings=settings,
+            bank_code=data.bank_code,
+            ewallet_type=data.ewallet_type,
+        )
+    except Exception as pg_err:
+        logger.error(f"[PayGW] create_payment error: {pg_err}")
+        raise HTTPException(502, f"Gagal membuat instruksi bayar: {pg_err}")
+
+    # Simpan payment_info ke invoice agar bisa di-polling
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "payment_info": result,
+            "payment_provider": data.provider,
+            "payment_type": data.payment_type,
+        }}
+    )
+
+    logger.info(
+        f"[PayGW] Invoice {inv.get('invoice_number')} — "
+        f"{data.provider.upper()} {data.payment_type} created"
+    )
+    return {
+        "message": "Instruksi pembayaran berhasil dibuat",
+        "payment_info": result,
+        "invoice_number": inv.get("invoice_number"),
+        "amount": inv.get("total", 0),
+    }
+
+
+@router.get("/invoices/{invoice_id}/payment-status")
+async def check_payment_status(
+    invoice_id: str,
+    user=Depends(get_current_user),
+):
+    """Polling status pembayaran VA/QRIS dari provider (untuk auto-update UI)."""
+    db = get_db()
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice tidak ditemukan")
+    return {
+        "invoice_id": invoice_id,
+        "invoice_number": inv.get("invoice_number", ""),
+        "status": inv.get("status", "unpaid"),
+        "payment_provider": inv.get("payment_provider", ""),
+        "payment_type": inv.get("payment_type", ""),
+        "payment_info": inv.get("payment_info", {}),
+    }
 
 
 @router.patch("/invoices/{invoice_id}/unpay")
@@ -1757,13 +1818,7 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
 
                 if phone and vc_user:
                     settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-                    n8n_url = settings.get("n8n_webhook_url", "")
-                    
-                    if n8n_url:
-                        background_tasks.add_task(_bg_trigger_n8n_webhook, invoice_id)
-                        logger.info(f"[Moota Webhook] Triggered N8N Webhook untuk Hotspot {vc_user}")
-                    else:
-                        wa_url = settings.get("wa_api_url", "https://api.fonnte.com/send")
+                    wa_url = settings.get("wa_api_url", "https://api.fonnte.com/send")
                         wa_token = settings.get("wa_token", "")
                         wa_type = settings.get("wa_gateway_type", "fonnte")
     
@@ -1815,13 +1870,252 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
                     f"re-aktivasi & notifikasi WA dijadwalkan."
                 )
 
-            # 6. Trigger N8N Webhook (untuk semua invoice)
-            background_tasks.add_task(_bg_trigger_n8n_webhook, invoice_id)
-
         except Exception as e:
             logger.error(f"[Moota Webhook] Error processing mutasi {mutasi.get('id')}: {traceback.format_exc()}")
             
     return {"message": f"Webhook processed. Total received: {len(payload)}, CR filtered: {processed}, matched invoices: {matched}"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# XENDIT WEBHOOK — Virtual Account, QRIS, E-Wallet Callbacks
+# ══════════════════════════════════════════════════════════════════════════════
+
+@webhook_router.post("/xendit")
+async def xendit_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Endpoint callback dari Xendit (VA paid / QRIS paid / E-wallet settled).
+    Xendit mengirim header: x-callback-token untuk verifikasi.
+    external_id format: INV-YYYY-MM-NNNN-<timestamp>
+    """
+    db = get_db()
+    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    webhook_token = settings.get("xendit_webhook_token", "").strip()
+
+    # 1. Verifikasi x-callback-token
+    if webhook_token:
+        token_header = request.headers.get("x-callback-token", "")
+        if not hmac.compare_digest(webhook_token, token_header):
+            logger.warning("[Xendit Webhook] Ditolak: x-callback-token tidak valid")
+            raise HTTPException(status_code=403, detail="Invalid callback token")
+
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON payload")
+
+    event_type = payload.get("event") or ""
+    status = (payload.get("status") or "").upper()
+    external_id = (
+        payload.get("external_id")
+        or payload.get("reference_id")
+        or ""
+    )
+    amount = payload.get("amount") or payload.get("paid_amount") or 0
+
+    # Hanya proses event PAID/SETTLED
+    if status not in ("PAID", "SETTLED", "COMPLETED"):
+        logger.info(f"[Xendit] Ignored: status={status}, external_id={external_id}")
+        return {"message": "ignored"}
+
+    # Cari invoice berdasarkan external_id (prefixed dengan invoice_number)
+    # Format external_id: "INV-2026-04-0001-1234567890"
+    invoice_number_part = external_id.rsplit("-", 1)[0] if "-" in external_id else external_id
+
+    inv = await db.invoices.find_one({
+        "invoice_number": invoice_number_part,
+        "status": {"$in": ["unpaid", "overdue"]},
+    })
+
+    # Fallback: cari by payment_info.external_id
+    if not inv:
+        inv = await db.invoices.find_one({
+            "payment_info.external_id": external_id,
+            "status": {"$in": ["unpaid", "overdue"]},
+        })
+
+    if not inv:
+        # Coba hotspot_invoices
+        inv = await db.hotspot_invoices.find_one({
+            "payment_info.external_id": external_id,
+            "status": {"$in": ["unpaid", "overdue"]},
+        })
+        if inv:
+            # Hotspot invoice paid
+            await db.hotspot_invoices.update_one(
+                {"id": inv["id"]},
+                {"$set": {
+                    "status": "paid",
+                    "paid_at": _now(),
+                    "payment_method": "xendit",
+                    "paid_notes": f"Auto-paid via Xendit (ext_id: {external_id})",
+                }}
+            )
+            background_tasks.add_task(_bg_send_whatsapp_paid, inv["id"])
+            logger.info(f"[Xendit] Hotspot invoice {inv.get('id')} LUNAS via Xendit")
+            return {"message": "ok"}
+
+        logger.warning(f"[Xendit] Tidak ada invoice untuk external_id: {external_id}")
+        return {"message": "invoice not found"}
+
+    invoice_id = inv["id"]
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "status": "paid",
+            "paid_at": _now(),
+            "payment_method": "xendit",
+            "paid_notes": f"Auto-paid via Xendit (ext_id: {external_id}, amount: {amount})",
+        }}
+    )
+    await _after_paid_actions(invoice_id, db)
+    background_tasks.add_task(_bg_send_whatsapp_paid, invoice_id)
+    logger.info(f"[Xendit] Invoice {inv.get('invoice_number')} LUNAS via Xendit (Rp{amount})")
+    return {"message": "ok"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BCA SNAP WEBHOOK — Virtual Account BCA Callback
+# ══════════════════════════════════════════════════════════════════════════════
+
+@webhook_router.post("/bca")
+async def bca_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Endpoint callback dari BCA SNAP API saat VA dibayar.
+    BCA mengirim: FreeText1 = invoice_number, Amount = jumlah pembayaran.
+    """
+    db = get_db()
+    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+
+    raw_body = await request.body()
+
+    # Verifikasi BCA signature (opsional — aktifkan jika api_secret dikonfigurasi)
+    bca_api_secret = settings.get("bca_api_secret", "").strip()
+    if bca_api_secret:
+        sig_header = request.headers.get("X-BCA-Signature", "")
+        timestamp = request.headers.get("X-BCA-Timestamp", "")
+        body_hash = hashlib.sha256(raw_body).hexdigest().lower()
+        string_to_sign = f"POST:/banking/v2/corporates/va/payments:{body_hash}:{timestamp}"
+        expected_sig = hmac.new(
+            bca_api_secret.encode(), string_to_sign.encode(), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected_sig, sig_header):
+            logger.warning("[BCA Webhook] Signature tidak valid")
+            raise HTTPException(403, "Invalid BCA signature")
+
+    try:
+        payload = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON payload")
+
+    # BCA payload: {"FreeText1": "INV-2026-04-0001", "Amount": "150000", "CompanyCode": "..."}
+    invoice_number = payload.get("FreeText1", "").strip()
+    amount_str = payload.get("Amount", "0")
+    try:
+        amount = int(float(amount_str))
+    except Exception:
+        amount = 0
+
+    if not invoice_number:
+        return {"message": "no invoice number in payload"}
+
+    inv = await db.invoices.find_one({
+        "invoice_number": invoice_number,
+        "status": {"$in": ["unpaid", "overdue"]},
+    })
+    if not inv:
+        logger.warning(f"[BCA] Tidak ada invoice: {invoice_number}")
+        return {"message": "invoice not found"}
+
+    invoice_id = inv["id"]
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "status": "paid",
+            "paid_at": _now(),
+            "payment_method": "bca_va",
+            "paid_notes": f"Auto-paid via BCA VA (amount: {amount})",
+        }}
+    )
+    await _after_paid_actions(invoice_id, db)
+    background_tasks.add_task(_bg_send_whatsapp_paid, invoice_id)
+    logger.info(f"[BCA] Invoice {invoice_number} LUNAS via BCA VA (Rp{amount})")
+    return {"message": "ok", "transactionStatus": "00"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BRI BRIVA WEBHOOK — Virtual Account BRI Callback
+# ══════════════════════════════════════════════════════════════════════════════
+
+@webhook_router.post("/bri")
+async def bri_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Endpoint callback dari BRI BRIVA API saat VA dibayar.
+    BRI mengirim: keterangan = invoice_number, amount = jumlah bayar.
+    """
+    db = get_db()
+    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+
+    raw_body = await request.body()
+
+    # Verifikasi BRI HMAC signature
+    bri_client_secret = settings.get("bri_client_secret", "").strip()
+    if bri_client_secret:
+        sig_header = request.headers.get("BRI-Signature", "")
+        timestamp = request.headers.get("BRI-Timestamp", "")
+        body_hash = hashlib.sha256(raw_body).hexdigest()
+        path = "/v1/briva/callback"
+        string_to_sign = f"POST:{path}:{body_hash}:{timestamp}"
+        expected_sig = hmac.new(
+            bri_client_secret.encode(), string_to_sign.encode(), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected_sig, sig_header):
+            logger.warning("[BRI Webhook] Signature tidak valid")
+            raise HTTPException(403, "Invalid BRI signature")
+
+    try:
+        payload = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON payload")
+
+    # BRI BRIVA payload: {"keterangan": "INV-2026-04-0001", "amount": "150000", ...}
+    invoice_number = (
+        payload.get("keterangan")
+        or payload.get("description")
+        or payload.get("FreeText1")
+        or ""
+    ).strip()
+    amount_str = str(payload.get("amount", "0"))
+    try:
+        amount = int(float(amount_str))
+    except Exception:
+        amount = 0
+
+    if not invoice_number:
+        return {"message": "no invoice number in payload"}
+
+    inv = await db.invoices.find_one({
+        "invoice_number": invoice_number,
+        "status": {"$in": ["unpaid", "overdue"]},
+    })
+    if not inv:
+        logger.warning(f"[BRI] Tidak ada invoice: {invoice_number}")
+        return {"message": "invoice not found"}
+
+    invoice_id = inv["id"]
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "status": "paid",
+            "paid_at": _now(),
+            "payment_method": "bri_briva",
+            "paid_notes": f"Auto-paid via BRI BRIVA (amount: {amount})",
+        }}
+    )
+    await _after_paid_actions(invoice_id, db)
+    background_tasks.add_task(_bg_send_whatsapp_paid, invoice_id)
+    logger.info(f"[BRI] Invoice {invoice_number} LUNAS via BRI BRIVA (Rp{amount})")
+    return {"message": "00", "status": "success"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2239,8 +2533,8 @@ async def mark_voucher_paid(order_id: str, data: dict, background_tasks: Backgro
     if res.matched_count == 0:
         raise HTTPException(404, "Voucher order tidak ditemukan")
         
-    # Trigger N8N Webhook untuk proses WA dan integrasi lainnya
-    background_tasks.add_task(_bg_trigger_n8n_webhook, order_id)
+    # Kirim WA notifikasi voucher lunas
+    background_tasks.add_task(_bg_send_whatsapp_paid, order_id)
         
     return {"message": "Voucher order ditandai lunas, memproses Notifikasi & Voucher."}
 

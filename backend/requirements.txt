@@ -42,3 +42,8 @@ pyasn1>=0.4.8
 
 # Push Notifications FCM
 firebase-admin==6.4.0
+
+# PDF Generator (Voucher Hotspot)
+reportlab>=4.0
+qrcode[pil]>=7.4
+Pillow>=10.0.0

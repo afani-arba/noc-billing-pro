@@ -1,4 +1,4 @@
-﻿﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ const RpIcon = ({ className = "w-5 h-5" }) => (
 );
 import BillingGuidePage from "@/pages/BillingGuidePage";
 import { PackagesTab, PackageForm } from "@/components/BillingPackages";
+import PaymentGatewayModal from "@/components/PaymentGatewayModal";
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Utilities Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -760,6 +761,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [paymentInv, setPaymentInv] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === "administrator";
 
@@ -968,8 +970,11 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
                         {inv.mt_disabled && <WifiOff className="w-3 h-3 text-orange-400" title="Diisolir" />}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right w-[120px]">
-                      <div className="flex gap-1 justify-end">
+                    <td className="px-3 py-2.5 text-right w-[150px]">
+                      <div className="flex gap-1 justify-end flex-wrap">
+                        {inv.status !== "paid" && (
+                          <Button size="sm" variant="outline" className="rounded-sm h-6 text-[10px] px-2 text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30" onClick={() => setPaymentInv(inv)}>VA/QRIS</Button>
+                        )}
                         <Button size="sm" variant="outline" className="rounded-sm h-6 text-[10px] px-2 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 border-blue-500/30" onClick={() => printInvoiceWithProfile(inv, inv.package_name, inv.customer_name, inv.customer_username, inv.customer_phone, inv.customer_address)}>Cetak</Button>
                         <Button size="sm" variant="outline" className="rounded-sm h-6 text-[10px] px-2" onClick={() => setSelected(inv)}>Detail</Button>
                       </div>
@@ -1003,7 +1008,10 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
                   </div>
                   <p className="font-bold font-mono text-primary text-base">{Rp(inv.total)}</p>
                 </div>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {inv.status !== "paid" && (
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-xs text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30" onClick={() => setPaymentInv(inv)}>VA/QRIS</Button>
+                  )}
                   <Button size="sm" variant="outline" className="flex-1 h-8 text-xs text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 border-blue-500/30" onClick={() => printInvoiceWithProfile(inv, inv.package_name, inv.customer_name, inv.customer_username, inv.customer_phone, inv.customer_address)}>Cetak</Button>
                   <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => setSelected(inv)}>Lihat Detail</Button>
                 </div>
@@ -1043,6 +1051,13 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
       )}
       {showReminderModal && (
         <BulkReminderModal invoices={unpaidWithPhone} onClose={() => setShowReminderModal(false)} />
+      )}
+      {paymentInv && (
+        <PaymentGatewayModal
+          invoice={paymentInv}
+          onClose={() => setPaymentInv(null)}
+          onPaid={() => { setPaymentInv(null); loadPage(page); }}
+        />
       )}
       <ConfirmDialog open={!!confirm} title={confirm?.title} message={confirm?.message}
         danger={confirm?.danger} onConfirm={confirm?.onConfirm} onCancel={() => setConfirm(null)} />
@@ -2136,6 +2151,22 @@ function SettingsTab() {
     auto_isolir_grace_days: 0,
     n8n_webhook_url: "",
     moota_webhook_secret: "",
+    payment_gateway_enabled: false,
+    default_payment_provider: "xendit",
+    xendit_secret_key: "",
+    xendit_webhook_token: "",
+    xendit_va_bank: "BNI",
+    xendit_enabled: false,
+    bca_client_id: "",
+    bca_client_secret: "",
+    bca_company_code: "",
+    bca_api_key: "",
+    bca_api_secret: "",
+    bca_enabled: false,
+    bri_client_id: "",
+    bri_client_secret: "",
+    bri_institution_code: "",
+    bri_enabled: false,
   });
   
   const [pppoeSettings, setPppoeSettings] = useState({
@@ -2453,9 +2484,103 @@ function SettingsTab() {
         </Button>
       </div>
 
+      {/* Payment Gateway Settings */}
       <div className="bg-card border border-border rounded-sm p-4 space-y-4">
         <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <Activity className="w-4 h-4 text-primary" /> Setup Otomatis IP Pool & DNS PPPoE
+          <CreditCard className="w-4 h-4 text-emerald-400" /> Payment Gateway (VA / QRIS / E-Wallet)
+        </h3>
+        <div className="flex items-center gap-3 p-3 bg-secondary/30 rounded-sm border border-border/50">
+          <input type="checkbox" id="pg_enabled" checked={!!settings.payment_gateway_enabled}
+            onChange={e => setSettings({ ...settings, payment_gateway_enabled: e.target.checked })}
+            className="w-4 h-4 rounded" />
+          <label htmlFor="pg_enabled" className="text-xs font-medium cursor-pointer">
+            Aktifkan Payment Gateway (VA / QRIS / E-Wallet untuk Pembayaran Tagihan PPPoE)
+          </label>
+        </div>
+
+        {settings.payment_gateway_enabled && (
+          <div className="space-y-4">
+            <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-sm text-[10px] text-blue-300 space-y-1">
+              <p className="font-semibold">Webhook URLs — Daftarkan ke dashboard masing-masing provider:</p>
+              <p className="font-mono">Xendit: <span className="text-sky-300">[domain]/api/webhook/xendit</span></p>
+              <p className="font-mono">BCA SNAP: <span className="text-sky-300">[domain]/api/webhook/bca</span></p>
+              <p className="font-mono">BRI BRIVA: <span className="text-sky-300">[domain]/api/webhook/bri</span></p>
+            </div>
+
+            {/* Xendit */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="xendit_enabled" checked={!!settings.xendit_enabled}
+                  onChange={e => setSettings({ ...settings, xendit_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label htmlFor="xendit_enabled" className="text-xs font-semibold text-emerald-400 cursor-pointer">Xendit (VA + QRIS + E-Wallet)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Secret Key</Label>
+                  <Input type="password" value={settings.xendit_secret_key || ""} onChange={e => setSettings({ ...settings, xendit_secret_key: e.target.value })}
+                    className="h-7 rounded-sm text-xs font-mono" placeholder="xnd_production_..." />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Webhook Token</Label>
+                  <Input type="password" value={settings.xendit_webhook_token || ""} onChange={e => setSettings({ ...settings, xendit_webhook_token: e.target.value })}
+                    className="h-7 rounded-sm text-xs font-mono" placeholder="token dari dashboard Xendit" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Bank VA Default</Label>
+                  <select value={settings.xendit_va_bank || "BNI"} onChange={e => setSettings({ ...settings, xendit_va_bank: e.target.value })}
+                    className="w-full h-7 text-xs rounded-sm border border-border bg-secondary px-2">
+                    {["BNI","BCA","BRI","MANDIRI","PERMATA","BSI","BJB"].map(b => <option key={b}>{b}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* BCA */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="bca_enabled" checked={!!settings.bca_enabled}
+                  onChange={e => setSettings({ ...settings, bca_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label htmlFor="bca_enabled" className="text-xs font-semibold text-blue-400 cursor-pointer">BCA SNAP (Virtual Account BCA)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[["bca_client_id","Client ID"],["bca_client_secret","Client Secret"],["bca_company_code","Company Code"],["bca_api_key","API Key"],["bca_api_secret","API Secret"]].map(([k,lb]) => (
+                  <div key={k} className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">{lb}</Label>
+                    <Input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
+                      className="h-7 rounded-sm text-xs font-mono" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* BRI */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="bri_enabled" checked={!!settings.bri_enabled}
+                  onChange={e => setSettings({ ...settings, bri_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label htmlFor="bri_enabled" className="text-xs font-semibold text-sky-400 cursor-pointer">BRI BRIVA (Virtual Account BRI)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[["bri_client_id","Client ID"],["bri_client_secret","Client Secret"],["bri_institution_code","Institution Code"]].map(([k,lb]) => (
+                  <div key={k} className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">{lb}</Label>
+                    <Input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
+                      className="h-7 rounded-sm text-xs font-mono" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" variant="outline">
+              <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Konfigurasi Gateway"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
+        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
+          <Activity className="w-4 h-4 text-primary" /> Setup Otomatis IP Pool &amp; DNS PPPoE
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

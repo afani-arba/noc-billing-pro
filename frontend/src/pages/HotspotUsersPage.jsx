@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
-import { Search, Plus, Pencil, Trash2, RefreshCw, Wifi, WifiOff, Server, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, Wifi, WifiOff, Server, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, FileDown, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -216,6 +216,42 @@ export default function HotspotUsersPage() {
     }
   };
 
+  const [showVoucherPdf, setShowVoucherPdf] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfOpts, setPdfOpts] = useState({ layout: "8x", template: "branded", device_id: "" });
+
+  const downloadVoucherPdf = async () => {
+    if (!selectedDevice) return toast.error("Pilih device terlebih dahulu");
+    setPdfLoading(true);
+    try {
+      const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token") || "";
+      const params = new URLSearchParams({
+        device_id: selectedDevice,
+        layout: pdfOpts.layout,
+        template: pdfOpts.template,
+      });
+      const resp = await fetch(`/api/vouchers/pdf?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: "Gagal generate PDF" }));
+        throw new Error(err.detail || "Gagal generate PDF");
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `voucher-hotspot-${selectedDevice}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF Voucher berhasil diunduh!");
+      setShowVoucherPdf(false);
+    } catch (e) {
+      toast.error(e.message || "Gagal generate PDF voucher");
+    }
+    setPdfLoading(false);
+  };
+
   const currentDev = devices.find(d => d.id === selectedDevice);
   const activeData = tabMode === "users" ? users : vouchers;
   const onlineCount = users.filter(u => u.is_online).length;
@@ -238,14 +274,21 @@ export default function HotspotUsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Hotspot Users & Vouchers</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">Manage Hotspot users (MikroTik) & Vouchers (NOC Sentinel RADIUS)</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Hotspot Users &amp; Vouchers</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">Manage Hotspot users (MikroTik) &amp; Vouchers (NOC Sentinel RADIUS)</p>
         </div>
-        {!isViewer && selectedDevice && tabMode === "users" && (
-          <Button onClick={openAdd} size="sm" className="rounded-sm gap-2 w-full sm:w-auto" data-testid="add-hotspot-user-btn">
-            <Plus className="w-4 h-4" /> Add User
-          </Button>
-        )}
+        <div className="flex gap-2 flex-wrap justify-end">
+          {selectedDevice && tabMode === "vouchers" && (
+            <Button onClick={() => setShowVoucherPdf(true)} size="sm" variant="outline" className="rounded-sm gap-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/10">
+              <Printer className="w-4 h-4" /> Cetak Voucher PDF
+            </Button>
+          )}
+          {!isViewer && selectedDevice && tabMode === "users" && (
+            <Button onClick={openAdd} size="sm" className="rounded-sm gap-2 w-full sm:w-auto" data-testid="add-hotspot-user-btn">
+              <Plus className="w-4 h-4" /> Add User
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex border-b border-border text-sm mb-4">
@@ -478,6 +521,57 @@ export default function HotspotUsersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="rounded-sm" data-testid="hotspot-form-cancel">Cancel</Button>
             <Button onClick={handleSave} className="rounded-sm" data-testid="hotspot-form-save">{editing ? "Update" : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Voucher PDF Dialog */}
+      <Dialog open={showVoucherPdf} onOpenChange={setShowVoucherPdf}>
+        <DialogContent className="rounded-sm bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cetak Voucher PDF</DialogTitle>
+            <DialogDescription>
+              Generate PDF voucher hotspot untuk dicetak. Semua voucher pada device ini akan disertakan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Layout Per Halaman</Label>
+              <Select value={pdfOpts.layout} onValueChange={v => setPdfOpts({ ...pdfOpts, layout: v })}>
+                <SelectTrigger className="rounded-sm bg-background text-xs h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="4x">4 per halaman (besar)</SelectItem>
+                  <SelectItem value="8x">8 per halaman (sedang)</SelectItem>
+                  <SelectItem value="16x">16 per halaman (kecil)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Template Desain</Label>
+              <Select value={pdfOpts.template} onValueChange={v => setPdfOpts({ ...pdfOpts, template: v })}>
+                <SelectTrigger className="rounded-sm bg-background text-xs h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="branded">Branded (Logo + Warna)</SelectItem>
+                  <SelectItem value="basic">Basic (Hitam Putih)</SelectItem>
+                  <SelectItem value="minimal">Minimal (Clean)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-2 bg-secondary/30 rounded-sm text-[10px] text-muted-foreground">
+              Device: <span className="text-foreground font-mono">{currentDev?.name || selectedDevice}</span>
+              {" | "}Total voucher: <span className="text-foreground font-mono">{vouchers.length}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVoucherPdf(false)} className="rounded-sm text-xs">Batal</Button>
+            <Button onClick={downloadVoucherPdf} disabled={pdfLoading} className="rounded-sm text-xs gap-2">
+              <FileDown className="w-3.5 h-3.5" />
+              {pdfLoading ? "Generating PDF..." : "Download PDF"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

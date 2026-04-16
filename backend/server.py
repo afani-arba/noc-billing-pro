@@ -79,6 +79,8 @@ from routers.wa_customer_service import router as wa_cs_router
 from routers.genieacs import router as genieacs_router
 # 10. Sentinel Peering Eye (includes BGP Content Steering)
 from routers.peering_eye import router as peering_eye_router
+# Payment Gateway Voucher PDF
+from routers.voucher_pdf import router as voucher_pdf_router
 
 _background_tasks: list = []
 
@@ -338,6 +340,9 @@ async def license_middleware(request: Request, call_next):
             "/api/webhook/hotspot-public-config",
             "/api/webhook/hotspot-create-order",
             "/api/webhook/hotspot-order-status/",
+            "/api/webhook/xendit",
+            "/api/webhook/bca",
+            "/api/webhook/bri",
         ]
         if not any(path.startswith(p) for p in allowed):
             try:
@@ -402,6 +407,7 @@ api.include_router(hotspot_router)              # Hotspot + RADIUS Status & Push
 api.include_router(pppoe_router)
 api.include_router(billing_router)
 api.include_router(customers_router)
+api.include_router(voucher_pdf_router)      # Voucher Hotspot PDF Generator
 
 # ── 6. Billing Hotspot ─────────────────────────────────────────────────────
 # (hotspot_router already included above, handles all hotspot + billing endpoints)
