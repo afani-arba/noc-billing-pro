@@ -4,7 +4,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { 
   Radar, Activity, Plus, Trash2, Power, Globe,
-  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw
+  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw, Terminal, CheckCircle2
 } from "lucide-react";
 
 export default function BgpSteeringPage() {
@@ -62,6 +62,39 @@ export default function BgpSteeringPage() {
  * ───────────────────────────────────────────────────────────────────────────── */
 function AppTrafficMonitorTab() {
   const queryClient = useQueryClient();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleCopyScript = async () => {
+    setIsGenerating(true);
+    try {
+      const res = await api.get("/peering-eye/app-traffic/setup-script");
+      const scriptContent = res.data.script || res.data;
+      
+      // Fallback for secure clipboard API on HTTP (since some NOC servers may run on HTTP locally)
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(scriptContent);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = scriptContent;
+        textArea.style.position = "absolute";
+        textArea.style.left = "-999999px";
+        document.body.prepend(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+        } catch (error) {
+          console.error(error);
+        } finally {
+          textArea.remove();
+        }
+      }
+      toast.success("Script berhasil disalin!", { description: "Paste script tersebut ke Terminal MikroTik Anda." });
+    } catch (e) {
+      toast.error("Gagal mengambil script", { description: e.response?.data?.detail || e.message });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const { data: summaryRaw, isLoading } = useQuery({
     queryKey: ["app_traffic_summary"],
@@ -143,14 +176,24 @@ function AppTrafficMonitorTab() {
         )}
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-        <h4 className="text-sm font-semibold text-amber-500 flex items-center gap-2 mb-2">
-          <AlertTriangle className="w-4 h-4" /> Cara Mengukur Traffic App
-        </h4>
-        <p className="text-xs text-amber-500/80 leading-relaxed">
-          NOC Billing Pro mengukur ukuran byte aplikasi dengan menarik data <strong>Simple Queue</strong> dari MikroTik Anda setiap 5 menit. 
-          Agar pengukuran berjalan, Anda WAJIB membuat Simple Queue di MikroTik bernama <code className="bg-amber-500/20 px-1 rounded">GLOBAL_APP_NamaPlatform</code> (Misalnya: <code>GLOBAL_APP_YouTube</code>).
-        </p>
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-amber-500 flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4" /> Cara Mengukur Traffic App
+          </h4>
+          <p className="text-xs text-amber-500/80 leading-relaxed max-w-3xl">
+            NOC Billing Pro mengukur ukuran byte aplikasi dengan menarik data <strong>Simple Queue</strong> dari MikroTik Anda setiap 5 menit. 
+            Agar pengukuran berjalan, Anda WAJIB membuat Simple Queue di MikroTik bernama <code className="bg-amber-500/20 px-1 rounded">GLOBAL_APP_NamaPlatform</code> (Misalnya: <code>GLOBAL_APP_YouTube</code>).
+          </p>
+        </div>
+        <button
+          onClick={handleCopyScript}
+          disabled={isGenerating}
+          className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Terminal className="w-4 h-4" />}
+          {isGenerating ? "Menyiapkan..." : "Generate & Copy Script"}
+        </button>
       </div>
     </div>
   );
