@@ -4,7 +4,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { 
   Radar, Activity, Plus, Trash2, Power, Globe,
-  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye
+  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw
 } from "lucide-react";
 
 export default function BgpSteeringPage() {
