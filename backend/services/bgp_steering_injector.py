@@ -244,7 +244,7 @@ async def run_inject_cycle():
         return
 
     # Ambil platform regex dari DB (untuk Judol/Dewasa/Custom)
-    platform_docs = await db.peering_eye_platforms.find({}, {"_id": 0}).to_list(100)
+    platform_docs = await db.peering_platforms.find({}, {"_id": 0}).to_list(100)
     regex_map = {d.get("name", ""): d.get("regex_pattern", "") for d in platform_docs}
 
     for policy in policies:

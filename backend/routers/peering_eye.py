@@ -63,8 +63,27 @@ class BgpSteeringPolicy(BaseModel):
 
 @router.get("/bgp-steering/catalog")
 async def get_steering_catalog(user=Depends(get_current_user)):
-    """Daftar platform populer yang bisa dipilih sebagai target steering."""
-    return STEERING_PLATFORM_CATALOG
+    """Daftar platform populer + custom platform yang bisa dipilih sebagai target steering."""
+    db = get_db()
+    base_catalog = list(STEERING_PLATFORM_CATALOG)
+    base_names = {p["name"] for p in base_catalog}
+    
+    try:
+        peering_docs = await db.peering_platforms.find({}, {"_id": 0}).to_list(500)
+        for pd in peering_docs:
+            name = pd.get("name")
+            if name and name not in base_names:
+                base_catalog.append({
+                    "name": name,
+                    "icon": pd.get("icon", "🌐"),
+                    "asn": 0,
+                    "color": pd.get("color", "#6366f1")
+                })
+    except Exception as e:
+        print(f"Error fetching peering_platforms for catalog: {e}")
+        pass
+        
+    return base_catalog
 
 
 @router.get("/bgp-steering")
