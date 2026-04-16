@@ -15,10 +15,10 @@ read -r -p "Pilihan (1/2/3): " OPTION
 
 case $OPTION in
     1)
-        docker compose exec noc-backend python manage_user.py --create
+        docker compose exec -w /app noc-backend python /app-host/backend/manage_user.py --create
         ;;
     2)
-        docker compose exec noc-backend python manage_user.py --reset
+        docker compose exec -w /app noc-backend python /app-host/backend/manage_user.py --reset
         ;;
     3)
         exit 0
