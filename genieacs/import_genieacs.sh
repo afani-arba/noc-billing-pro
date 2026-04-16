@@ -6,7 +6,9 @@
 # =============================================================================
 set -e
 
-GENIE_URL="${GENIEACS_NBI_URL:-http://localhost:7557}"
+GENIEACS_CONTAINER="noc-billing-pro-genieacs-nbi"
+NBI_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$GENIEACS_CONTAINER" 2>/dev/null || echo "localhost")
+GENIE_URL="${GENIEACS_NBI_URL:-http://$NBI_IP:7557}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Warna output
