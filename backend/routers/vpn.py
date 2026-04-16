@@ -92,6 +92,10 @@ async def l2tp_health():
 
 @router.get("/l2tp/status")
 async def l2tp_status():
+    db = get_db()
+    cfg = await db.system_settings.find_one({"_id": "vpn_l2tp_config"})
+    if not cfg or not cfg.get("enabled"):
+        return {"status": "disabled"}
     return await _proxy_get(f"{L2TP_AGENT_URL}/status")
 
 
@@ -158,6 +162,10 @@ async def sstp_health():
 
 @router.get("/sstp/status")
 async def sstp_status():
+    db = get_db()
+    cfg = await db.system_settings.find_one({"_id": "vpn_sstp_config"})
+    if not cfg or not cfg.get("enabled"):
+        return {"status": "disabled"}
     return await _proxy_get(f"{SSTP_AGENT_URL}/status")
 
 
