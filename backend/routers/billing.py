@@ -1819,39 +1819,39 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
                 if phone and vc_user:
                     settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
                     wa_url = settings.get("wa_api_url", "https://api.fonnte.com/send")
-                        wa_token = settings.get("wa_token", "")
-                        wa_type = settings.get("wa_gateway_type", "fonnte")
-    
-                        msg = (
-                            f"✅ *Pembayaran Voucher Berhasil!*\n\n"
-                            f"Yth. *{cust_name}*,\n"
-                            f"Pembayaran sebesar *{_rupiah(amount_int)}* telah kami terima.\n\n"
-                            f"🎫 *Kode Voucher Hotspot Anda:*\n"
-                            f"Username : `{vc_user}`\n"
-                            f"Password : `{vc_pass}`\n"
-                            f"Paket     : {pkg_name}\n\n"
-                            f"Cara pakai:\n"
-                            f"1. Sambungkan ke WiFi hotspot\n"
-                            f"2. Buka browser, akan muncul halaman login\n"
-                            f"3. Masukkan username & password di atas\n\n"
-                            f"Selamat menikmati! 🌐"
-                        )
-    
-                        if wa_url and wa_token:
-                            async def send_voucher_wa(ph=phone, m=msg, wu=wa_url, wt=wa_token, wtp=wa_type):
-                                try:
-                                    async with httpx.AsyncClient(timeout=10) as client:
-                                        if wtp == "fonnte":
-                                            await client.post(wu, headers={"Authorization": wt},
-                                                              data={"target": ph, "message": m, "countryCode": "62"})
-                                        else:
-                                            await client.post(wu, headers={"Authorization": wt},
-                                                              json={"phone": ph, "message": m})
-                                    logger.info(f"[Moota Webhook] Kode voucher {vc_user} dikirim ke {ph}")
-                                except Exception as wa_err:
-                                    logger.error(f"[Moota Webhook] Gagal kirim voucher WA: {wa_err}")
-    
-                            asyncio.create_task(send_voucher_wa())
+                    wa_token = settings.get("wa_token", "")
+                    wa_type = settings.get("wa_gateway_type", "fonnte")
+
+                    msg = (
+                        f"✅ *Pembayaran Voucher Berhasil!*\n\n"
+                        f"Yth. *{cust_name}*,\n"
+                        f"Pembayaran sebesar *{_rupiah(amount_int)}* telah kami terima.\n\n"
+                        f"🎫 *Kode Voucher Hotspot Anda:*\n"
+                        f"Username : `{vc_user}`\n"
+                        f"Password : `{vc_pass}`\n"
+                        f"Paket     : {pkg_name}\n\n"
+                        f"Cara pakai:\n"
+                        f"1. Sambungkan ke WiFi hotspot\n"
+                        f"2. Buka browser, akan muncul halaman login\n"
+                        f"3. Masukkan username & password di atas\n\n"
+                        f"Selamat menikmati! 🌐"
+                    )
+
+                    if wa_url and wa_token:
+                        async def send_voucher_wa(ph=phone, m=msg, wu=wa_url, wt=wa_token, wtp=wa_type):
+                            try:
+                                async with httpx.AsyncClient(timeout=10) as client:
+                                    if wtp == "fonnte":
+                                        await client.post(wu, headers={"Authorization": wt},
+                                                          data={"target": ph, "message": m, "countryCode": "62"})
+                                    else:
+                                        await client.post(wu, headers={"Authorization": wt},
+                                                          json={"phone": ph, "message": m})
+                                logger.info(f"[Moota Webhook] Kode voucher {vc_user} dikirim ke {ph}")
+                            except Exception as wa_err:
+                                logger.error(f"[Moota Webhook] Gagal kirim voucher WA: {wa_err}")
+
+                        asyncio.create_task(send_voucher_wa())
                             
                     # Tandai voucher sudah dikirim
                     await db.hotspot_invoices.update_one(
