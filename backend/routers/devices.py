@@ -1036,10 +1036,15 @@ async def bandwidth_history_range(
             if isinstance(ts_ms, (int, float)) and ts_ms > 0:
                 bucket_map[int(ts_ms)] = b
 
-        start_ms = int(int(start.timestamp() * 1000) // interval_ms) * interval_ms
-        end_ms   = int(int(now_utc.timestamp() * 1000) // interval_ms) * interval_ms
-
+        # Forward-fill: gunakan nilai terakhir yang diketahui untuk slot kosong
+        # (seperti Grafana/Nagios — nilai dipertahankan sampai ada data baru)
+        # Ini mencegah pola sawtooth/segitiga karena SNMP 90s vs bucket 60s
         result = []
+        last_known_dl:   float | None = None
+        last_known_ul:   float | None = None
+        last_known_ping: float | None = None
+        last_known_jitter: float | None = None
+
         cur_ms = start_ms
         while cur_ms <= end_ms:
             utc_dt   = datetime.fromtimestamp(cur_ms / 1000, tz=timezone.utc)
@@ -1050,22 +1055,35 @@ async def bandwidth_history_range(
             )
             b = bucket_map.get(cur_ms)
             if b:
+                dl   = round((b.get("download_bps") or 0) / 1_000_000, 2)
+                ul   = round((b.get("upload_bps")   or 0) / 1_000_000, 2)
+                ping = round(b.get("ping_ms")   or 0, 1)
+                jit  = round(b.get("jitter_ms") or 0, 1)
+                # Update last known values
+                last_known_dl     = dl
+                last_known_ul     = ul
+                last_known_ping   = ping
+                last_known_jitter = jit
                 result.append({
-                    "time":     label,
-                    "download": round((b.get("download_bps") or 0) / 1_000_000, 2),
-                    "upload":   round((b.get("upload_bps")   or 0) / 1_000_000, 2),
-                    "ping":     round(b.get("ping_ms")   or 0, 1),
-                    "jitter":   round(b.get("jitter_ms") or 0, 1),
-                    "ping_raw": [p for p in b.get("ping_raw", []) if p is not None],
+                    "time":       label,
+                    "download":   dl,
+                    "upload":     ul,
+                    "ping":       ping,
+                    "jitter":     jit,
+                    "ping_raw":   [p for p in b.get("ping_raw", []) if p is not None],
                     "jitter_raw": [j for j in b.get("jitter_raw", []) if j is not None],
                 })
             else:
-                # Slot kosong — isi None agar Recharts skip titik ini (bukan drop ke 0)
-                # Versi sebelumnya: isi 0.0 => menyebabkan pola segitiga/sawtooth di grafik
-                # Solusi: None + connectNulls=True di frontend = garis tetap smooth
+                # Slot kosong: forward-fill dengan nilai terakhir jika ada,
+                # atau None jika belum ada data sama sekali (awal timeline)
                 result.append({
-                    "time": label, "download": None, "upload": None,
-                    "ping": None, "jitter": None, "ping_raw": [], "jitter_raw": []
+                    "time":       label,
+                    "download":   last_known_dl,
+                    "upload":     last_known_ul,
+                    "ping":       last_known_ping,
+                    "jitter":     last_known_jitter,
+                    "ping_raw":   [],
+                    "jitter_raw": [],
                 })
             cur_ms += interval_ms
         return result

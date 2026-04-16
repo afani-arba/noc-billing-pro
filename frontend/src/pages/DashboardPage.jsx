@@ -62,8 +62,9 @@ export default function DashboardPage() {
   const [comparePeriod, setComparePeriod] = useState("week");
   const [showCompare, setShowCompare] = useState(false);
 
-  // SSTP Status
+  // VPN Status — SSTP + L2TP
   const [sstpStatus, setSstpStatus] = useState(null);
+  const [l2tpStatus, setL2tpStatus] = useState(null);
 
   // Auto-refresh state
   const [lastFetchError, setLastFetchError] = useState(false);
@@ -244,12 +245,14 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Fetch SSTP Status
+  // Fetch SSTP + L2TP Status
   useEffect(() => {
-    api.get("/sstp/status").then(r => setSstpStatus(r.data)).catch(() => {});
-    const sstpIv = setInterval(() => {
-      api.get("/sstp/status").then(r => setSstpStatus(r.data)).catch(() => {});
-    }, 10000);
+    const fetchVpnStatus = () => {
+      api.get("/sstp/status").then(r => setSstpStatus(r.data)).catch(() => setSstpStatus(null));
+      api.get("/l2tp/status").then(r => setL2tpStatus(r.data)).catch(() => setL2tpStatus(null));
+    };
+    fetchVpnStatus();
+    const sstpIv = setInterval(fetchVpnStatus, 10000);
     return () => clearInterval(sstpIv);
   }, []);
 
@@ -275,9 +278,9 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const td = bandwidthData ?? (stats?.traffic_data || []);
-  // Find first non-zero index to auto-scroll chart to active data
-  const firstNonZeroIdx = td.findIndex(d => (d.download ?? 0) > 0 || (d.upload ?? 0) > 0);
-  const brushStart = firstNonZeroIdx > 0 ? Math.max(0, firstNonZeroIdx - 2) : Math.max(0, td.length - 60);
+  // Find first non-null/non-zero index to auto-scroll chart to active data
+  const firstActiveIdx = td.findIndex(d => (d.download ?? 0) > 0 || (d.upload ?? 0) > 0);
+  const brushStart = firstActiveIdx > 0 ? Math.max(0, firstActiveIdx - 2) : Math.max(0, td.length - 80);
   // Defensive aliases — prevent TypeError when API returns partial data
   const health = stats.system_health || {};
   const devStat = stats.devices || { online: 0, total: 0 };
@@ -320,10 +323,21 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* SSTP VPN Status Badge */}
+            {/* VPN Status Badges — SSTP + L2TP */}
+            {l2tpStatus && l2tpStatus.status !== "disabled" && (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-[10px] font-mono font-semibold transition-all ${
+                l2tpStatus.status === "online"
+                  ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                  : "bg-red-500/10 border-red-500/20 text-red-400"
+              }`} title={`L2TP VPN: ${l2tpStatus.status}`}>
+                <Shield className="w-2.5 h-2.5" /> L2TP {l2tpStatus.status.toUpperCase()}
+              </div>
+            )}
             {sstpStatus && sstpStatus.status !== "disabled" && (
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-[10px] font-mono font-semibold transition-all ${
-                sstpStatus.status === "online" ? "bg-purple-500/10 border-purple-500/20 text-purple-400" : "bg-red-500/10 border-red-500/20 text-red-400"
+                sstpStatus.status === "online"
+                  ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
+                  : "bg-red-500/10 border-red-500/20 text-red-400"
               }`} title={sstpStatus.status === "online" ? `SSTP VPN Endpoint: ${sstpStatus.endpoint}\nRX/TX: ${sstpStatus.rx_bytes}/${sstpStatus.tx_bytes}` : "SSTP VPN Disconnected"}>
                 <Shield className="w-2.5 h-2.5" /> SSTP {sstpStatus.status.toUpperCase()}
               </div>
@@ -499,8 +513,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={40} />
                   <YAxis tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} width={80} tickFormatter={formatBwTooltip} />
                   <Tooltip contentStyle={ttStyle.contentStyle} formatter={(v, n) => [formatBwTooltip(v), n === "Download" || n === "download" ? "Download" : "Upload"]} />
-                  <Area type="linear" dataKey="download" stroke="#ef4444" fill="url(#gDlBandwidth)" strokeWidth={1.5} name="Download" activeDot={{ r: 4 }} connectNulls={true} />
-                  <Area type="linear" dataKey="upload" stroke="#f97316" fill="url(#gUlBandwidth)" strokeWidth={1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={true} />
+                  <Area type="linear" dataKey="download" stroke="#ef4444" fill="url(#gDlBandwidth)" strokeWidth={1.5} name="Download" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
+                  <Area type="linear" dataKey="upload" stroke="#f97316" fill="url(#gUlBandwidth)" strokeWidth={1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
                   <Brush dataKey="time" height={18} startIndex={brushStart} endIndex={Math.min(td.length - 1, brushStart + 80)} {...brushStyle} tick={<BrushTick />} />
                 </AreaChart>
               </ResponsiveContainer>
