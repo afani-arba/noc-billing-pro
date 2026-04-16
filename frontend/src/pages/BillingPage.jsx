@@ -442,6 +442,7 @@ export default function BillingPage() {
     { id: "invoices", label: "Tagihan", icon: RpIcon },
     { id: "customers", label: "Pelanggan", icon: Users },
     { id: "packages", label: "Paket", icon: Package },
+    { id: "monitoring", label: "Monitoring PPPoE", icon: Activity },
     { id: "settings", label: "Pengaturan", icon: Settings },
     { id: "guide", label: "Panduan", icon: BookOpen },
   ];
@@ -519,6 +520,7 @@ export default function BillingPage() {
         {tab === "invoices" && <InvoicesTab month={month} year={year} packages={packages} customers={customers} deviceId={globalDeviceId} />}
         {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} />}
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
+        {tab === "monitoring" && <PpoeMonitoringTab />}
         {tab === "settings" && <SettingsTab />}
         {tab === "guide" && <BillingGuidePage />}
       </div>
@@ -2673,3 +2675,336 @@ function ImportCsvModal({ onClose, onImported }) {
     </div>
   );
 }
+
+// â”€â”€ Monitoring PPPoE Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// This file is appended to BillingPage.jsx by the build script
+
+function PpoeMonitoringTab() {
+  const [actives, setActives]       = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [showPwd, setShowPwd]       = useState({});
+  const [search, setSearch]         = useState("");
+  const [kickingUser, setKicking]   = useState(null);
+  const [enabled, setEnabled]       = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ppoe_monitoring_enabled") ?? "true"); }
+    catch { return true; }
+  });
+  const [routers, setRouters]       = useState([]);
+  const [selectedRouter, setSelectedRouter] = useState("all");
+  const [countdown, setCountdown]   = useState(15);
+  const intervalRef  = useRef(null);
+  const countdownRef = useRef(null);
+
+  useEffect(() => {
+    api.get("/pppoe-monitoring-routers")
+      .then(({ data }) => setRouters(data || []))
+      .catch(() => {});
+  }, []);
+
+  const loadData = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true);
+    setCountdown(15);
+    try {
+      const params = selectedRouter !== "all" ? `?router_id=${selectedRouter}` : "";
+      const { data } = await api.get(`/pppoe-active-monitoring${params}`);
+      setActives(data || []);
+    } catch (e) {
+      toast.error("Gagal load data monitoring PPPoE");
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled, selectedRouter]);
+
+  useEffect(() => {
+    clearInterval(intervalRef.current);
+    clearInterval(countdownRef.current);
+    if (enabled) {
+      loadData();
+      intervalRef.current  = setInterval(loadData, 15000);
+      countdownRef.current = setInterval(() => setCountdown(c => c <= 1 ? 15 : c - 1), 1000);
+    } else {
+      setActives([]);
+      setCountdown(15);
+    }
+    return () => { clearInterval(intervalRef.current); clearInterval(countdownRef.current); };
+  }, [enabled, selectedRouter]); // eslint-disable-line
+
+  const toggleEnabled = () => {
+    const next = !enabled;
+    setEnabled(next);
+    localStorage.setItem("ppoe_monitoring_enabled", JSON.stringify(next));
+    if (next) toast.success("Monitoring PPPoE diaktifkan");
+    else       toast.info("Monitoring PPPoE dinonaktifkan - beban MikroTik berkurang");
+  };
+
+  const handleKick = async (a) => {
+    if (!window.confirm(`Putus koneksi "${a.name}" dari ${a.router_name}?`)) return;
+    setKicking(a.name);
+    try {
+      await api.post("/pppoe-kick", { username: a.name, router_id: a.router_id });
+      toast.success(`[OK] Koneksi "${a.name}" berhasil diputus`);
+      setTimeout(loadData, 1500);
+    } catch (e) {
+      toast.error(`Gagal kick "${a.name}": ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setKicking(null);
+    }
+  };
+
+  const togglePwd = (u) => setShowPwd(p => ({ ...p, [u]: !p[u] }));
+
+  const formatBytes = (b) => {
+    const num = Number(b);
+    if (!b || isNaN(num) || num === 0) return "0 B";
+    if (num > 1024**3) return (num / 1024**3).toFixed(2) + " GB";
+    if (num > 1024**2) return (num / 1024**2).toFixed(2) + " MB";
+    if (num > 1024)    return (num / 1024).toFixed(2) + " KB";
+    return num + " B";
+  };
+
+  const formatBps = (bps) => {
+    const num = Number(bps);
+    if (isNaN(num) || num === 0) return null;
+    if (num > 1_000_000) return (num / 1_000_000).toFixed(1) + " Mbps";
+    if (num > 1_000)     return (num / 1_000).toFixed(1) + " kbps";
+    return num + " bps";
+  };
+
+  const BpsCell = ({ txBps, rxBps }) => {
+    const tx = formatBps(txBps);
+    const rx = formatBps(rxBps);
+    return (
+      <div className="tabular-nums text-[11px] space-y-1">
+        <div className="flex items-center gap-1.5">
+          <Download className="w-3 h-3 text-green-500 shrink-0"/>
+          {tx ? <span className="text-green-500 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block"/>
+                  {tx}
+                </span>
+              : <span className="text-muted-foreground">0 bps</span>}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Upload className="w-3 h-3 text-blue-500 shrink-0"/>
+          {rx ? <span className="text-blue-500 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse inline-block"/>
+                  {rx}
+                </span>
+              : <span className="text-muted-foreground">0 bps</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const q = search.toLowerCase().trim();
+  const filtered = q
+    ? actives.filter(a =>
+        a.name.toLowerCase().includes(q) ||
+        (a.customer_name || "").toLowerCase().includes(q) ||
+        (a.address || "").toLowerCase().includes(q) ||
+        (a.caller_id || "").toLowerCase().includes(q) ||
+        (a.router_name || "").toLowerCase().includes(q)
+      )
+    : actives;
+
+  return (
+    <div className="space-y-4">
+      {/* Header Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-4 rounded-sm border border-border">
+        <div>
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <Activity className={`w-4 h-4 ${enabled ? "text-green-500 animate-pulse" : "text-muted-foreground"}`}/>
+            Monitoring PPPoE Aktif
+            {enabled && (
+              <span className="text-[10px] font-normal text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+                Refresh dalam {countdown}s
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Pantau sesi PPPoE aktif - mendukung ROS 6, ROS 7, dan autentikasi RADIUS.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedRouter}
+            onChange={e => setSelectedRouter(e.target.value)}
+            disabled={!enabled}
+            className="h-8 text-xs bg-secondary border border-border rounded-sm px-2 cursor-pointer disabled:opacity-40 min-w-[160px]"
+          >
+            <option value="all">- Semua Router -</option>
+            {routers.map(r => (
+              <option key={r.id} value={r.id}>
+                {r.name} {r.api_mode === "api" ? "(ROS6)" : "(ROS7)"}
+              </option>
+            ))}
+          </select>
+
+          <Button onClick={loadData} disabled={loading || !enabled} size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}/> Refresh
+          </Button>
+
+          <button
+            onClick={toggleEnabled}
+            className={`h-8 px-3 rounded-sm text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+              enabled
+                ? "bg-green-500/10 border-green-500/40 text-green-400 hover:bg-green-500/20"
+                : "bg-red-500/10 border-red-500/40 text-red-400 hover:bg-red-500/20"
+            }`}
+          >
+            {enabled ? <><Wifi className="w-3.5 h-3.5"/> Monitoring ON</> : <><WifiOff className="w-3.5 h-3.5"/> Monitoring OFF</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Disabled state */}
+      {!enabled && (
+        <div className="flex flex-col items-center justify-center py-16 space-y-4 bg-card border border-border rounded-sm">
+          <WifiOff className="w-12 h-12 text-muted-foreground/30"/>
+          <div className="text-center">
+            <p className="font-semibold text-muted-foreground">Monitoring dinonaktifkan</p>
+            <p className="text-xs text-muted-foreground/60 mt-1 max-w-xs">
+              Polling ke MikroTik dihentikan. Klik <strong>Monitoring OFF</strong> untuk mengaktifkan.
+            </p>
+          </div>
+          <button onClick={toggleEnabled} className="text-xs bg-primary text-primary-foreground px-4 py-2 rounded-sm font-semibold hover:opacity-90 transition-opacity">
+            Aktifkan Monitoring
+          </button>
+        </div>
+      )}
+
+      {/* Search + Table */}
+      {enabled && (
+        <>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cari username, IP, MAC, nama pelanggan, router..."
+              className="w-full h-8 pl-8 pr-3 text-xs bg-card border border-border rounded-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5"/>
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-sm border border-border overflow-x-auto bg-card">
+            <table className="w-full text-xs text-left whitespace-nowrap min-w-[900px]">
+              <thead className="bg-secondary/50">
+                <tr>
+                  <th className="p-3 border-b border-border/50 font-semibold">User (Pelanggan)</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Password</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Alamat IP &amp; MAC</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Router</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Waktu Terhubung</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Total Data</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Bandwidth Saat Ini</th>
+                  <th className="p-3 border-b border-border/50 font-semibold">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {loading && actives.length === 0 ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
+                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2"/>Memuat data dari {routers.length} router...
+                  </td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
+                    {search ? `Tidak ditemukan untuk "${search}"` : `Tidak ada sesi PPPoE aktif${selectedRouter !== "all" ? " pada router ini" : ""}`}
+                  </td></tr>
+                ) : filtered.map((a, i) => (
+                  <tr key={i} className={`hover:bg-secondary/20 transition-colors ${loading ? "opacity-60" : ""}`}>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold">{a.name}</span>
+                        {a.is_radius && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 font-semibold">RADIUS</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{a.customer_name !== a.name ? a.customer_name : "-"}</span>
+                    </td>
+                    <td className="p-3">
+                      {a.is_radius ? (
+                        <span className="text-[10px] text-muted-foreground italic">via RADIUS</span>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono bg-secondary/50 px-1 py-0.5 rounded text-[11px] min-w-[70px] inline-block">
+                            {showPwd[a.name] ? (a.password || "-") : "●●●●●●●●"}
+                          </span>
+                          <button onClick={() => togglePwd(a.name)} className="text-muted-foreground hover:text-foreground">
+                            {showPwd[a.name] ? <EyeOff className="w-3.5 h-3.5"/> : <Eye className="w-3.5 h-3.5"/>}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3 font-mono text-[11px]">
+                      <span className="text-primary font-semibold">{a.address || "-"}</span><br/>
+                      <span className="text-muted-foreground text-[10px]">{a.caller_id || "-"}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded-sm bg-accent/20 border border-accent/30 text-accent-foreground text-[10px]">
+                        {a.router_name}
+                      </span>
+                    </td>
+                    <td className="p-3 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0"/>
+                        {a.uptime || "-"}
+                      </div>
+                    </td>
+                    <td className="p-3 tabular-nums text-[11px] space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Download className="w-3 h-3 text-muted-foreground shrink-0"/>
+                        <span className="font-medium">{formatBytes(a.tx_byte)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Upload className="w-3 h-3 text-muted-foreground shrink-0"/>
+                        <span className="font-medium">{formatBytes(a.rx_byte)}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <BpsCell txBps={a.tx_bps} rxBps={a.rx_bps}/>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleKick(a)}
+                        disabled={kickingUser === a.name}
+                        title={`Putus koneksi ${a.name}`}
+                        className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-semibold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-wait transition-all"
+                      >
+                        {kickingUser === a.name
+                          ? <><RefreshCw className="w-3 h-3 animate-spin"/> Memutus...</>
+                          : <><UserX className="w-3 h-3"/> Kick</>}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {actives.length > 0 && (
+              <div className="px-3 py-2 border-t border-border/50 flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>
+                  {filtered.length !== actives.length
+                    ? `${filtered.length} dari ${actives.length} sesi aktif`
+                    : `${actives.length} sesi PPPoE aktif`}
+                  {actives.filter(a => a.is_radius).length > 0 && (
+                    <span className="ml-2 text-purple-400">
+                      • {actives.filter(a => a.is_radius).length} via RADIUS
+                    </span>
+                  )}
+                </span>
+                {loading && <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin"/> Memperbarui...</span>}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
