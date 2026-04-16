@@ -126,6 +126,7 @@ class MikroTikBase:
     async def remove_hotspot_active_session(self, username): raise NotImplementedError
     async def list_pppoe_profiles(self): raise NotImplementedError
     async def list_hotspot_profiles(self): raise NotImplementedError
+    async def list_hotspot_server_profiles(self): raise NotImplementedError
     async def list_hotspot_servers(self): raise NotImplementedError
     
     # ── Queues ──
@@ -166,7 +167,7 @@ class MikroTikBase:
     # ── RADIUS Management ──
     async def list_radius_clients(self) -> list: return []
     async def add_radius_client(self, address: str, secret: str, service: str = "hotspot", comment: str = "") -> dict: return {}
-    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1") -> dict: return {}
+    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict: return {}
     async def check_radius_enabled(self, server_profile: str = "hsprof1") -> dict: return {"radius_enabled": False, "radius_clients": []}
 
     # ── Walled Garden ──
@@ -1197,6 +1198,13 @@ class MikroTikRestAPI(MikroTikBase):
         except Exception:
             return []
 
+    async def list_hotspot_server_profiles(self):
+        try:
+            items = await self._async_req("GET", "ip/hotspot/profile")
+            return items if isinstance(items, list) else []
+        except Exception:
+            return []
+
     # ── RADIUS Management (ROS 7.x REST API) ─────────────────────────────────
     async def list_radius_clients(self) -> list:
         """List semua RADIUS client yang terdaftar di MikroTik."""
@@ -1231,7 +1239,7 @@ class MikroTikRestAPI(MikroTikBase):
         except Exception as e:
             raise Exception(f"Gagal tambah RADIUS client: {e}")
 
-    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1") -> dict:
+    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
         """
         Setup lengkap RADIUS di MikroTik untuk Hotspot & PPPoE:
         1. Tambah RADIUS client (IP NOC Sentinel + secret)
@@ -1266,7 +1274,14 @@ class MikroTikRestAPI(MikroTikBase):
             else:
                 steps.append("⚠️ Data profile hotspot kosong")
         except Exception as e:
-            steps.append(f"⚠️ Tidak dapat set use-radius di profile: {e}")
+            steps.append(f"⚠️ Tidak dapat set use-radius di profile hotspot: {e}")
+
+        if pppoe_profile:
+            try:
+                await self._async_req("PATCH", "ppp/aaa", {"use-radius": "yes"})
+                steps.append("✅ PPPoE AAA — use-radius=yes diaktifkan secara global (PPP Profile: target OK)")
+            except Exception as e:
+                steps.append(f"⚠️ Tidak dapat set use-radius untuk PPPoE (PPP AAA): {e}")
 
         return {"success": True, "steps": steps}
 
@@ -1756,6 +1771,13 @@ class MikroTikLegacyAPI(MikroTikBase):
     async def list_hotspot_servers(self):
         try:
             items = await asyncio.to_thread(self._list_resource, "/ip/hotspot")
+            return self._normalize_items(items)
+        except Exception:
+            return []
+
+    async def list_hotspot_server_profiles(self):
+        try:
+            items = await asyncio.to_thread(self._list_resource, "/ip/hotspot/profile")
             return self._normalize_items(items)
         except Exception:
             return []
@@ -2346,7 +2368,7 @@ class MikroTikLegacyAPI(MikroTikBase):
         except Exception as e:
             raise Exception(f"Gagal tambah RADIUS client (ROS6): {e}")
 
-    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1") -> dict:
+    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
         steps = []
         try:
             await self.add_radius_client(radius_ip, secret, service="hotspot,ppp", comment="NOC-Sentinel RADIUS")
@@ -2383,7 +2405,17 @@ class MikroTikLegacyAPI(MikroTikBase):
             else:
                 steps.append("⚠️ Hotspot server profile di router kosong — pastikan hotspot sudah dikonfigurasi di MikroTik")
         except Exception as e:
-            steps.append(f"⚠️ Gagal set use-radius di profile: {e}")
+            steps.append(f"⚠️ Gagal set use-radius di profile hotspot: {e}")
+
+        if pppoe_profile:
+            try:
+                def set_ppp_aaa(api):
+                    res = api.get_resource("/ppp/aaa")
+                    res.set(**{"use-radius": "yes"})
+                await asyncio.to_thread(self._execute, set_ppp_aaa)
+                steps.append("✅ PPPoE AAA — use-radius=yes diaktifkan secara global (PPP Profile: target OK)")
+            except Exception as e:
+                steps.append(f"⚠️ Tidak dapat set use-radius untuk PPPoE (PPP AAA): {e}")
 
         return {"success": True, "steps": steps}
 

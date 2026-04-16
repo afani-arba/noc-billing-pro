@@ -37,9 +37,10 @@ export default function RadiusSettingsPage() {
   const [radiusStatus, setRadiusStatus] = useState(null);
   const [radiusLoading, setRadiusLoading] = useState(false);
   const [pushSettings, setPushSettings] = useState({
-    radius_ip: "", secret: "", server_profile: "",
+    radius_ip: "", secret: "", server_profile: "", pppoe_profile: "",
   });
   const [hsProfiles, setHsProfiles] = useState([]);
+  const [pppoeProfiles, setPppoeProfiles] = useState([]);
   const [pushingRadius, setPushingRadius] = useState(false);
   const [pushLog, setPushLog] = useState([]);
 
@@ -95,7 +96,7 @@ export default function RadiusSettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDevice) { setRadiusStatus(null); setHsProfiles([]); return; }
+    if (!selectedDevice) { setRadiusStatus(null); setHsProfiles([]); setPppoeProfiles([]); return; }
     fetchRadiusStatus(selectedDevice);
     fetchWalledGarden(selectedDevice);
     
@@ -109,6 +110,17 @@ export default function RadiusSettingsPage() {
         }
       })
       .catch(() => setHsProfiles([]));
+
+    // Fetch pppoe profiles
+    api.get("/pppoe-profiles", { params: { device_id: selectedDevice } })
+      .then(r => {
+        const profs = r.data || [];
+        setPppoeProfiles(profs);
+        if (profs.length > 0 && !pushSettings.pppoe_profile) {
+          setPushSettings(prev => ({ ...prev, pppoe_profile: profs[0].name }));
+        }
+      })
+      .catch(() => setPppoeProfiles([]));
   }, [selectedDevice]);
 
   const handlePushRadius = async () => {
@@ -126,6 +138,7 @@ export default function RadiusSettingsPage() {
         radius_ip: pushSettings.radius_ip,
         secret: pushSettings.secret,
         server_profile: pushSettings.server_profile,
+        pppoe_profile: pushSettings.pppoe_profile,
       });
       setPushLog(r.data.steps || []);
       if (r.data.success) {
@@ -279,7 +292,21 @@ export default function RadiusSettingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground">NOC Sentinel akan membuat hotspot profile otomatis khusus RADIUS</p>
+                  <p className="text-[10px] text-muted-foreground">NOC Sentinel akan integrasikan profile ini dengan RADIUS</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Target Profile PPPoE</Label>
+                  <Select value={pushSettings.pppoe_profile} onValueChange={v => setPushSettings({...pushSettings, pppoe_profile: v})}>
+                    <SelectTrigger className="h-8 text-xs bg-card"><SelectValue placeholder="Opsional (abaikan jika tidak pakai PPPoE)..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">-- Abaikan --</SelectItem>
+                      {pppoeProfiles.length === 0 && <SelectItem value="-">Tidak ada profile pppoe ditemukan</SelectItem>}
+                      {pppoeProfiles.map((hp) => (
+                        <SelectItem key={hp.name || hp['.id']} value={hp.name}>{hp.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">Tentukan profile PPPoE untuk di-integrasikan ke RADIUS</p>
                 </div>
 
                 {pushLog.length > 0 && (

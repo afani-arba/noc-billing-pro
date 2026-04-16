@@ -317,6 +317,76 @@ async def list_hotspot_profiles(
         return []
 
 
+@router.get("/hotspot-server-profiles", dependencies=[Depends(require_enterprise)])
+async def list_hotspot_server_profiles_api(
+    device_id: str = Query(..., description="ID device MikroTik"),
+    user=Depends(get_current_user),
+):
+    db = get_db()
+    device = await db.devices.find_one({"id": device_id})
+    if not device:
+         raise HTTPException(404, "Device tidak ditemukan")
+    try:
+        from mikrotik_api import get_api_client
+        mt = get_api_client(device)
+        if hasattr(mt, "list_hotspot_server_profiles"):
+             profiles = await mt.list_hotspot_server_profiles()
+             return profiles or []
+        return []
+    except Exception as e:
+        logger.warning(f"[hotspot-server-profiles] Gagal ambil dari MikroTik {device.get('name')}: {e}")
+        return []
+
+@router.get("/pppoe-profiles", dependencies=[Depends(require_enterprise)])
+async def list_pppoe_profiles_api(
+    device_id: str = Query(..., description="ID device MikroTik"),
+    user=Depends(get_current_user),
+):
+    db = get_db()
+    device = await db.devices.find_one({"id": device_id})
+    if not device:
+        raise HTTPException(404, "Device tidak ditemukan")
+    try:
+        from mikrotik_api import get_api_client
+        mt = get_api_client(device)
+        if hasattr(mt, "list_pppoe_profiles"):
+             profiles = await mt.list_pppoe_profiles()
+             return profiles or []
+        return []
+    except Exception as e:
+        logger.warning(f"[pppoe-profiles] Gagal ambil dari MikroTik {device.get('name')}: {e}")
+        return []
+
+class PushRadiusRequest(BaseModel):
+    device_id: str
+    radius_ip: str
+    secret: str
+    server_profile: str = "hsprof1"
+    pppoe_profile: str = ""
+
+@router.post("/hotspot-push-radius", dependencies=[Depends(require_enterprise)])
+async def push_hotspot_radius_config(req: PushRadiusRequest, user=Depends(require_write)):
+    db = get_db()
+    device = await db.devices.find_one({"id": req.device_id})
+    if not device:
+        raise HTTPException(404, "Device tidak ditemukan")
+
+    try:
+        from mikrotik_api import get_api_client
+        mt = get_api_client(device)
+        result = await mt.setup_hotspot_radius(req.radius_ip, req.secret, req.server_profile, req.pppoe_profile)
+
+        # Update db flag if success
+        if result.get("success"):
+            await db.devices.update_one(
+                {"id": req.device_id},
+                {"$set": {"hotspot_radius_enabled": True}}
+            )
+
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"Gagal push RADIUS: {e}")
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HOTSPOT RADIUS STATUS
 # ══════════════════════════════════════════════════════════════════════════════
