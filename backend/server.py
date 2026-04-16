@@ -65,11 +65,9 @@ from routers.admin import router as admin_router
 from routers.system import router as system_router
 from routers.notifications import router as notifications_router
 from routers.backups import router as backups_router
-from routers.syslog import router as syslog_router
 from routers.metrics import router as metrics_router
 from routers.audit import router as audit_router
 from routers.events import router as events_router
-from routers.scheduler import router as scheduler_router
 from routers.speedtest import router as speedtest_router
 from routers.routing_alerts import router as routing_alerts_router
 from routers.license import router as license_router
@@ -460,9 +458,7 @@ api.include_router(license_router)
 
 # ── Admin pendukung ────────────────────────────────────────────────────────
 api.include_router(backups_router)
-api.include_router(syslog_router)
 api.include_router(audit_router)
-api.include_router(scheduler_router)
 api.include_router(routing_alerts_router)
 
 app.include_router(api)

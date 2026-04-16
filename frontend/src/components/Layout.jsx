@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth, useEdition } from "@/App";
 import {
   LayoutDashboard, Users, Wifi, WifiOff, FileText, Server, Shield, LogOut, Menu, ChevronLeft, Settings, Bell, HardDrive, Terminal,
-  GitBranch, Route, Cable, ShieldAlert, Cpu, Monitor, BarChart2, AlertTriangle, ClipboardList, Download, CalendarClock, Radar, Zap, PieChart, TrendingUp, MessageCircle, Activity, Radio, Search
+  GitBranch, Route, Cable, ShieldAlert, Cpu, Monitor, BarChart2, AlertTriangle, Download, Radar, Zap, PieChart, TrendingUp, MessageCircle, Activity, Radio, Search
 } from "lucide-react";
 
 const RpIcon = ({ className = "w-5 h-5" }) => (
@@ -60,10 +60,7 @@ const navItems = [
 
   // ── SYSTEM ADMINISTRATION ──
   { separator: true, label: "Administration", adminOnly: true },
-  { to: "/scheduler",      icon: CalendarClock,   label: "Task Scheduler",         serviceKey: "scheduler",      nocOnly: true },
   { to: "/backups",        icon: HardDrive,       label: "Backup Config",          serviceKey: "backups",        nocOnly: true },
-  { to: "/syslog",         icon: Terminal,        label: "Syslog",                 serviceKey: "syslog",         nocOnly: true },
-  { to: "/audit",          icon: ClipboardList,   label: "Audit Log",              serviceKey: "audit",          nocOnly: true },
   { to: "/notifications",  icon: Bell,            label: "Notifikasi Sistem",      serviceKey: "notifications",  adminOnly: true },
   { to: "/radius-server",  icon: Radio,           label: "RADIUS Server",          serviceKey: "radius_server",  adminOnly: true },
   { to: "/integration-settings", icon: Cable,     label: "Integrasi & Otomasi",    serviceKey: "integration_settings", adminOnly: true },

@@ -197,7 +197,7 @@ export default function WallDisplayPage() {
             </div>
             <div>
               <h1 className="text-[15px] font-bold tracking-tight text-white leading-none drop-shadow-lg">
-                NOC Sentinel <span className="text-blue-500 font-semibold">v3</span>
+                NOC Billing <span className="text-blue-500 font-semibold">Pro</span>
               </h1>
               <p className="text-[9px] text-blue-400 font-bold tracking-[0.1em] uppercase mt-0.5">Wall Display</p>
             </div>

@@ -20,6 +20,7 @@ import { Toaster } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Layout from "@/components/Layout";
 import api from "@/lib/api";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
 const LoginPage               = lazy(() => import("@/pages/LoginPage"));
@@ -38,8 +39,6 @@ const SettingsPage            = lazy(() => import("@/pages/SettingsPage"));
 const AdminPage               = lazy(() => import("@/pages/AdminPage"));
 const NotificationsPage       = lazy(() => import("@/pages/NotificationsPage"));
 const BackupsPage             = lazy(() => import("@/pages/BackupsPage"));
-const AuditLogPage            = lazy(() => import("@/pages/AuditLogPage"));
-const SchedulerPage           = lazy(() => import("@/pages/SchedulerPage"));
 const UpdatePage              = lazy(() => import("@/pages/UpdatePage"));
 const LicensePage             = lazy(() => import("@/pages/LicensePage"));
 const WallDisplayPage         = lazy(() => import("@/pages/WallDisplayPage"));
@@ -151,6 +150,7 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ token, user, login, logout }}>
       <EditionContext.Provider value={editionData}>
+        <ThemeProvider>
         <BrowserRouter>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
@@ -224,10 +224,11 @@ export default function App() {
 
                   {/* System support pages */}
                   <Route path="backups"                element={<BackupsPage />} />
-                  <Route path="audit"                  element={<AuditLogPage />} />
-                  <Route path="scheduler"              element={<SchedulerPage />} />
 
-                  {/* Disabled features in Billing Pro — redirect to home */}
+                  {/* Disabled features — redirect to home */}
+                  <Route path="scheduler"              element={<Navigate to="/" replace />} />
+                  <Route path="syslog"                 element={<Navigate to="/" replace />} />
+                  <Route path="audit"                  element={<Navigate to="/" replace />} />
                   <Route path="topology"               element={<Navigate to="/" replace />} />
                   <Route path="sdwan"                  element={<Navigate to="/" replace />} />
                   <Route path="routing"                element={<Navigate to="/" replace />} />
@@ -248,6 +249,7 @@ export default function App() {
 
         {/* Global toast notifications */}
         <Toaster richColors position="top-right" closeButton />
+      </ThemeProvider>
       </EditionContext.Provider>
     </AuthContext.Provider>
   );
