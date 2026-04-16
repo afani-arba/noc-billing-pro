@@ -53,6 +53,7 @@ const navItems = [
   { separator: true, label: "Routing & Peering", nocOnly: true },
   { to: "/routing",        icon: Route,           label: "OSPF / Routes",          serviceKey: "routing",        nocOnly: true, billingProHide: true },
   { to: "/peering-eye",    icon: Radar,           label: "Sentinel Peering-Eye",   serviceKey: "peering_eye" },
+  { to: "/bgp-steering",   icon: GitBranch,       label: "App Traffic & Steering", serviceKey: "bgp_steering" },
 
   { to: "/sdwan",          icon: Zap,             label: "Load Balance",           serviceKey: "sdwan",          nocOnly: true, billingProHide: true },
 

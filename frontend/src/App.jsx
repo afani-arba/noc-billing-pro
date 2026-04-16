@@ -35,6 +35,7 @@ const ReportsPage             = lazy(() => import("@/pages/ReportsPage"));
 const WACustomerServicePage   = lazy(() => import("@/pages/WACustomerServicePage"));
 const SettingsPage            = lazy(() => import("@/pages/SettingsPage"));
 const AdminPage               = lazy(() => import("@/pages/AdminPage"));
+const BgpSteeringPage         = lazy(() => import("@/pages/BgpSteeringPage"));
 const NotificationsPage       = lazy(() => import("@/pages/NotificationsPage"));
 const BackupsPage             = lazy(() => import("@/pages/BackupsPage"));
 const UpdatePage              = lazy(() => import("@/pages/UpdatePage"));
@@ -211,6 +212,7 @@ export default function App() {
 
                   {/* 10 & 11. Peering Eye + BGP */}
                   <Route path="peering-eye"            element={<PeeringEyePage />} />
+                  <Route path="bgp-steering"           element={<BgpSteeringPage />} />
 
                   {/* 12. Pengaturan */}
                   <Route path="settings"               element={<SettingsPage />} />
