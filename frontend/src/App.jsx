@@ -161,6 +161,16 @@ export default function App() {
                 <Route path="/portal/dashboard" element={<ClientDashboard />} />
                 <Route path="/portal"           element={<Navigate to="/portal/login" replace />} />
 
+                {/* ── Full-Screen TV Dashboards ─────────────────────────── */}
+                <Route
+                  path="/wall-display"
+                  element={
+                    <ProtectedRoute>
+                      <WallDisplayPage />
+                    </ProtectedRoute>
+                  }
+                />
+
                 {/* ── Authenticated app (all nested under Layout) ────────── */}
                 <Route
                   path="/"
@@ -172,7 +182,6 @@ export default function App() {
                 >
                   {/* 1. Dashboard */}
                   <Route index                         element={<DashboardPage />} />
-                  <Route path="wall-display"           element={<WallDisplayPage />} />
 
                   {/* 2. Device Hub */}
                   <Route path="devices"                element={<DevicesPage />} />
