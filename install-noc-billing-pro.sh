@@ -71,35 +71,35 @@ else
     echo -e "  ${Y}${BOLD}Masukkan konfigurasi NOC Billing Pro:${N}"
     echo ""
 
-    read -r -p "  Nama layanan ISP Anda [NOC Billing Pro]: " _NAME
+    read -r -p "  Nama layanan ISP Anda [NOC Billing Pro]: " _NAME </dev/tty
     NOC_NAME="${_NAME:-NOC Billing Pro}"
 
-    read -r -p "  Domain / URL akses (contoh: https://billing.domain.com) [http://$(hostname -I | awk '{print $1}'):8082]: " _URL
+    read -r -p "  Domain / URL akses (contoh: https://billing.domain.com) [http://$(hostname -I | awk '{print $1}'):8082]: " _URL </dev/tty
     APP_URL="${_URL:-http://$(hostname -I | awk '{print $1}'):8082}"
 
-    read -r -p "  RADIUS Secret (untuk MikroTik hotspot) [ganti_radius_secret]: " _RSECRET
+    read -r -p "  RADIUS Secret (untuk MikroTik hotspot) [ganti_radius_secret]: " _RSECRET </dev/tty
     RADIUS_SECRET="${_RSECRET:-ganti_radius_secret}"
 
     echo ""
     echo -e "  ${Y}${BOLD}Konfigurasi GoBGP (BGP Content Steering):${N}"
-    read -r -p "  Local AS Number GoBGP [65000]: " _AS
+    read -r -p "  Local AS Number GoBGP [65000]: " _AS </dev/tty
     BGP_LOCAL_AS="${_AS:-65000}"
 
-    read -r -p "  Router-ID GoBGP (IP VPS/loopback) [$(hostname -I | awk '{print $1}')]: " _RID
+    read -r -p "  Router-ID GoBGP (IP VPS/loopback) [$(hostname -I | awk '{print $1}')]: " _RID </dev/tty
     BGP_ROUTER_ID="${_RID:-$(hostname -I | awk '{print $1}')}"
 
-    read -r -p "  IP MikroTik BGP Peer 1 (kosongkan jika belum ada): " _PEER1
+    read -r -p "  IP MikroTik BGP Peer 1 (kosongkan jika belum ada): " _PEER1 </dev/tty
     BGP_PEER1_IP="${_PEER1:-}"
 
-    read -r -p "  AS Number MikroTik Peer 1 [65001]: " _PEER1AS
+    read -r -p "  AS Number MikroTik Peer 1 [65001]: " _PEER1AS </dev/tty
     BGP_PEER1_AS="${_PEER1AS:-65001}"
 
     echo ""
     echo -e "  ${Y}${BOLD}GitHub Container Registry (GHCR):${N}"
     info "Diperlukan untuk pull image NOC Billing Pro dari ghcr.io"
-    read -r -p "  GitHub Username [afani-arba]: " _GHUSER
+    read -r -p "  GitHub Username [afani-arba]: " _GHUSER </dev/tty
     GHCR_USER="${_GHUSER:-afani-arba}"
-    read -r -s -p "  GitHub Token (Personal Access Token / classic): " _GHTOKEN
+    read -r -s -p "  GitHub Token (Personal Access Token / classic): " _GHTOKEN </dev/tty
     echo ""
     GHCR_TOKEN="$_GHTOKEN"
 
@@ -112,23 +112,10 @@ else
     echo -e "  ${R}${BOLD}            Sangat disarankan mengisi token untuk keamanan & akses remote.${N}"
     echo ""
     while true; do
-        read -r -p "  Cloudflare Tunnel Token (WAJIB — ketik 'skip' untuk lewati): " _CFTOKEN
+        read -r -p "  Cloudflare Tunnel Token (WAJIB diisi untuk akses publik HTTPS!): " _CFTOKEN </dev/tty
         CF_TUNNEL_TOKEN="${_CFTOKEN:-}"
-        if [[ "$CF_TUNNEL_TOKEN" == "skip" ]]; then
-            CF_TUNNEL_TOKEN=""
-            echo ""
-            warn "╔══════════════════════════════════════════════════════════════╗"
-            warn "║  CLOUDFLARE TUNNEL DILEWATI!                                ║"
-            warn "║  Dashboard HANYA bisa diakses via IP: http://IP:8082        ║"
-            warn "║  Untuk aktifkan nanti:                                      ║"
-            warn "║    1. Edit: $APP_DIR/.env → CF_TUNNEL_TOKEN=<token>          ║"
-            warn "║    2. Edit: $APP_DIR/docker-compose.yml → uncomment blok CF ║"
-            warn "║    3. Restart: cd $APP_DIR && docker compose up -d          ║"
-            warn "╚══════════════════════════════════════════════════════════════╝"
-            echo ""
-            break
-        elif [[ -z "$CF_TUNNEL_TOKEN" ]]; then
-            echo -e "  ${R}Token tidak boleh kosong. Masukkan token atau ketik 'skip' untuk lewati.${N}"
+        if [[ -z "$CF_TUNNEL_TOKEN" ]]; then
+            echo -e "  ${R}Token tidak boleh kosong. Harap masukkan Cloudflare Tunnel Token Anda.${N}"
         else
             ok "Cloudflare Tunnel Token diterima ✔"
             break
@@ -157,14 +144,7 @@ apt-get install -y -qq \
     sstp-client \
     > /dev/null 2>&1
 
-# Coba install paket VPN server tambahan jika tersedia di repo
-# accel-ppp: PPPoE + L2TP server (Ubuntu PPA)
-if apt-cache show accel-ppp > /dev/null 2>&1; then
-    apt-get install -y -qq accel-ppp > /dev/null 2>&1 || true
-    ok "accel-ppp terinstall"
-else
-    warn "accel-ppp tidak ditemukan di repo — lewati (install manual jika perlu)"
-fi
+# (accel-ppp dihapus untuk menghindari warning yang tidak perlu di Debian 13/Ubuntu modern)
 
 ok "Paket sistem OK (L2TP: xl2tpd ✔ | IKEv2: strongswan ✔ | PPTP: pptpd ✔ | SSTP: sstp-client ✔)"
 
