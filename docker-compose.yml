@@ -238,16 +238,18 @@ services:
       - genieacs-nbi
 
   # ═════════════════════════════════════════════════════════════════
-  # 5. CLOUDFLARE TUNNEL (Opsional — diaktifkan otomatis oleh install script jika TOKEN diisi)
+  # 5. CLOUDFLARE TUNNEL (Dikendalikan via Dashboard → Integrasi)
   # ═════════════════════════════════════════════════════════════════
-  # cloudflared:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: noc-billing-pro-cloudflared
-  #   restart: always
-  #   network_mode: "host"
-  #   command: tunnel run
-  #   environment:
-  #     - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: noc-billing-pro-cloudflared
+    restart: "no"
+    network_mode: "host"
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN:-}
+    profiles:
+      - cloudflare
 
   # ═════════════════════════════════════════════════════════════════
   # 6. NOC UPDATER — Auto-update via UI Dashboard
@@ -268,6 +270,8 @@ services:
       - |
         echo "noc-billing-pro updater siap memantau trigger update..."
         while true; do
+
+          # ── App Update Trigger ──────────────────────────────────────
           if [ -f /update-data/.update-trigger ]; then
             echo "Trigger update terdeteksi!"
             rm -f /update-data/.update-trigger
@@ -286,6 +290,33 @@ services:
               printf '{"done":true,"success":false,"error":"pull failed: exit %s"}' "$$PE" > /update-data/.update-running
             fi
           fi
+
+          # ── Cloudflare Tunnel Trigger ───────────────────────────────
+          if [ -f /update-data/.cf-start-trigger ]; then
+            TOKEN=$$(cat /update-data/.cf-token 2>/dev/null || echo "")
+            rm -f /update-data/.cf-start-trigger
+            if [ -n "$$TOKEN" ]; then
+              echo "Cloudflare tunnel start triggered..."
+              docker rm -f noc-billing-pro-cloudflared 2>/dev/null || true
+              docker run -d --name noc-billing-pro-cloudflared \
+                --network host \
+                --restart always \
+                -e TUNNEL_TOKEN="$$TOKEN" \
+                cloudflare/cloudflared:latest \
+                tunnel --no-autoupdate run
+              echo '{"status":"running"}' > /update-data/.cf-status
+            else
+              echo '{"status":"error","msg":"Token kosong"}' > /update-data/.cf-status
+            fi
+          fi
+
+          if [ -f /update-data/.cf-stop-trigger ]; then
+            rm -f /update-data/.cf-stop-trigger
+            echo "Cloudflare tunnel stop triggered..."
+            docker rm -f noc-billing-pro-cloudflared 2>/dev/null || true
+            echo '{"status":"stopped"}' > /update-data/.cf-status
+          fi
+
           sleep 5
         done
 

@@ -223,3 +223,116 @@ async def sstp_connect(body: ConnectRequest):
 async def sstp_disconnect():
     """Putuskan koneksi SSTP."""
     return await _proxy_post(f"{SSTP_AGENT_URL}/disconnect", {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLOUDFLARE TUNNEL ROUTES
+# Menggunakan shared volume /update-data untuk trigger noc-updater container
+# ─────────────────────────────────────────────────────────────────────────────
+
+import asyncio
+import json
+from pathlib import Path
+
+UPDATE_DATA = Path("/update-data")          # shared volume dengan noc-updater
+
+
+class CloudflareConfig(BaseModel):
+    token: str
+    enabled: bool = True
+
+
+@router.get("/cloudflare/status")
+async def cloudflare_status():
+    """Cek status Cloudflare Tunnel — baca dari trigger-result file."""
+    db = get_db()
+    cfg = await db.system_settings.find_one({"_id": "cloudflare_tunnel"})
+    enabled = bool(cfg and cfg.get("enabled"))
+
+    # Baca status dari file yang ditulis noc-updater
+    status_file = UPDATE_DATA / ".cf-status"
+    container_status = "unknown"
+    try:
+        if status_file.exists():
+            data = json.loads(status_file.read_text())
+            container_status = data.get("status", "unknown")
+    except Exception:
+        pass
+
+    # Jika token masih ada tapi belum di-start, cek apakah container berjalan
+    return {
+        "enabled": enabled,
+        "status": container_status,
+        "has_token": bool(cfg and cfg.get("token")),
+    }
+
+
+@router.get("/cloudflare/config")
+async def cloudflare_get_config():
+    """Ambil konfigurasi Cloudflare Tunnel (token tidak dikembalikan plaintext)."""
+    db = get_db()
+    cfg = await db.system_settings.find_one({"_id": "cloudflare_tunnel"})
+    if not cfg:
+        return {"token": "", "enabled": False, "token_set": False}
+    return {
+        "token": "••••••••" if cfg.get("token") else "",
+        "token_set": bool(cfg.get("token")),
+        "enabled": cfg.get("enabled", False),
+    }
+
+
+@router.put("/cloudflare/config")
+async def cloudflare_save_config(body: CloudflareConfig):
+    """Simpan token Cloudflare Tunnel dan jalankan/hentikan tunnel."""
+    db = get_db()
+
+    # Jika token dikirim sebagai masked, ambil yang tersimpan
+    real_token = body.token
+    if body.token.startswith("•"):
+        existing = await db.system_settings.find_one({"_id": "cloudflare_tunnel"})
+        real_token = existing.get("token", "") if existing else ""
+
+    if not real_token and body.enabled:
+        raise HTTPException(400, "Token Cloudflare Tunnel wajib diisi")
+
+    data = {"_id": "cloudflare_tunnel", "token": real_token, "enabled": body.enabled}
+    await db.system_settings.replace_one({"_id": "cloudflare_tunnel"}, data, upsert=True)
+
+    try:
+        if body.enabled and real_token:
+            # Tulis token ke file lalu buat trigger start
+            (UPDATE_DATA / ".cf-token").write_text(real_token)
+            (UPDATE_DATA / ".cf-stop-trigger").unlink(missing_ok=True)
+            (UPDATE_DATA / ".cf-start-trigger").write_text("1")
+            logger.info("[Cloudflare] Trigger start dikirim ke noc-updater")
+        else:
+            # Trigger stop
+            (UPDATE_DATA / ".cf-token").unlink(missing_ok=True)
+            (UPDATE_DATA / ".cf-start-trigger").unlink(missing_ok=True)
+            (UPDATE_DATA / ".cf-stop-trigger").write_text("1")
+            logger.info("[Cloudflare] Trigger stop dikirim ke noc-updater")
+    except Exception as e:
+        logger.warning(f"[Cloudflare] Gagal tulis trigger: {e}")
+        raise HTTPException(500, f"Gagal mengirim perintah ke updater: {e}")
+
+    return {"ok": True, "message": "Konfigurasi Cloudflare Tunnel disimpan" + (". Tunnel sedang diaktifkan..." if body.enabled else ". Tunnel dihentikan.")}
+
+
+@router.post("/cloudflare/restart")
+async def cloudflare_restart():
+    """Restart Cloudflare Tunnel — stop lalu start kembali."""
+    db = get_db()
+    cfg = await db.system_settings.find_one({"_id": "cloudflare_tunnel"})
+    if not cfg or not cfg.get("token"):
+        raise HTTPException(400, "Token belum dikonfigurasi")
+
+    try:
+        (UPDATE_DATA / ".cf-stop-trigger").write_text("1")
+        await asyncio.sleep(6)  # tunggu updater stop dulu
+        (UPDATE_DATA / ".cf-token").write_text(cfg["token"])
+        (UPDATE_DATA / ".cf-start-trigger").write_text("1")
+    except Exception as e:
+        raise HTTPException(500, f"Gagal restart: {e}")
+
+    return {"ok": True, "message": "Cloudflare Tunnel sedang di-restart..."}
+

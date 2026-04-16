@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import {
   Webhook, MessageSquare, CreditCard,
-  Save, Cable, Bot, Send
+  Save, Cable, Bot, Send, Cloud, RefreshCw, CheckCircle2, XCircle, Loader2, Eye, EyeOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 function IntegrationSection() {
@@ -51,6 +52,150 @@ function IntegrationSection() {
         </div>
       </div>
       <div className="flex"><Button onClick={handleSave} disabled={saving} className="rounded-sm gap-2 bg-orange-600 hover:bg-orange-700 text-white"><Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Pengaturan Integrasi"}</Button></div>
+    </div>
+  );
+}
+
+// ── Cloudflare Tunnel Section ──────────────────────────────────────────────
+function CloudflareSection() {
+  const [cfg, setCfg] = useState({ token: "", enabled: false, token_set: false });
+  const [showToken, setShowToken] = useState(false);
+  const [status, setStatus] = useState({ status: "unknown", enabled: false, has_token: false });
+  const [saving, setSaving] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+
+  const fetchAll = () => {
+    api.get("/cloudflare/config").then(r => setCfg(c => ({ ...c, ...r.data }))).catch(() => {});
+    api.get("/cloudflare/status").then(r => setStatus(r.data)).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchAll();
+    const iv = setInterval(fetchAll, 8000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const handleSave = async (enabled) => {
+    setSaving(true);
+    try {
+      const payload = { token: cfg.token || "", enabled };
+      const r = await api.put("/cloudflare/config", payload);
+      toast.success(r.data.message || "Disimpan");
+      setTimeout(fetchAll, 3000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Gagal menyimpan");
+    }
+    setSaving(false);
+  };
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    try {
+      const r = await api.post("/cloudflare/restart");
+      toast.success(r.data.message);
+      setTimeout(fetchAll, 8000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Gagal restart");
+    }
+    setRestarting(false);
+  };
+
+  const statusColor = {
+    running: "text-green-400 bg-green-500/10 border-green-500/20",
+    stopped: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+    error: "text-red-400 bg-red-500/10 border-red-500/20",
+    unknown: "text-muted-foreground bg-muted/40 border-border",
+  }[status.status] || "text-muted-foreground bg-muted/40 border-border";
+
+  const statusLabel = { running: "🟢 Aktif", stopped: "🟡 Berhenti", error: "🔴 Error", unknown: "⚪ Tidak Diketahui" }[status.status] || status.status;
+
+  return (
+    <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-sm bg-orange-500/10 flex items-center justify-center">
+            <Cloud className="w-4 h-4 text-orange-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              Cloudflare Tunnel
+              <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Zero-Trust Access</span>
+            </h2>
+            <p className="text-[10px] text-muted-foreground">Akses dashboard dari internet tanpa buka port — gratis via Cloudflare Zero Trust</p>
+          </div>
+        </div>
+        <div className={`text-[10px] font-mono px-2 py-1 rounded border ${statusColor}`}>{statusLabel}</div>
+      </div>
+
+      {/* Info Card */}
+      <div className="bg-blue-500/5 border border-blue-500/10 rounded-sm p-3 text-xs text-muted-foreground space-y-1">
+        <p className="font-semibold text-blue-400">📋 Cara Mendapatkan Token:</p>
+        <ol className="list-decimal list-inside space-y-0.5 text-[11px]">
+          <li>Buka <span className="font-mono text-foreground">dash.cloudflare.com</span> → Zero Trust → Networks → Tunnels</li>
+          <li>Buat tunnel baru, pilih <b>cloudflared</b></li>
+          <li>Salin token dari perintah instalasi (panjang ~300 karakter)</li>
+          <li>Paste di kolom token di bawah lalu klik <b>Aktifkan</b></li>
+        </ol>
+      </div>
+
+      {/* Token Input */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold">Tunnel Token</Label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              type={showToken ? "text" : "password"}
+              value={cfg.token}
+              onChange={e => setCfg(c => ({ ...c, token: e.target.value }))}
+              placeholder={cfg.token_set ? "Token tersimpan (isi untuk ganti)" : "eyJhbGci..."}
+              className="rounded-sm font-mono text-xs pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowToken(s => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+        {cfg.token_set && !cfg.token && (
+          <p className="text-[10px] text-muted-foreground">Token sudah tersimpan — kosongkan untuk menggunakan token lama</p>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button
+          onClick={() => handleSave(true)}
+          disabled={saving}
+          className="gap-2 bg-orange-600 hover:bg-orange-700 text-white rounded-sm h-8 text-xs"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          {saving ? "Menyimpan..." : "Aktifkan Tunnel"}
+        </Button>
+        {status.enabled && (
+          <>
+            <Button
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              variant="outline"
+              className="gap-2 rounded-sm h-8 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+            >
+              <XCircle className="w-3.5 h-3.5" /> Nonaktifkan
+            </Button>
+            <Button
+              onClick={handleRestart}
+              disabled={restarting}
+              variant="outline"
+              className="gap-2 rounded-sm h-8 text-xs"
+            >
+              {restarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Restart
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -231,10 +376,11 @@ export default function IntegrationSettingsPage() {
         <div className="w-10 h-10 rounded-sm bg-orange-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-orange-400" /></div>
         <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook N8N, WhatsApp Gateway, AI Chat, dan Telegram NOC</p></div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         {[
           { icon: Webhook, color: "text-orange-400", bg: "bg-orange-500/10", title: "N8N Webhook", sub: "Notifikasi pembayaran ke N8N" },
           { icon: MessageSquare, color: "text-green-500", bg: "bg-green-500/10", title: "WhatsApp Gateway", sub: "Fonnte / Wablas / Custom API" },
+          { icon: Cloud, color: "text-orange-400", bg: "bg-orange-500/10", title: "Cloudflare Tunnel", sub: "Akses publik tanpa buka port" },
           { icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10", title: "AI Chat + Telegram", sub: "Gemini AI + Alert NOC" },
         ].map(s => (
           <div key={s.title} className="bg-card border border-border rounded-sm p-3 flex items-center gap-3">
@@ -244,6 +390,7 @@ export default function IntegrationSettingsPage() {
         ))}
       </div>
       <IntegrationSection />
+      <CloudflareSection />
       <AIIntegrationSection />
     </div>
   );
