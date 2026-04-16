@@ -1278,7 +1278,10 @@ class MikroTikRestAPI(MikroTikBase):
 
         if pppoe_profile:
             try:
-                await self._async_req("PATCH", "ppp/aaa", {"use-radius": "yes"})
+                try:
+                    await self._async_req("POST", "ppp/aaa/set", {"use-radius": "yes"})
+                except Exception:
+                    await self._async_req("PATCH", "ppp/aaa", {"use-radius": "true"})
                 steps.append("✅ PPPoE AAA — use-radius=yes diaktifkan secara global (PPP Profile: target OK)")
             except Exception as e:
                 steps.append(f"⚠️ Tidak dapat set use-radius untuk PPPoE (PPP AAA): {e}")
