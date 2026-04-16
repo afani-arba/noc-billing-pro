@@ -124,7 +124,7 @@ function AppTrafficMonitorTab() {
                       <div className="flex items-center justify-end gap-2">
                          <span className="w-12 text-right">{row.percent}%</span>
                          <div className="w-24 h-1.5 bg-secondary rounded-full overflow-hidden">
-                           <div className="h-full bg-indigo-500 rounded-full" style={{ width: \`\${row.percent}%\` }} />
+                           <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${row.percent}%` }} />
                          </div>
                       </div>
                     </td>
@@ -165,13 +165,13 @@ function BgpSteeringTab() {
   });
 
   const toggleMut = useMutation({
-    mutationFn: (id) => api.post(\`/peering-eye/bgp-steering/\${id}/toggle\`),
+    mutationFn: (id) => api.post(`/peering-eye/bgp-steering/${id}/toggle`),
     onSuccess: () => queryClient.invalidateQueries(["bgp_steering_policies"]),
     onError: (e) => toast.error(e.response?.data?.detail || "Gagal mengubah status policy.")
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => api.delete(\`/peering-eye/bgp-steering/\${id}\`),
+    mutationFn: (id) => api.delete(`/peering-eye/bgp-steering/${id}`),
     onSuccess: () => {
       toast.success("Policy BGP berhasil dihapus");
       queryClient.invalidateQueries(["bgp_steering_policies"]);
@@ -215,7 +215,7 @@ function BgpSteeringTab() {
                     </div>
                     <div>
                        <h4 className="font-bold text-foreground">{p.platform_name}</h4>
-                       <span className={\`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider \${p.enabled ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}\`}>
+                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${p.enabled ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
                          {p.enabled ? "Active" : "Disabled"}
                        </span>
                     </div>
@@ -223,7 +223,7 @@ function BgpSteeringTab() {
                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={() => toggleMut.mutate(p.id)}
-                      className={\`p-1.5 rounded-md transition-colors \${p.enabled ? "text-amber-500 hover:bg-amber-500/10" : "text-emerald-500 hover:bg-emerald-500/10"}\`}
+                      className={`p-1.5 rounded-md transition-colors ${p.enabled ? "text-amber-500 hover:bg-amber-500/10" : "text-emerald-500 hover:bg-emerald-500/10"}`}
                       title={p.enabled ? "Disable Policy" : "Enable Policy"}
                     >
                       <Power className="w-4 h-4" />
