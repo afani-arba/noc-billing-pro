@@ -4,7 +4,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { 
   Radar, Activity, Plus, Trash2, Power, Globe,
-  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw, Terminal, CheckCircle2
+  ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw, Terminal, CheckCircle2, Edit2
 } from "lucide-react";
 
 export default function BgpSteeringPage() {
@@ -205,6 +205,7 @@ function AppTrafficMonitorTab() {
 function BgpSteeringTab() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [editData, setEditData] = useState(null);
 
   const { data: rawPolicies, isLoading } = useQuery({
     queryKey: ["bgp_steering_policies"],
@@ -282,6 +283,13 @@ function BgpSteeringTab() {
                       <Power className="w-4 h-4" />
                     </button>
                     <button 
+                      onClick={() => setEditData(p)}
+                      className="p-1.5 rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
+                      title="Edit Policy"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
                       onClick={() => { if(window.confirm("Hapus BGP Policy ini?")) deleteMut.mutate(p.id) }}
                       className="p-1.5 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
                       title="Hapus Policy"
@@ -318,6 +326,7 @@ function BgpSteeringTab() {
       )}
 
       {showAdd && <AddBgpPolicyModal onClose={() => setShowAdd(false)} />}
+      {editData && <AddBgpPolicyModal onClose={() => setEditData(null)} initialData={editData} />}
     </div>
   );
 }
@@ -325,11 +334,19 @@ function BgpSteeringTab() {
 /* ─────────────────────────────────────────────────────────────────────────────
  * Add BGP Policy Modal
  * ───────────────────────────────────────────────────────────────────────────── */
-function AddBgpPolicyModal({ onClose }) {
+function AddBgpPolicyModal({ onClose, initialData }) {
   const queryClient = useQueryClient();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(initialData || {
     platform_name: "", gateway_ip: "", target_peer: "", community: "", custom_prefixes: ""
   });
+  
+  // Format custom_prefixes from array to string for editing
+  useEffect(() => {
+    if (initialData?.custom_prefixes && Array.isArray(initialData.custom_prefixes)) {
+       setFormData(prev => ({ ...prev, custom_prefixes: initialData.custom_prefixes.join(", ") }));
+    }
+  }, [initialData]);
+
   const [loading, setLoading] = useState(false);
 
   const { data: catalog = [] } = useQuery({
@@ -357,11 +374,18 @@ function AddBgpPolicyModal({ onClose }) {
     try {
       const payload = {
         ...formData,
-        custom_prefixes: formData.custom_prefixes ? formData.custom_prefixes.split(",").map(s => s.trim()) : [],
-        enabled: true
+        custom_prefixes: formData.custom_prefixes ? (typeof formData.custom_prefixes === 'string' ? formData.custom_prefixes.split(",").map(s => s.trim()) : formData.custom_prefixes) : [],
+        enabled: initialData ? initialData.enabled : true
       };
-      await api.post("/peering-eye/bgp-steering", payload);
-      toast.success("BGP Policy berhasil dibuat! ASN Prefix sedang di-inject.");
+      
+      if (initialData) {
+        await api.put(`/peering-eye/bgp-steering/${initialData.id}`, payload);
+        toast.success("BGP Policy berhasil diupdate!");
+      } else {
+        await api.post("/peering-eye/bgp-steering", payload);
+        toast.success("BGP Policy berhasil dibuat! ASN Prefix sedang di-inject.");
+      }
+      
       queryClient.invalidateQueries(["bgp_steering_policies"]);
       onClose();
     } catch (err) {
@@ -375,7 +399,7 @@ function AddBgpPolicyModal({ onClose }) {
       <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-lg w-full p-6 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold flex items-center gap-2">
-             <Globe className="w-5 h-5 text-emerald-500" /> Tambah BGP Policy
+             <Globe className="w-5 h-5 text-emerald-500" /> {initialData ? "Edit BGP Policy" : "Tambah BGP Policy"}
           </h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground hover:bg-secondary p-1 rounded-md transition-colors"><Shield className="w-5 h-5" /></button>
         </div>
