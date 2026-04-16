@@ -99,7 +99,7 @@ export default function LicensePage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Manajemen Lisensi</h1>
         <p className="text-muted-foreground">
-          Kelola lisensi NOC Sentinel untuk memastikan fitur aplikasi berjalan maksimal.
+          Kelola lisensi NOC Billing Pro untuk memastikan fitur aplikasi berjalan maksimal.
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export default function LicensePage() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Zap className={edition === "enterprise" ? "text-cyan-400 w-4 h-4" : "text-primary w-4 h-4"} />
-            Edisi Aktif: <span className={edition === "enterprise" ? "text-cyan-400" : "text-primary"}>{edition_name || "NOC-Sentinel Pro"}</span>
+            Edisi Aktif: <span className={edition === "enterprise" ? "text-cyan-400" : "text-primary"}>{edition_name || "NOC-Billing-Pro"}</span>
           </CardTitle>
           <CardDescription>Fitur yang tersedia pada edisi ini</CardDescription>
         </CardHeader>
@@ -183,7 +183,7 @@ export default function LicensePage() {
             {/* Overlay Lock if invalid */}
             {!isValid && (
               <div className="p-4 bg-red-900/20 border border-red-500/50 text-red-400 rounded-lg text-sm mb-4">
-                Sistem NOC Sentinel sedang terkunci karena lisensi tidak valid atau kadaluarsa. Silakan aktivasi dengan kunci lisensi baru untuk membuka kembali akses.
+                Sistem NOC Billing Pro sedang terkunci karena lisensi tidak valid atau kadaluarsa. Silakan aktivasi dengan kunci lisensi baru untuk membuka kembali akses.
               </div>
             )}
           </CardContent>

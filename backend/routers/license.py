@@ -21,7 +21,7 @@ async def get_license_info(db=Depends(get_db)):
         "license_key": doc.get("license_key") if doc else None,
         "status": status_doc.get("status", "unlicensed"),
         "type": status_doc.get("type"),
-        "edition": status_doc.get("edition"),
+        "edition": status_doc.get("edition") or lic_svc.EDITION,
         "customer": status_doc.get("customer"),
         "expires_at": status_doc.get("expires_at"),
         "message": status_doc.get("message")
