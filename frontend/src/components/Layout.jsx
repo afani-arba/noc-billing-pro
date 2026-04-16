@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth, useEdition } from "@/App";
 import {
-  LayoutDashboard, Users, Wifi, WifiOff, FileText, Server, Shield, LogOut, Menu, ChevronLeft, Settings, Bell, HardDrive, Terminal,
+  LayoutDashboard, WifiOff, FileText, Server, Shield, LogOut, Menu, ChevronLeft, Settings, Bell, HardDrive, Terminal,
   GitBranch, Route, Cable, ShieldAlert, Cpu, Monitor, BarChart2, AlertTriangle, Download, Radar, Zap, PieChart, TrendingUp, MessageCircle, Activity, Radio, Search
 } from "lucide-react";
 
@@ -27,8 +27,6 @@ const navItems = [
   
   // ── CUSTOMER & SERVICES ──
   { separator: true, label: "Customer Services" },
-  { to: "/pppoe",          icon: Users,           label: "PPPoE Users",            serviceKey: "pppoe" },
-  { to: "/hotspot",        icon: Wifi,            label: "Hotspot Users",          serviceKey: "hotspot" },
   { to: "/genieacs",       icon: Cpu,             label: "GenieACS / TR-069",      serviceKey: "genieacs",       nocOnly: true },
   
   // ── HELPDESK & BILLING ──

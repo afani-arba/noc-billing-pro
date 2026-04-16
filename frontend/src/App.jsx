@@ -26,8 +26,6 @@ import { ThemeProvider } from "@/context/ThemeContext";
 const LoginPage               = lazy(() => import("@/pages/LoginPage"));
 const DashboardPage           = lazy(() => import("@/pages/DashboardPage"));
 const DevicesPage             = lazy(() => import("@/pages/DevicesPage"));
-const PPPoEUsersPage          = lazy(() => import("@/pages/PPPoEUsersPage"));
-const HotspotUsersPage        = lazy(() => import("@/pages/HotspotUsersPage"));
 const BillingPage             = lazy(() => import("@/pages/BillingPage"));
 const HotspotBillingPage      = lazy(() => import("@/pages/HotspotBillingPage"));
 const FinanceReportPage       = lazy(() => import("@/pages/FinanceReportPage"));
@@ -182,11 +180,11 @@ export default function App() {
                   {/* 3. GenieACS + ZTP */}
                   <Route path="genieacs"               element={<GenieACSPage />} />
 
-                  {/* 4. RADIUS / Hotspot Users */}
-                  <Route path="hotspot"                element={<HotspotUsersPage />} />
+                  {/* 4. RADIUS / Hotspot Billing */}
+                  <Route path="hotspot"                element={<Navigate to="/" replace />} />
 
                   {/* 5. Billing PPPoE */}
-                  <Route path="pppoe"                  element={<PPPoEUsersPage />} />
+                  <Route path="pppoe"                  element={<Navigate to="/" replace />} />
                   <Route path="billing"                element={<BillingPage />} />
 
                   {/* 6. Billing Hotspot */}
@@ -248,7 +246,7 @@ export default function App() {
         </BrowserRouter>
 
         {/* Global toast notifications */}
-        <Toaster richColors position="top-right" closeButton />
+        <Toaster richColors position="bottom-right" closeButton />
       </ThemeProvider>
       </EditionContext.Provider>
     </AuthContext.Provider>
