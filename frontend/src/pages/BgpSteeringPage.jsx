@@ -63,7 +63,7 @@ export default function BgpSteeringPage() {
 function AppTrafficMonitorTab() {
   const queryClient = useQueryClient();
 
-  const { data: summary = [], isLoading } = useQuery({
+  const { data: summaryRaw, isLoading } = useQuery({
     queryKey: ["app_traffic_summary"],
     queryFn: async () => {
       const res = await api.get("/peering-eye/app-traffic/summary");
@@ -71,6 +71,13 @@ function AppTrafficMonitorTab() {
     },
     refetchInterval: 30000,
   });
+
+  // API returns { platforms: [...], days, total_bytes, ... } — extract array safely
+  const summary = Array.isArray(summaryRaw)
+    ? summaryRaw
+    : Array.isArray(summaryRaw?.platforms)
+    ? summaryRaw.platforms
+    : [];
 
   const formatBytes = (bytes) => {
     if (!bytes) return "0 B";
@@ -156,13 +163,16 @@ function BgpSteeringTab() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
 
-  const { data: policies = [], isLoading } = useQuery({
+  const { data: rawPolicies, isLoading } = useQuery({
     queryKey: ["bgp_steering_policies"],
     queryFn: async () => {
       const res = await api.get("/peering-eye/bgp-steering");
       return res.data;
     },
   });
+
+  // Ensure policies is always an array
+  const policies = Array.isArray(rawPolicies) ? rawPolicies : [];
 
   const toggleMut = useMutation({
     mutationFn: (id) => api.post(`/peering-eye/bgp-steering/${id}/toggle`),
