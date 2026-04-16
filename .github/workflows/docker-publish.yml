@@ -6,6 +6,9 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'genieacs/**'
+      - '*.sh'
+      - 'docker-compose.yml'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
