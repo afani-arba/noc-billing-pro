@@ -1060,10 +1060,12 @@ async def bandwidth_history_range(
                     "jitter_raw": [j for j in b.get("jitter_raw", []) if j is not None],
                 })
             else:
-                # Slot kosong — isi 0 agar grafik tidak loncat / continuous
+                # Slot kosong — isi None agar Recharts skip titik ini (bukan drop ke 0)
+                # Versi sebelumnya: isi 0.0 => menyebabkan pola segitiga/sawtooth di grafik
+                # Solusi: None + connectNulls=True di frontend = garis tetap smooth
                 result.append({
-                    "time": label, "download": 0.0, "upload": 0.0,
-                    "ping": 0.0, "jitter": 0.0, "ping_raw": [], "jitter_raw": []
+                    "time": label, "download": None, "upload": None,
+                    "ping": None, "jitter": None, "ping_raw": [], "jitter_raw": []
                 })
             cur_ms += interval_ms
         return result

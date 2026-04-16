@@ -276,7 +276,7 @@ export default function DashboardPage() {
 
   const td = bandwidthData ?? (stats?.traffic_data || []);
   // Find first non-zero index to auto-scroll chart to active data
-  const firstNonZeroIdx = td.findIndex(d => (d.download || 0) > 0 || (d.upload || 0) > 0);
+  const firstNonZeroIdx = td.findIndex(d => (d.download ?? 0) > 0 || (d.upload ?? 0) > 0);
   const brushStart = firstNonZeroIdx > 0 ? Math.max(0, firstNonZeroIdx - 2) : Math.max(0, td.length - 60);
   // Defensive aliases — prevent TypeError when API returns partial data
   const health = stats.system_health || {};
@@ -499,8 +499,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={40} />
                   <YAxis tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} width={80} tickFormatter={formatBwTooltip} />
                   <Tooltip contentStyle={ttStyle.contentStyle} formatter={(v, n) => [formatBwTooltip(v), n === "Download" || n === "download" ? "Download" : "Upload"]} />
-                  <Area type="monotone" dataKey="download" stroke="#ef4444" fill="url(#gDlBandwidth)" strokeWidth={1.5} name="Download" activeDot={{ r: 4 }} connectNulls={false} />
-                  <Area type="monotone" dataKey="upload" stroke="#f97316" fill="url(#gUlBandwidth)" strokeWidth={1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={false} />
+                  <Area type="linear" dataKey="download" stroke="#ef4444" fill="url(#gDlBandwidth)" strokeWidth={1.5} name="Download" activeDot={{ r: 4 }} connectNulls={true} />
+                  <Area type="linear" dataKey="upload" stroke="#f97316" fill="url(#gUlBandwidth)" strokeWidth={1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={true} />
                   <Brush dataKey="time" height={18} startIndex={brushStart} endIndex={Math.min(td.length - 1, brushStart + 80)} {...brushStyle} tick={<BrushTick />} />
                 </AreaChart>
               </ResponsiveContainer>
