@@ -138,7 +138,7 @@ export default function RadiusSettingsPage() {
         radius_ip: pushSettings.radius_ip,
         secret: pushSettings.secret,
         server_profile: pushSettings.server_profile,
-        pppoe_profile: pushSettings.pppoe_profile,
+        pppoe_profile: pushSettings.pppoe_profile === "none" ? "" : pushSettings.pppoe_profile,
       });
       setPushLog(r.data.steps || []);
       if (r.data.success) {
@@ -299,7 +299,7 @@ export default function RadiusSettingsPage() {
                   <Select value={pushSettings.pppoe_profile} onValueChange={v => setPushSettings({...pushSettings, pppoe_profile: v})}>
                     <SelectTrigger className="h-8 text-xs bg-card"><SelectValue placeholder="Opsional (abaikan jika tidak pakai PPPoE)..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-- Abaikan --</SelectItem>
+                      <SelectItem value="none">-- Abaikan --</SelectItem>
                       {pppoeProfiles.length === 0 && <SelectItem value="-">Tidak ada profile pppoe ditemukan</SelectItem>}
                       {pppoeProfiles.map((hp) => (
                         <SelectItem key={hp.name || hp['.id']} value={hp.name}>{hp.name}</SelectItem>
