@@ -232,6 +232,8 @@ services:
       - GENIEACS_DEBUG=false
     ports:
       - "3001:3000"           # GenieACS UI → http://IP:3001 (3000 = master)
+    volumes:
+      - ./genieacs/app-custom.css:/usr/local/lib/node_modules/genieacs/public/app-LU66VFYW.css:ro
     depends_on:
       - genieacs-nbi
 

@@ -165,9 +165,15 @@ echo "--- Import UI Config (cwmp + ui.*) ---"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 if [ -f "$CONFIG_FILE" ]; then
     if docker ps --format '{{.Names}}' | grep -q 'noc-billing-pro-mongodb'; then
-        echo "  Menggunakan mongoimport untuk config.json..."
+        echo "  Menghapus config default bawaan dan menggunakan mongoimport untuk config.json..."
+        # Hapus default layout "online" dari GenieACS agar tidak berbenturan dengan layout custom
+        docker exec -i noc-billing-pro-mongodb mongosh genieacs_billing_pro --quiet --eval 'db.config.deleteMany({_id: /ui.overview.groups.online/})' >/dev/null 2>&1
+        
         docker exec -i noc-billing-pro-mongodb mongoimport --db genieacs_billing_pro --collection config --jsonArray --mode upsert < "$CONFIG_FILE" >/dev/null 2>&1
-        ok "Imported config.json via MongoDB backend"
+        
+        # Restart layanan UI untuk apply config
+        docker restart noc-billing-pro-genieacs-ui >/dev/null 2>&1
+        ok "Imported config.json via MongoDB backend & UI restarted"
     else
         warn "Container noc-billing-pro-mongodb tidak berjalan, gagal import config"
     fi

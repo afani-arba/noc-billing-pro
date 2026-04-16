@@ -1,0 +1,228 @@
+/* =====================================================================
+   Grafana / Prometheus Dark Mode Theme for GenieACS
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  /* Grafana Dark Palette */
+  --grafana-bg: #111217;
+  --grafana-panel-bg: #181b1f;
+  --grafana-border: #303133;
+  --grafana-text: #c7d0d9;
+  --grafana-text-muted: #8e99a8;
+  --grafana-accent: #3274D9;
+  --grafana-accent-hover: #1f60c4;
+  --grafana-success: #379777;
+  --grafana-warning: #fffa00;
+  --grafana-danger: #FF2400;
+  --grafana-orange: #E08736;
+}
+
+/* Global Body */
+body, html {
+  background-color: var(--grafana-bg) !important;
+  color: var(--grafana-text) !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Base Top Navigation Bar / Header */
+.layout-header {
+  background-color: var(--grafana-panel-bg) !important;
+  border-bottom: 1px solid var(--grafana-border) !important;
+}
+.layout-header .logo {
+  filter: brightness(0) invert(1) opacity(0.8);
+}
+.navbar {
+  background-color: var(--grafana-panel-bg) !important;
+  border: none !important;
+}
+
+/* Headings over everything */
+h1, h2, h3, h4, th, .label {
+  color: #eeeeee !important;
+}
+
+/* Tabs */
+.nav-tabs {
+  border-bottom: 1px solid var(--grafana-border) !important;
+}
+.nav-tabs > li > a {
+  background-color: transparent !important;
+  color: var(--grafana-text-muted) !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  font-weight: 500;
+  padding: 10px 16px !important;
+}
+.nav-tabs > li > a:hover {
+  color: #eeeeee !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-bottom: 2px solid var(--grafana-border) !important;
+}
+.nav-tabs > li.active > a, 
+.nav-tabs > li.active > a:hover, 
+.nav-tabs > li.active > a:focus {
+  background-color: transparent !important;
+  color: var(--grafana-orange) !important;
+  border: none !important;
+  border-bottom: 2px solid var(--grafana-orange) !important;
+}
+
+/* Panels, Cards, and Graphs */
+.panel, .card, .chart-container, .wrapper {
+  background-color: var(--grafana-panel-bg) !important;
+  border: 1px solid var(--grafana-border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden;
+}
+.panel-heading {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  border-bottom: 1px solid var(--grafana-border) !important;
+  color: #eeeeee !important;
+  font-weight: 600;
+}
+.panel-footer {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+  border-top: 1px solid var(--grafana-border) !important;
+}
+.well {
+  background-color: var(--grafana-panel-bg) !important;
+  border: 1px solid var(--grafana-border) !important;
+}
+
+/* Tables */
+table, .table {
+  background-color: transparent !important;
+  color: var(--grafana-text) !important;
+}
+.table > thead > tr > th {
+  background-color: rgba(255,255,255,0.05) !important;
+  color: #bbbbbb !important;
+  border-bottom: 2px solid var(--grafana-border) !important;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.table > tbody > tr > td {
+  border-top: 1px solid var(--grafana-border) !important;
+  vertical-align: middle !important;
+}
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+.table-hover > tbody > tr:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+td a {
+  color: var(--grafana-accent) !important;
+}
+
+/* Inputs and Forms */
+input, select, textarea, .form-control {
+  background-color: #0b0c0e !important;
+  color: #eeeeee !important;
+  border: 1px solid var(--grafana-border) !important;
+  border-radius: 4px !important;
+}
+input:focus, select:focus, textarea:focus, .form-control:focus {
+  border-color: var(--grafana-accent) !important;
+  box-shadow: 0 0 0 2px rgba(50, 116, 217, 0.2) !important;
+  outline: none !important;
+}
+/* Ensure placehoder contrast */
+::placeholder {
+  color: #666 !important;
+}
+
+/* Buttons */
+.btn, button {
+  background-color: var(--grafana-border) !important;
+  color: #eeeeee !important;
+  border: 1px solid var(--grafana-border) !important;
+  border-radius: 4px !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn:hover, button:hover {
+  background-color: #404246 !important;
+  border-color: #555 !important;
+  color: #fff !important;
+}
+.btn-primary {
+  background-color: var(--grafana-accent) !important;
+  border-color: var(--grafana-accent) !important;
+}
+.btn-primary:hover {
+  background-color: var(--grafana-accent-hover) !important;
+  border-color: var(--grafana-accent-hover) !important;
+}
+
+/* Status Badges / Colors */
+.text-success, .status-success { color: var(--grafana-success) !important; }
+.text-warning, .status-warning { color: var(--grafana-warning) !important; }
+.text-danger, .status-danger { color: var(--grafana-danger) !important; }
+
+/* Overrides for specific structural elements */
+#wrapper {
+  background-color: var(--grafana-bg) !important;
+}
+.container-fluid {
+  background-color: var(--grafana-bg) !important;
+}
+
+/* Pie Chart overrides - give legends better text color */
+.legend-item {
+  color: #ccc !important;
+}
+
+/* Make modals dark */
+.modal-content, .modal-header, .modal-body, .modal-footer {
+  background-color: var(--grafana-panel-bg) !important;
+  border: 1px solid var(--grafana-border) !important;
+  color: var(--grafana-text) !important;
+}
+.modal-header {
+  border-bottom: 1px solid var(--grafana-border) !important;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  background-color: var(--grafana-panel-bg) !important;
+  border: 1px solid var(--grafana-border) !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5) !important;
+}
+.dropdown-menu > li > a {
+  color: var(--grafana-text) !important;
+}
+.dropdown-menu > li > a:hover {
+  background-color: rgba(255,255,255,0.1) !important;
+}
+.dropdown-menu .divider {
+  background-color: var(--grafana-border) !important;
+}
+
+/* Code Mirror (for config editors) */
+.CodeMirror {
+  background-color: #000 !important;
+  color: #0f0 !important;
+  border: 1px solid var(--grafana-border) !important;
+}
+
+/* Fix generic pagination */
+.pagination > li > a, .pagination > li > span {
+  background-color: var(--grafana-panel-bg) !important;
+  border-color: var(--grafana-border) !important;
+  color: var(--grafana-text) !important;
+}
+.pagination > li > a:hover, .pagination > li > span:hover {
+  background-color: #333 !important;
+}
+.pagination > .active > a, .pagination > .active > a:hover {
+  background-color: var(--grafana-accent) !important;
+  border-color: var(--grafana-accent) !important;
+  color: #fff !important;
+}
