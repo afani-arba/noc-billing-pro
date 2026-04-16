@@ -1137,8 +1137,8 @@ function ServerConfigTab() {
             GenieACS URL (NBI) <span className="text-destructive">*</span>
           </Label>
           <Input value={cfg.url} onChange={e => setCfg(c => ({ ...c, url: e.target.value }))}
-            placeholder="http://10.x.x.x:7557" className="rounded-sm font-mono text-xs" />
-          <p className="text-[10px] text-muted-foreground">Port NBI default GenieACS adalah <code className="bg-secondary px-1 rounded">7557</code></p>
+            placeholder="http://genieacs-nbi:7557" className="rounded-sm font-mono text-xs" />
+          <p className="text-[10px] text-muted-foreground">URL internal NBI GenieACS harus menggunakan <code className="bg-secondary px-1 rounded">http://genieacs-nbi:7557</code></p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
