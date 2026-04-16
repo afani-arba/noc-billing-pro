@@ -685,6 +685,12 @@ check_container "noc-billing-pro-genieacs-cwmp" "GenieACS CWMP" || true
 check_container "noc-billing-pro-genieacs-nbi"  "GenieACS NBI " || true
 check_container "noc-billing-pro-updater"     "Auto Updater  " || true
 
+# ── Auto-Import GenieACS Config ────────────────────────────────────────────
+if [[ -f "$APP_DIR/genieacs/import_genieacs.sh" ]]; then
+    info "Mengimpor konfigurasi default GenieACS (Provisions, Presets)..."
+    bash "$APP_DIR/genieacs/import_genieacs.sh" || warn "Gagal menjalankan import GenieACS"
+fi
+
 # ── UFW Firewall ───────────────────────────────────────────────────────────
 if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
     # NOC Billing Pro — Web & API

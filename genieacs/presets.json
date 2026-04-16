@@ -1,0 +1,6 @@
+[
+{"_id":"bootstrap","weight":0,"channel":"bootstrap","events":{"0 BOOTSTRAP":true},"precondition":"","configurations":[{"type":"provision","name":"bootstrap","args":null}]},
+{"_id":"default","weight":0,"channel":"default","precondition":"","events":{},"configurations":[{"type":"provision","name":"default","args":null}]},
+{"_id":"useradmin","channel":"useradmin","weight":0,"precondition":"DeviceID.Manufacturer <> \"ZIONCOM\" AND DeviceID.Manufacturer <> \"RAISECOM\" AND DeviceID.Manufacturer <> \"Raisecom\" AND DeviceID.Manufacturer <> \"Huawei Technologies Co., Ltd\"","events":{},"configurations":[{"type":"provision","name":"useradmin","args":null}]},
+{"_id":"Auto_Hapus_Kredensial","events":{"2 PERIODIC":true},"precondition":"","weight":0,"configurations":[{"type":"provision","name":"Fix_Semua_Modem","args":null}]}
+]
