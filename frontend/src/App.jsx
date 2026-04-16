@@ -180,7 +180,7 @@ export default function App() {
                   {/* 3. GenieACS + ZTP */}
                   <Route path="genieacs"               element={<GenieACSPage />} />
 
-                  {/* 4. RADIUS / Hotspot Billing */}
+                  {/* 4. RADIUS / Hotspot Users */}
                   <Route path="hotspot"                element={<Navigate to="/" replace />} />
 
                   {/* 5. Billing PPPoE */}
@@ -246,7 +246,7 @@ export default function App() {
         </BrowserRouter>
 
         {/* Global toast notifications */}
-        <Toaster richColors position="bottom-right" closeButton />
+        <Toaster richColors position="bottom-right" closeButton theme="dark" />
       </ThemeProvider>
       </EditionContext.Provider>
     </AuthContext.Provider>

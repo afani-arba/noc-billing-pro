@@ -55,8 +55,6 @@ from core.edition import EDITION, EDITION_NAME, is_enterprise, FEATURES
 from fastapi import APIRouter
 from routers.auth import router as auth_router
 from routers.devices import router as devices_router
-from routers.pppoe import router as pppoe_router
-from routers.hotspot import router as hotspot_router
 from routers.billing import router as billing_router, webhook_router as billing_webhook_router
 from routers.customers import router as customers_router
 from routers.client_portal import router as client_portal_router
@@ -417,16 +415,15 @@ api.include_router(devices_router)
 api.include_router(genieacs_router)
 
 # ── 4. RADIUS (via hotspot router) ────────────────────────────────────────
-api.include_router(hotspot_router)              # Hotspot + RADIUS Status & Push
+# (hotspot_router disabled since Hotspot Users legacy feature is removed)
 
 # ── 5. Billing PPPoE ──────────────────────────────────────────────────────
-api.include_router(pppoe_router)
 api.include_router(billing_router)
 api.include_router(customers_router)
 api.include_router(voucher_pdf_router)      # Voucher Hotspot PDF Generator
 
 # ── 6. Billing Hotspot ─────────────────────────────────────────────────────
-# (hotspot_router already included above, handles all hotspot + billing endpoints)
+# (legacy hotspot endpoints removed)
 
 # ── 7. Laporan Keuangan ────────────────────────────────────────────────────
 api.include_router(reports_router)
