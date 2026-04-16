@@ -257,6 +257,9 @@ async def lifespan(app: FastAPI):
             t = asyncio.create_task(bgp_steering_loop())
             _background_tasks.append(t)
             logger.info("BGP Content Steering injector started")
+        except ImportError:
+            # bgp_steering_loop may not be present in all versions
+            logger.info("BGP Steering injector loop not available (routes handled on-demand)")
         except Exception as e:
             logger.error(f"BGP Steering error: {e}")
 
@@ -277,17 +280,15 @@ async def lifespan(app: FastAPI):
             t = asyncio.create_task(genieacs_sync_loop())
             _background_tasks.append(t)
             logger.info("GenieACS sync service started (ZTP ready)")
+        except ImportError:
+            # genieacs_sync_loop may not be present in all versions
+            logger.info("GenieACS sync loop not available (sync handled on-demand via API)")
         except Exception as e:
             logger.error(f"GenieACS sync error: {e}")
 
-    # Peering intelligence cache
-    try:
-        from services.peering_intelligence_cache import peering_cache_loop
-        t = asyncio.create_task(peering_cache_loop())
-        _background_tasks.append(t)
-        logger.info("Peering intelligence cache started")
-    except Exception as e:
-        logger.error(f"Peering cache error: {e}")
+    # Peering intelligence cache — cache_get/cache_set helpers are used on-demand
+    # peering_cache_loop does not exist as a standalone background task
+    logger.info("Peering intelligence cache helpers ready (on-demand)")
 
     # ── Auto-reconnect L2TP VPN saat startup (jika sudah dikonfigurasi) ───────
     # Fresh install: DB kosong → tidak ada config → skip (tidak auto-connect)
