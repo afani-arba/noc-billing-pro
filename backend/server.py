@@ -253,8 +253,8 @@ async def lifespan(app: FastAPI):
     # BGP Content Steering
     if _svc("ENABLE_BGP_STEERING"):
         try:
-            from services.bgp_steering_injector import bgp_steering_loop
-            t = asyncio.create_task(bgp_steering_loop())
+            from services.bgp_steering_injector import bgp_injector_loop
+            t = asyncio.create_task(bgp_injector_loop())
             _background_tasks.append(t)
             logger.info("BGP Content Steering injector started")
         except ImportError:
