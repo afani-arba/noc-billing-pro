@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Component } from "react";
 import api from "@/lib/api";
+import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import {
   PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -784,7 +785,10 @@ export default function PeeringEyePage(props) {
 }
 
 function PeeringEyePageInner() {
-  const [devices, setDevices]       = useState([]);
+  // RBAC: device list difilter berdasarkan allowed_devices user
+  const { devices: allowedDevList, isLocked, defaultDeviceId } = useAllowedDevices();
+  // peeringDevices: format { device_id, device_name, hits } untuk dropdown
+  const [peeringDevices, setPeeringDevices] = useState([]);
   const [selectedDev, setSelectedDev] = useState(null); // null = all
   const [range, setRange]           = useState("24h");
   const [summary, setSummary]       = useState(null);
@@ -994,6 +998,32 @@ function PeeringEyePageInner() {
 
   // ── Push Community Filter ke MikroTik ──────────────────────────────────────────
   const [pushingFilterFor, setPushingFilterFor] = useState(null);
+  
+  // ── Load devices (filtered by RBAC) & BGP settings ──────────────────────────
+  useEffect(() => {
+    api.get("/peering-eye/devices")
+      .then(r => {
+        const allPeeringDevs = r.data || [];
+        // Filter peering devices berdasarkan allowed_devices RBAC
+        const filtered = allowedDevList.length === 0
+          ? allPeeringDevs
+          : allPeeringDevs.filter(pd => allowedDevList.some(d => d.id === pd.device_id));
+        setPeeringDevices(filtered);
+        // Auto-select jika terkunci (1 device)
+        if (isLocked && defaultDeviceId) {
+          const locked = filtered.find(pd => pd.device_id === defaultDeviceId);
+          if (locked) setSelectedDev(locked);
+        }
+      })
+      .catch(() => {});
+    api.get("/peering-eye/bgp/settings")
+      .then(r => setBgpSettings(r.data))
+      .catch(() => {});
+  }, [allowedDevList, isLocked, defaultDeviceId]);
+
+  // Alias agar tidak perlu ubah referensi lama
+  const devices = peeringDevices;
+
   const handlePushCommunityFilter = async (neighborIp) => {
     const localAs = bgpSettings?.local_as || 65000;
     const lastOctet = neighborIp.split(".").pop();
@@ -1036,17 +1066,6 @@ function PeeringEyePageInner() {
       setPushingFilterFor(null);
     }
   };
-
-  // â”€â”€ Load devices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // ── Load devices & BGP settings ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    api.get("/peering-eye/devices")
-      .then(r => setDevices(r.data || []))
-      .catch(() => {});
-    api.get("/peering-eye/bgp/settings")
-      .then(r => setBgpSettings(r.data))
-      .catch(() => {});
-  }, []);
 
   // â”€â”€ Poll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {

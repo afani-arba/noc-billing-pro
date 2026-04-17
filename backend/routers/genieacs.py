@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
-from core.auth import get_current_user, require_admin, require_noc
+from core.auth import get_current_user, require_admin, require_noc, get_user_allowed_devices
 from core.db import get_db
 from services import genieacs_service as svc
 from mikrotik_api import get_api_client
@@ -57,10 +57,37 @@ async def list_devices(
     model: str = Query(""),
     user=Depends(get_current_user),
 ):
-    """List CPE devices with optional search/filter."""
+    """List CPE devices with optional search/filter. Filtered by RBAC allowed_devices."""
     try:
         devices = await asyncio.to_thread(svc.get_devices, limit, search, model)
-        return _normalize_devices(devices)
+        normalized = _normalize_devices(devices)
+
+        # ── RBAC: filter berdasarkan allowed_devices user ────────────────────────
+        scope = get_user_allowed_devices(user)  # None = admin (semua), list = terbatas
+        if scope is not None and len(scope) > 0:
+            # Ambil semua PPPoE username dari customer yang terkait ke allowed devices
+            db = get_db()
+            allowed_customers = await db.customers.find(
+                {"device_id": {"$in": scope}},
+                {"_id": 0, "username": 1, "pppoe_username": 1}
+            ).to_list(5000)
+            allowed_usernames = set()
+            for c in allowed_customers:
+                if c.get("username"): allowed_usernames.add(c["username"].lower())
+                if c.get("pppoe_username"): allowed_usernames.add(c["pppoe_username"].lower())
+
+            if allowed_usernames:
+                # Filter: hanya tampilkan CPE yang PPPoE username-nya ada dalam list
+                normalized = [
+                    d for d in normalized
+                    if not d.get("pppoe_username")  # jika belum ada PPPoE username (baru), tampilkan
+                    or d.get("pppoe_username", "").lower() in allowed_usernames
+                ]
+            else:
+                # Tidak ada customer pada allowed devices — tampilkan semua (baru)
+                normalized = [d for d in normalized if not d.get("pppoe_username")]
+
+        return normalized
     except HTTPException:
         raise
     except Exception as e:

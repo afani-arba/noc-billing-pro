@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
+import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import { toast } from "sonner";
 import { printInvoiceWithProfile } from "@/lib/printUtils";
 import { Button } from "@/components/ui/button";
@@ -394,7 +395,7 @@ export default function BillingPage() {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
-  const [devices, setDevices] = useState([]);
+  const { devices, isLocked, defaultDeviceId, loading: devicesLoading } = useAllowedDevices();
   const [globalDeviceId, setGlobalDeviceId] = useState("");
 
   const loadPackages = useCallback(() => {
@@ -407,9 +408,12 @@ export default function BillingPage() {
 
   useEffect(() => { loadPackages(); loadCustomers(); }, [loadPackages, loadCustomers]);
 
+  // Inisialisasi globalDeviceId: jika terkunci ke 1 device, langsung auto-select
   useEffect(() => {
-    api.get("/devices").then(r => setDevices(r.data)).catch(() => {});
-  }, []);
+    if (isLocked && defaultDeviceId) {
+      setGlobalDeviceId(defaultDeviceId);
+    }
+  }, [isLocked, defaultDeviceId]);
 
   // Deteksi PPPoE user baru yang belum ada billing record
   useEffect(() => {
@@ -461,9 +465,10 @@ export default function BillingPage() {
         </div>
         {/* Month selector */}
         <div className="flex flex-wrap items-center gap-2 self-start">
-          <select value={globalDeviceId} onChange={e => setGlobalDeviceId(e.target.value)}
-            className="h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground min-w-[140px]">
-            <option value="">Semua Router</option>
+          <select value={globalDeviceId} onChange={e => !isLocked && setGlobalDeviceId(e.target.value)}
+            disabled={isLocked}
+            className={`h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground min-w-[140px] ${isLocked ? "opacity-80 cursor-not-allowed" : ""}`}>
+            {!isLocked && <option value="">Semua Router</option>}
             {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
           <select value={month} onChange={e => setMonth(Number(e.target.value))}
@@ -518,7 +523,7 @@ export default function BillingPage() {
       <div className="bg-card border border-border rounded-sm p-4">
         {tab === "dashboard" && <DashboardTab month={month} year={year} deviceId={globalDeviceId} />}
         {tab === "invoices" && <InvoicesTab month={month} year={year} packages={packages} customers={customers} deviceId={globalDeviceId} />}
-        {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} />}
+        {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} isLocked={isLocked} />}
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
         {tab === "monitoring" && <PpoeMonitoringTab deviceId={globalDeviceId} />}
         {tab === "settings" && <SettingsTab />}
@@ -1182,7 +1187,7 @@ function CreateInvoiceModal({ packages, customers, month, year, serviceType, onC
 
 // â”€â”€ Customers Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function CustomersTab({ packages, devices, onRefresh, deviceId }) {
+function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -1199,7 +1204,12 @@ function CustomersTab({ packages, devices, onRefresh, deviceId }) {
   const [savingPhone, setSavingPhone] = useState({});
   const [showPwd, setShowPwd] = useState({});  // { [customerId]: bool }
   const { user } = useAuth();
-  const isAdmin = user?.role === "administrator";
+  const isAdmin = ["administrator", "super_admin", "branch_admin"].includes(user?.role);
+
+  // Sync selectedRouter jika parent mengubah deviceId (RBAC lock)
+  useEffect(() => {
+    if (deviceId !== undefined) setSelectedRouter(deviceId);
+  }, [deviceId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1273,9 +1283,10 @@ function CustomersTab({ packages, devices, onRefresh, deviceId }) {
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama / username / telepon..."
             className="pl-8 h-8 rounded-sm text-xs" />
         </div>
-        <select value={selectedRouter} onChange={e => setSelectedRouter(e.target.value)}
-          className="h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground min-w-[140px]">
-          <option value="">Semua Router</option>
+        <select value={selectedRouter} onChange={e => !isLocked && setSelectedRouter(e.target.value)}
+          disabled={isLocked}
+          className={`h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground min-w-[140px] ${isLocked ? "opacity-80 cursor-not-allowed" : ""}`}>
+          {!isLocked && <option value="">Semua Router</option>}
           {devices?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         <Button size="sm" variant="outline" className="rounded-sm h-8 gap-1 text-xs" onClick={load}><RefreshCw className="w-3.5 h-3.5" /></Button>

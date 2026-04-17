@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
+import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,8 +83,7 @@ export default function HotspotBillingPage() {
 
   const [activeTab, setActiveTab] = useState("vouchers");
 
-  // State
-  const [devices, setDevices]           = useState([]);
+  // State (devices & loadingDevices sekarang dari useAllowedDevices hook di bawah)
   const [devRadiusMap, setDevRadiusMap] = useState({}); // { device_id: { radius_enabled, loading } }
   const [selectedDevice, setSelectedDevice] = useState("");
   const [profiles, setProfiles]         = useState([]);
@@ -105,7 +105,6 @@ export default function HotspotBillingPage() {
   const [settings, setSettings]         = useState({});
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [savingSettings, setSavingSettings]   = useState(false);
-  const [loadingDevices, setLoadingDevices] = useState(true);
   const [packages, setPackages]         = useState([]);
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [waOrders, setWaOrders]         = useState([]);
@@ -261,29 +260,32 @@ export default function HotspotBillingPage() {
   };
 
 
+  const { devices, isLocked, defaultDeviceId, loading: loadingDevices } = useAllowedDevices();
+
+  // Auto-select: pilih pertama jika terkunci, atau semua device jika admin
   useEffect(() => {
-    setLoadingDevices(true);
-    api.get("/devices").then(async r => {
-      const allDevs = r.data || [];
-      setDevices(allDevs);
-      if (allDevs.length > 0) setSelectedDevice(allDevs[0].id);
+    if (devices.length > 0) {
+      const firstId = defaultDeviceId || devices[0]?.id;
+      setSelectedDevice(firstId || "");
+    }
+  }, [devices, defaultDeviceId]);
 
-      // Paralel cek status RADIUS semua device — update per-device selesai
-      const initMap = Object.fromEntries(allDevs.map(d => [d.id, { radius_enabled: null, loading: true }]));
-      setDevRadiusMap(initMap);
-
-      await Promise.all(allDevs.map(async d => {
-        try {
-          const res = await api.get("/hotspot-radius-status", { params: { device_id: d.id } });
-          setDevRadiusMap(prev => ({ ...prev, [d.id]: { radius_enabled: res.data?.radius_enabled, loading: false } }));
-        } catch {
-          setDevRadiusMap(prev => ({ ...prev, [d.id]: { radius_enabled: false, loading: false, error: true } }));
-        }
-      }));
-    }).catch(() => {}).finally(() => setLoadingDevices(false));
+  // Paralel cek status RADIUS semua device
+  useEffect(() => {
+    if (devices.length === 0) return;
+    const initMap = Object.fromEntries(devices.map(d => [d.id, { radius_enabled: null, loading: true }]));
+    setDevRadiusMap(initMap);
+    Promise.all(devices.map(async d => {
+      try {
+        const res = await api.get("/hotspot-radius-status", { params: { device_id: d.id } });
+        setDevRadiusMap(prev => ({ ...prev, [d.id]: { radius_enabled: res.data?.radius_enabled, loading: false } }));
+      } catch {
+        setDevRadiusMap(prev => ({ ...prev, [d.id]: { radius_enabled: false, loading: false, error: true } }));
+      }
+    }));
     loadSettings();
     loadPackages();
-  }, [loadPackages]);
+  }, [devices, loadPackages]);
 
   useEffect(() => {
     if (!selectedDevice) { setProfiles([]); setRadiusStatus(null); return; }
@@ -505,6 +507,12 @@ export default function HotspotBillingPage() {
           {loadingDevices ? (
             <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card text-xs text-muted-foreground">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Memeriksa router...
+            </div>
+          ) : isLocked ? (
+            // Tampilkan nama router saja (tidak bisa diganti) jika terkunci
+            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card/80 text-xs text-foreground min-w-[180px]">
+              <span className="truncate">{devices.find(d => d.id === selectedDevice)?.name || "Router"}</span>
+              <span className="ml-auto text-[9px] text-muted-foreground px-1 py-0.5 border border-border rounded bg-secondary">Terkunci</span>
             </div>
           ) : (
             <Select value={selectedDevice} onValueChange={setSelectedDevice}>

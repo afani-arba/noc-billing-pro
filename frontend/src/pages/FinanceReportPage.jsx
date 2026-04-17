@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -265,18 +266,16 @@ export default function FinanceReportPage() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [deviceId, setDeviceId] = useState("");
-  const [devices, setDevices] = useState([]);
   const [report, setReport] = useState(null);
   const [hotspotReport, setHotspotReport] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Load device list once
+  const { devices, isLocked, defaultDeviceId } = useAllowedDevices();
+
+  // Auto-select jika terkunci ke 1 device
   useEffect(() => {
-    api
-      .get("/devices", { params: { limit: 200 } })
-      .then((r) => setDevices(r.data?.data || r.data || []))
-      .catch(() => {});
-  }, []);
+    if (isLocked && defaultDeviceId) setDeviceId(defaultDeviceId);
+  }, [isLocked, defaultDeviceId]);
 
   const loadReport = useCallback(async () => {
     setLoading(true);
@@ -405,18 +404,24 @@ export default function FinanceReportPage() {
           <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
             Router
           </label>
-          <select
-            value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
-            className="h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground pr-7 max-w-[200px]"
-          >
-            <option value="">Semua Router</option>
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name || d.host}
-              </option>
-            ))}
-          </select>
+          {isLocked ? (
+            <div className="flex items-center gap-2 h-8 px-3 rounded-sm border border-border bg-secondary text-xs text-foreground min-w-[140px]">
+              {devices.find(d => d.id === deviceId)?.name || "—"}
+            </div>
+          ) : (
+            <select
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              className="h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground pr-7 max-w-[200px]"
+            >
+              <option value="">Semua Router</option>
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name || d.host}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <Button
