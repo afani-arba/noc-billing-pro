@@ -1024,16 +1024,20 @@ function PeeringEyePageInner() {
       .then(r => setBgpSettings(r.data))
       .catch(() => {});
   }, [allowedDevList, isLocked, defaultDeviceId]);
-  // Pastikan selectedDev selalu terkunci jika isLocked (misal jika user coba reset)
+  // Pastikan selectedDev terkunci ke device pertama jika isLocked
+  // PENTING: jangan masukkan selectedDev ke dalam dependency array — akan menyebabkan infinite loop!
+  const lockAppliedRef = useRef(false);
   useEffect(() => {
-    if (isLocked && defaultDeviceId && peeringDevices.length > 0) {
-      const locked = peeringDevices.find(pd => pd.device_id === defaultDeviceId)
-        || peeringDevices[0];
-      if (locked && (!selectedDev || selectedDev.device_id !== locked.device_id)) {
-        setSelectedDev(locked);
-      }
+    if (!isLocked) { lockAppliedRef.current = false; return; }
+    if (lockAppliedRef.current) return; // sudah dikunci, tidak perlu run lagi
+    if (peeringDevices.length === 0) return; // belum load
+    const locked = peeringDevices.find(pd => pd.device_id === defaultDeviceId)
+      || peeringDevices[0];
+    if (locked) {
+      setSelectedDev(locked);
+      lockAppliedRef.current = true; // tandai sudah terkunci
     }
-  }, [isLocked, defaultDeviceId, peeringDevices, selectedDev]);
+  }, [isLocked, defaultDeviceId, peeringDevices]); // tanpa selectedDev!
 
   // Alias agar tidak perlu ubah referensi lama
   const devices = peeringDevices;

@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from core.db import get_db
 from core.auth import (
-    require_admin, pwd_context, VALID_ROLES, ROLE_DEFAULT_SERVICES, ALL_SERVICES
+    require_admin, require_super_admin, pwd_context, VALID_ROLES, ROLE_DEFAULT_SERVICES, ALL_SERVICES
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -48,7 +48,7 @@ async def list_admin_users(user=Depends(require_admin)):
 
 
 @router.post("/users", status_code=201)
-async def create_admin_user(data: UserCreate, user=Depends(require_admin)):
+async def create_admin_user(data: UserCreate, user=Depends(require_super_admin)):
     db = get_db()
 
     if await db.admin_users.find_one({"username": data.username}):
@@ -91,7 +91,7 @@ async def create_admin_user(data: UserCreate, user=Depends(require_admin)):
 
 
 @router.put("/users/{user_id}")
-async def update_admin_user(user_id: str, data: UserUpdate, user=Depends(require_admin)):
+async def update_admin_user(user_id: str, data: UserUpdate, user=Depends(require_super_admin)):
     db = get_db()
 
     upd = {}
@@ -143,7 +143,7 @@ async def update_admin_user(user_id: str, data: UserUpdate, user=Depends(require
 
 
 @router.delete("/users/{user_id}")
-async def delete_admin_user(user_id: str, user=Depends(require_admin)):
+async def delete_admin_user(user_id: str, user=Depends(require_super_admin)):
     db = get_db()
     target = await db.admin_users.find_one({"id": user_id}, {"_id": 0})
     if not target:

@@ -1290,8 +1290,11 @@ function GuideTab() {
 // â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function GenieACSPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "administrator";
+  // ZTP tersedia untuk semua role kecuali viewer/helpdesk read-only
+  const READONLY_ROLES = ["viewer", "helpdesk"];
+  const isAdmin = !READONLY_ROLES.includes(user?.role);
+  // Hanya super_admin yang bisa hapus perangkat
+  const canDelete = ["super_admin", "administrator"].includes(user?.role);
 
   const [tab, setTab] = useState("devices");
   const [devices, setDevices] = useState([]);
