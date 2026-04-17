@@ -25,20 +25,6 @@ function IntegrationSection({ selectedDevice }) {
     <div className="space-y-6">
       <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
-          <div className="w-8 h-8 rounded-sm bg-orange-500/10 flex items-center justify-center"><Webhook className="w-4 h-4 text-orange-400" /></div>
-          <div><h2 className="text-base font-semibold">N8N Webhook</h2><p className="text-[10px] text-muted-foreground">Integrasikan NOC Sentinel dengan N8N untuk notifikasi pembayaran otomatis</p></div>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">URL Webhook N8N (POST)</Label>
-          <Input value={cfg.n8n_webhook_url || ""} onChange={e => setCfg(c => ({ ...c, n8n_webhook_url: e.target.value }))} placeholder="https://n8n.domain.com/webhook/payment" className="rounded-sm font-mono text-xs" />
-        </div>
-        <div className="space-y-2 pt-2">
-          <div className="flex items-center gap-2 mb-1"><CreditCard className="w-4 h-4 text-blue-400" /><Label className="text-xs font-semibold">Moota Mutasi (Auto-Pay) — Webhook Endpoint</Label></div>
-          <Input readOnly value={`${window.location.protocol}//${window.location.host}/api/v1/billing/webhook/moota`} className="rounded-sm font-mono text-[10px] bg-secondary/50 text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
-        </div>
-      </div>
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-green-500/10 flex items-center justify-center"><MessageSquare className="w-4 h-4 text-green-500" /></div>
           <div><h2 className="text-base font-semibold">WhatsApp Gateway</h2><p className="text-[10px] text-muted-foreground">Konfigurasi gateway WA untuk notifikasi tagihan dan isolir</p></div>
         </div>
@@ -454,12 +440,11 @@ function BillingSettingsSection({ selectedDevice }) {
         {settings.auto_isolir_enabled && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pl-6">
             <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Metode Notifikasi</label>
+              <label className="text-xs text-muted-foreground">Metode Tindakan Isolir</label>
               <select value={settings.auto_isolir_method || "whatsapp"} onChange={e => setSettings({ ...settings, auto_isolir_method: e.target.value })}
                 className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground">
-                <option value="whatsapp">Hanya WhatsApp</option>
-                <option value="ssid">Hanya Ganti SSID</option>
-                <option value="both">WA + Ganti SSID</option>
+                <option value="whatsapp">Isolir Disable User MikroTik</option>
+                <option value="ssid">Isolir Ganti Nama WiFi (SSID)</option>
               </select>
             </div>
             <div className="space-y-1.5">
@@ -526,6 +511,26 @@ function BillingSettingsSection({ selectedDevice }) {
         </div>
         <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
           <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Template FCM"}
+        </button>
+      </div>
+
+      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+          <div className="w-8 h-8 rounded-sm bg-blue-500/10 flex items-center justify-center"><CreditCard className="w-4 h-4 text-blue-400" /></div>
+          <div><h2 className="text-base font-semibold">Moota Mutasi (Auto-Pay)</h2><p className="text-[10px] text-muted-foreground">Otomatisasi pengecekan mutasi bank via webhook Moota</p></div>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+             <label className="text-xs text-muted-foreground">Webhook Endpoint URL</label>
+             <input readOnly value={`${window.location.protocol}//${window.location.host}/api/v1/billing/webhook/moota`} className="w-full h-8 text-[10px] rounded-sm border border-border bg-secondary/50 px-2 font-mono text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
+          </div>
+          <div className="space-y-1.5">
+             <label className="text-xs text-muted-foreground">Webhook Secret (Opsional)</label>
+             <input type="password" value={settings.moota_webhook_secret || ""} onChange={e => setSettings({ ...settings, moota_webhook_secret: e.target.value })} placeholder="Kosongkan jika di Moota tidak disetting" className="w-full h-8 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
+          </div>
+        </div>
+        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors">
+          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Pengaturan Moota"}
         </button>
       </div>
 
