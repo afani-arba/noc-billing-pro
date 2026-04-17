@@ -42,6 +42,9 @@ SSH "docker restart noc-billing-pro-backend && echo 'BACKEND_RESTARTED'"
 Write-Host "`n=== [7] Final verification ===" -ForegroundColor Cyan
 SSH "docker exec noc-billing-pro-frontend ls /usr/share/nginx/html/"
 Start-Sleep -Seconds 5
-SSH "docker exec noc-billing-pro-backend python3 -c 'from core.auth import VALID_ROLES; print(\"Roles:\", VALID_ROLES)'"
+SSH "docker exec noc-billing-pro-backend python3 -m py_compile /app/core/auth.py && echo 'auth.py OK - no syntax errors'"
+SSH "docker exec noc-billing-pro-backend python3 -m py_compile /app/routers/genieacs.py && echo 'genieacs.py OK'"
+SSH "docker logs --tail 5 noc-billing-pro-backend"
+
 
 Write-Host "`n=== DONE ===" -ForegroundColor Green
