@@ -18,13 +18,13 @@ SSH "docker run --rm -v /opt/noc-billing-pro:/repo -w /repo --entrypoint sh alpi
 
 Write-Host "`n=== [3] Build frontend in Docker node container ===" -ForegroundColor Cyan
 Write-Host "Building frontend in Docker (may take 3-5 minutes)..." -ForegroundColor Yellow
-SSH "docker run --rm -v /opt/noc-billing-pro/frontend:/app -w /app node:20-alpine sh -c 'rm -rf build && npm ci --silent && npm run build 2>&1 | tail -10 && echo BUILD_OK' 2>&1"
+SSH "docker run --rm -v /opt/noc-billing-pro/frontend:/app -w /app node:20-alpine sh -c 'rm -rf dist && npm install --silent && npm run build 2>&1 | tail -20 && echo BUILD_OK' 2>&1"
 
 Write-Host "`n=== [4] Check build result ===" -ForegroundColor Cyan
-SSH "ls /opt/noc-billing-pro/frontend/build/ 2>&1 | head -10"
+SSH "ls /opt/noc-billing-pro/frontend/dist/ 2>&1 | head -10"
 
 Write-Host "`n=== [5] Inject built assets into running Nginx container ===" -ForegroundColor Cyan
-SSH "docker cp /opt/noc-billing-pro/frontend/build/. noc-billing-pro-frontend:/usr/share/nginx/html/ && echo 'INJECT_OK'"
+SSH "docker cp /opt/noc-billing-pro/frontend/dist/. noc-billing-pro-frontend:/usr/share/nginx/html/ && echo 'INJECT_OK'"
 SSH "docker exec noc-billing-pro-frontend nginx -s reload && echo 'NGINX_RELOAD_OK'"
 
 Write-Host "`n=== [6] Final verification ===" -ForegroundColor Cyan
