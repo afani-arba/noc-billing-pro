@@ -379,6 +379,7 @@ function ZTPModal({ device, onClose, onSuccess }) {
     installation_fee: "",
     billing_type: "prepaid",
     payment_status: "belum_bayar",
+    initial_payment_method: "cash",
     use_radius: true,
   });
 
@@ -717,17 +718,37 @@ function ZTPModal({ device, onClose, onSuccess }) {
 
                   {form.billing_type === "prepaid" && (
                     <div className="space-y-1 sm:col-span-2 p-2.5 bg-secondary/20 border border-border rounded-sm">
-                      <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1.5 mb-2">
-                        <CheckCircle2 className="w-3 h-3 text-cyan-400" /> Status Pembayaran Awal
-                      </Label>
-                      <select
-                        value={form.payment_status}
-                        onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}
-                        className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground"
-                      >
-                        <option value="sudah_bayar">Sudah Bayar Lunas (Internet langsung aktif)</option>
-                        <option value="belum_bayar">Belum Bayar (Internet di-isolir otomatis di awal)</option>
-                      </select>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1.5 mb-2">
+                            <CheckCircle2 className="w-3 h-3 text-cyan-400" /> Status Pembayaran Awal
+                          </Label>
+                          <select
+                            value={form.payment_status}
+                            onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}
+                            className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground"
+                          >
+                            <option value="sudah_bayar">Sudah Bayar Lunas (Langsung aktif)</option>
+                            <option value="belum_bayar">Belum Bayar (Di-isolir otomatis)</option>
+                          </select>
+                        </div>
+                        
+                        {form.payment_status === "sudah_bayar" && (
+                          <div className="space-y-1 animate-in fade-in zoom-in-95">
+                            <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1.5 mb-2 opacity-80">
+                               Metode
+                            </Label>
+                            <select
+                              value={form.initial_payment_method}
+                              onChange={e => setForm(f => ({ ...f, initial_payment_method: e.target.value }))}
+                              className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground"
+                            >
+                              <option value="cash">Cash (Tunai)</option>
+                              <option value="transfer">Transfer Bank / QRIS</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
                       <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
                         Tagihan Invoice awal (Biaya Pasang + Langganan Paket pertama) otomatis dibuat. Karena sistem Prepaid,
                         jika diset <strong>Belum Bayar</strong>, ONT tidak akan bisa digunakan sampai invoice dilunasi.

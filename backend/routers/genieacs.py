@@ -482,6 +482,7 @@ class ZTPActivateRequest(BaseModel):
     installation_fee: int = 0
     billing_type: str = "prepaid"        # prepaid | postpaid
     payment_status: str = "belum_bayar"  # sudah_bayar | belum_bayar
+    initial_payment_method: str = "cash" # cash | transfer
     use_radius: bool = True              # Gunakan RADIUS sebagai default
 
 
@@ -689,7 +690,7 @@ async def activate_customer_ztp(
                     "status": "paid" if is_paid else "unpaid",
                     "notes": f"Tagihan Pertama. Paket: Rp {pkg_price}, Biaya Pasang: Rp {body.installation_fee}",
                     "paid_at": _now() if is_paid else None,
-                    "payment_method": "cash" if is_paid else None,
+                    "payment_method": body.initial_payment_method if is_paid else None,
                     "created_at": _now(),
                 }
                 await db.invoices.insert_one(inv_doc)
