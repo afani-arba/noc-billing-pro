@@ -10,14 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useAllowedDevices } from "@/hooks/useAllowedDevices";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function IntegrationSection() {
+function IntegrationSection({ selectedDevice }) {
   const [cfg, setCfg] = useState({ n8n_webhook_url: "", wa_gateway_type: "fonnte", wa_api_url: "https://api.fonnte.com/send", wa_token: "", wa_delay_ms: 10000 });
   const [saving, setSaving] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [testPhone, setTestPhone] = useState("");
-  useEffect(() => { api.get("/billing/settings").then(r => setCfg(c => ({ ...c, ...r.data }))).catch(() => {}); }, []);
-  const handleSave = async () => { setSaving(true); try { await api.put("/billing/settings", cfg); toast.success("Disimpan"); } catch { toast.error("Gagal"); } setSaving(false); };
+  useEffect(() => { api.get("/billing/settings", { params: { device_id: selectedDevice } }).then(r => setCfg(c => ({ ...c, ...r.data }))).catch(() => {}); }, [selectedDevice]);
+  const handleSave = async () => { setSaving(true); try { await api.put("/billing/settings", { ...cfg, device_id: selectedDevice }); toast.success("Disimpan"); } catch { toast.error("Gagal"); } setSaving(false); };
   const handleTestWa = async () => { if (!testPhone) return toast.error("Masukkan nomor"); setTestMode(true); try { await api.post("/notifications/test", { phone: testPhone, fonnte_token: cfg.wa_token }); toast.success("Test terkirim!"); } catch { toast.error("Gagal"); } setTestMode(false); };
   return (
     <div className="space-y-6">
@@ -371,7 +373,7 @@ function AIIntegrationSection() {
 }
 
 // ── Billing Settings Section (WA Templates, Auto Isolir, FCM, Payment Gateway) ─
-function BillingSettingsSection() {
+function BillingSettingsSection({ selectedDevice }) {
   const [settings, setSettings] = useState({
     wa_template_unpaid: "", wa_template_paid: "", wa_template_h1: "", wa_template_isolir: "",
     fcm_template_h3: "", fcm_template_h2: "", fcm_template_h1: "", fcm_template_due: "",
@@ -387,15 +389,16 @@ function BillingSettingsSection() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.get("/billing/settings")
+    setLoading(true);
+    api.get("/billing/settings", { params: { device_id: selectedDevice } })
       .then(r => setSettings(p => ({ ...p, ...r.data })))
       .catch(() => toast.error("Gagal memuat pengaturan billing"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedDevice]);
 
   const handleSave = async () => {
     setSaving(true);
-    try { await api.put("/billing/settings", settings); toast.success("Pengaturan Billing disimpan ✓"); }
+    try { await api.put("/billing/settings", { ...settings, device_id: selectedDevice }); toast.success("Pengaturan Billing disimpan ✓"); }
     catch { toast.error("Gagal menyimpan"); }
     setSaving(false);
   };
@@ -610,11 +613,44 @@ function BillingSettingsSection() {
 }
 
 export default function IntegrationSettingsPage() {
+  const { devices, isLocked, defaultDeviceId, loading: loadingDevices } = useAllowedDevices();
+  const [selectedDevice, setSelectedDevice] = useState("GLOBAL");
+
+  useEffect(() => {
+    if (isLocked && defaultDeviceId) setSelectedDevice(defaultDeviceId);
+  }, [isLocked, defaultDeviceId]);
+
   return (
     <div className="space-y-4 pb-16">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-sm bg-orange-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-orange-400" /></div>
-        <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook, WhatsApp, AI, Telegram NOC, Notifikasi Billing & Payment Gateway</p></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-sm bg-orange-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-orange-400" /></div>
+          <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook, WhatsApp, AI, Telegram NOC, Notifikasi Billing & Payment Gateway</p></div>
+        </div>
+
+        {/* Global Filter */}
+        <div className="flex items-center gap-2">
+            {loadingDevices ? (
+              <div className="h-9 px-3 rounded-sm border border-border flex items-center text-xs text-muted-foreground bg-card"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2"/> Memuat router...</div>
+            ) : isLocked ? (
+              <div className="h-9 px-3 rounded-sm border border-border flex items-center text-xs text-foreground bg-card/50">
+                  <span className="truncate max-w-[150px]">{devices.find(d => d.id === selectedDevice)?.name || "Router"}</span>
+                  <span className="ml-2 text-[9px] bg-secondary px-1 py-0.5 rounded text-muted-foreground">Terkunci</span>
+              </div>
+            ) : (
+                <Select value={selectedDevice} onValueChange={setSelectedDevice}>
+                    <SelectTrigger className="w-full sm:w-[240px] h-9 bg-card text-xs">
+                        <SelectValue placeholder="Pilih Router..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="GLOBAL"><span className="font-semibold text-primary">🌍 Pengaturan Pusat (Global)</span></SelectItem>
+                        {devices.map(d => (
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+        </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
@@ -630,18 +666,25 @@ export default function IntegrationSettingsPage() {
           </div>
         ))}
       </div>
-      <IntegrationSection />
+      <IntegrationSection selectedDevice={selectedDevice} />
       <CloudflareSection />
       <AIIntegrationSection />
       <div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><Activity className="w-4 h-4 text-emerald-400" /></div>
-          <div>
-            <h2 className="text-base font-semibold">Konfigurasi Notifikasi & Pembayaran Billing</h2>
-            <p className="text-xs text-muted-foreground">Template WA, Auto Isolir, Template Push Notification, Payment Gateway</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 mt-6 gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><Activity className="w-4 h-4 text-emerald-400" /></div>
+            <div>
+              <h2 className="text-base font-semibold">Konfigurasi Notifikasi & Pembayaran Billing</h2>
+              <p className="text-xs text-muted-foreground">Template WA, Auto Isolir, Template Push Notification, Payment Gateway</p>
+            </div>
           </div>
+          {selectedDevice === "GLOBAL" ? (
+            <Badge variant="outline" className="text-[10px] sm:self-start mt-1 sm:mt-0 font-normal bg-blue-500/10 text-blue-400 border-blue-500/20 px-2 py-0.5">Memodifikasi: 🌍 Pengaturan Pusat (Global)</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] sm:self-start mt-1 sm:mt-0 font-normal bg-orange-500/10 text-orange-400 border-orange-500/20 px-2 py-0.5">Memodifikasi Spesifik: {devices.find(d => d.id === selectedDevice)?.name}</Badge>
+          )}
         </div>
-        <BillingSettingsSection />
+        <BillingSettingsSection selectedDevice={selectedDevice} />
       </div>
     </div>
   );
