@@ -296,7 +296,8 @@ async def get_roles_config(user=Depends(require_admin)):
         "role_defaults": {r: ROLE_DEFAULT_SERVICES.get(r, []) for r in VALID_ROLES},
         "role_info": {
             "super_admin":    {"label": "Super Admin",     "color": "red",    "desc": "Akses penuh ke semua fitur, pengaturan lisensi dan sistem"},
-            "administrator":  {"label": "Administrator",   "color": "red",    "desc": "Akses penuh (alias super_admin, backward-compatible)"},
+            "administrator":  {"label": "Administrator",   "color": "red",    "desc": "Akses penuh + User Management (setara super_admin)"},
+            "admin":          {"label": "Admin",           "color": "orange", "desc": "Akses semua service — tidak bisa akses User Management"},
             "branch_admin":   {"label": "Branch Admin",    "color": "purple", "desc": "Akses manajemen cabang penuh (billing & router) tanpa akses konfigurasi sistem"},
             "noc_engineer":   {"label": "NOC Engineer",    "color": "orange", "desc": "Full monitoring & routing, tidak bisa akses Billing/Keuangan"},
             "billing_staff":  {"label": "Billing Staff",   "color": "green",  "desc": "Full Billing & Laporan Keuangan, tidak bisa konfigurasi router"},

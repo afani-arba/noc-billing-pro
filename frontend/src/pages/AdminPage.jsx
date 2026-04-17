@@ -32,7 +32,8 @@ import { toast } from "sonner";
 // ── Role Configuration ──────────────────────────────────────────────────────
 const roleConfig = {
   super_admin:   { icon: ShieldCheck, color: "text-red-500",    bg: "bg-red-500/10 border-red-500/20",     label: "Super Admin",   desc: "Akses penuh ke semua fitur, lisensi & sistem" },
-  administrator: { icon: Shield,      color: "text-red-400",    bg: "bg-red-400/10 border-red-400/20",     label: "Administrator", desc: "Akses penuh (alias super_admin)" },
+  administrator: { icon: Shield,      color: "text-red-400",    bg: "bg-red-400/10 border-red-400/20",     label: "Administrator", desc: "Akses penuh + User Management" },
+  admin:         { icon: ShieldAlert, color: "text-orange-500", bg: "bg-orange-500/10 border-orange-500/20", label: "Admin",       desc: "Akses semua service — tidak bisa kelola User Management" },
   branch_admin:  { icon: MonitorDot,  color: "text-purple-400", bg: "bg-purple-400/10 border-purple-400/20", label: "Branch Admin",  desc: "Akses cabang (billing & router) tanpa setting sistem" },
   noc_engineer:  { icon: MonitorDot,  color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20", label: "NOC Engineer",  desc: "Full monitoring & routing — tidak ada akses Billing" },
   billing_staff: { icon: CreditCard,  color: "text-green-400",  bg: "bg-green-400/10 border-green-400/20",  label: "Billing Staff", desc: "Full billing & keuangan — tidak ada routing" },

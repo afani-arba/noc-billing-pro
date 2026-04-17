@@ -41,13 +41,16 @@ if not JWT_SECRET:
         )
 
 # ── Role Constants ─────────────────────────────────────────────────────────
-VALID_ROLES = ["super_admin", "administrator", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"]
+VALID_ROLES = ["super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"]
 
 # Groups untuk kemudahan pengecekan
+# ADMIN_ROLES: bisa akses User Management (super_admin & administrator saja)
 ADMIN_ROLES      = {"super_admin", "administrator"}
-NOC_ROLES        = {"super_admin", "administrator", "branch_admin", "noc_engineer"}
-BILLING_ROLES    = {"super_admin", "administrator", "branch_admin", "billing_staff"}
-READONLY_ROLES   = {"super_admin", "administrator", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"}
+# FULL_ACCESS_ROLES: akses semua service tapi tidak bisa kelola user
+FULL_ACCESS_ROLES = {"super_admin", "administrator", "admin"}
+NOC_ROLES        = {"super_admin", "administrator", "admin", "branch_admin", "noc_engineer"}
+BILLING_ROLES    = {"super_admin", "administrator", "admin", "branch_admin", "billing_staff"}
+READONLY_ROLES   = {"super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"}
 
 # Services yang bisa di-assign per user (disesuaikan dgn NOC Billing Pro berjalan)
 ALL_SERVICES = [
@@ -60,9 +63,13 @@ ALL_SERVICES = [
 ]
 
 # Default services per role
+# "admin" = semua service kecuali user management (dikontrol via sidebar, bukan service key)
+ADMIN_SERVICES = ALL_SERVICES  # admin mendapat semua service key yang sama
+
 ROLE_DEFAULT_SERVICES = {
     "super_admin":    ALL_SERVICES,
     "administrator":  ALL_SERVICES,
+    "admin":          ADMIN_SERVICES,  # semua service, tapi tidak tampil di user management (dikontrol frontend)
     "branch_admin":   [
         "dashboard", "wallboard", "reports", "devices", "genieacs",
         "peering_eye", "bgp_steering",
