@@ -191,8 +191,8 @@ export default function Layout() {
   };
 
   const ADMIN_ROLES = ["super_admin", "administrator"];
-  const NOC_ROLES   = ["super_admin", "administrator", "noc_engineer"];
-  const BILLING_ROLES = ["super_admin", "administrator", "billing_staff"];
+  const NOC_ROLES   = ["super_admin", "administrator", "branch_admin", "noc_engineer"];
+  const BILLING_ROLES = ["super_admin", "administrator", "branch_admin", "billing_staff"];
 
   const isAdmin         = ADMIN_ROLES.includes(user?.role);
   const isNOC           = NOC_ROLES.includes(user?.role);

@@ -297,6 +297,7 @@ async def get_roles_config(user=Depends(require_admin)):
         "role_info": {
             "super_admin":    {"label": "Super Admin",     "color": "red",    "desc": "Akses penuh ke semua fitur, pengaturan lisensi dan sistem"},
             "administrator":  {"label": "Administrator",   "color": "red",    "desc": "Akses penuh (alias super_admin, backward-compatible)"},
+            "branch_admin":   {"label": "Branch Admin",    "color": "purple", "desc": "Akses manajemen cabang penuh (billing & router) tanpa akses konfigurasi sistem"},
             "noc_engineer":   {"label": "NOC Engineer",    "color": "orange", "desc": "Full monitoring & routing, tidak bisa akses Billing/Keuangan"},
             "billing_staff":  {"label": "Billing Staff",   "color": "green",  "desc": "Full Billing & Laporan Keuangan, tidak bisa konfigurasi router"},
             "helpdesk":       {"label": "Helpdesk / CS",   "color": "blue",   "desc": "Read-only monitoring + daftar pelanggan, tidak bisa ubah data"},

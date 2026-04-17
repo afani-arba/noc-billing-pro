@@ -32,9 +32,10 @@ import { toast } from "sonner";
 // ── Role Configuration ──────────────────────────────────────────────────────
 const roleConfig = {
   super_admin:   { icon: ShieldCheck, color: "text-red-500",    bg: "bg-red-500/10 border-red-500/20",     label: "Super Admin",   desc: "Akses penuh ke semua fitur, lisensi & sistem" },
-  administrator: { icon: Shield,      color: "text-red-400",    bg: "bg-red-400/10 border-red-400/20",     label: "Administrator", desc: "Akses penuh (alias super_admin, backward-compatible)" },
-  noc_engineer:  { icon: MonitorDot,  color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20", label: "NOC Engineer",  desc: "Full monitoring & routing — tidak bisa akses Billing" },
-  billing_staff: { icon: CreditCard,  color: "text-green-400",  bg: "bg-green-400/10 border-green-400/20",  label: "Billing Staff", desc: "Full billing & keuangan — tidak bisa konfigurasi router" },
+  administrator: { icon: Shield,      color: "text-red-400",    bg: "bg-red-400/10 border-red-400/20",     label: "Administrator", desc: "Akses penuh (alias super_admin)" },
+  branch_admin:  { icon: MonitorDot,  color: "text-purple-400", bg: "bg-purple-400/10 border-purple-400/20", label: "Branch Admin",  desc: "Akses cabang (billing & router) tanpa setting sistem" },
+  noc_engineer:  { icon: MonitorDot,  color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20", label: "NOC Engineer",  desc: "Full monitoring & routing — tidak ada akses Billing" },
+  billing_staff: { icon: CreditCard,  color: "text-green-400",  bg: "bg-green-400/10 border-green-400/20",  label: "Billing Staff", desc: "Full billing & keuangan — tidak ada routing" },
   helpdesk:      { icon: Headphones,  color: "text-blue-400",   bg: "bg-blue-400/10 border-blue-400/20",   label: "Helpdesk / CS", desc: "Read-only monitoring & daftar pelanggan" },
   viewer:        { icon: Eye,         color: "text-gray-400",   bg: "bg-gray-400/10 border-gray-400/20",   label: "Viewer (Legacy)", desc: "Read-only semua halaman monitoring" },
 };
@@ -43,15 +44,15 @@ const roleConfig = {
 const SERVICE_CATEGORIES = [
   {
     label: "🖥️ Monitoring Utama",
-    services: ["dashboard", "wallboard", "sla", "incidents", "topology", "ping"],
+    services: ["dashboard", "wallboard"],
   },
   {
     label: "📡 Pelanggan & Jaringan",
-    services: ["pppoe", "hotspot", "reports", "devices", "genieacs"],
+    services: ["reports", "devices", "genieacs"],
   },
   {
     label: "🔀 Routing & Security",
-    services: ["bgp", "routing", "sdwan", "peering_eye"],
+    services: ["bgp_steering", "peering_eye"],
   },
   {
     label: "💳 Keuangan & Billing",
@@ -63,26 +64,20 @@ const SERVICE_CATEGORIES = [
   },
   {
     label: "⚙️ Admin & Sistem",
-    services: ["notifications", "backups", "scheduler", "syslog", "audit", "settings", "integration_settings", "radius_server", "update", "license"],
+    services: ["notifications", "backups", "settings", "integration_settings", "radius_server", "update", "license"],
   },
 ];
 
 const SERVICE_LABELS = {
   dashboard: "Dashboard", wallboard: "Wall Display",
-  sla: "SLA Monitor", incidents: "Incidents", topology: "Network Map",
-  pppoe: "PPPoE Users", hotspot: "Hotspot Users", reports: "Reports",
-  devices: "Devices", genieacs: "GenieACS / TR-069",
-  bgp: "BGP Peers", routing: "OSPF / Routes", sdwan: "Load Balance",
-
+  reports: "Reports", devices: "Devices", genieacs: "GenieACS / TR-069",
+  bgp_steering: "App Traffic & BGP", peering_eye: "Sentinel Peering-Eye",
   billing: "Billing PPPoE", hotspot_billing: "Billing Hotspot",
   finance_report: "Laporan Keuangan",
   wa_customer_service: "CS Command Center",
-  ping: "Network Ping Tool",
   notifications: "Notifikasi", backups: "Backup Config",
-  scheduler: "Scheduler & Monitor", syslog: "Syslog",
-  audit: "Audit Log", settings: "Pengaturan",
-  integration_settings: "Integrasi & Otomasi", update: "Update Aplikasi",
-  radius_server: "Radius Server", license: "Lisensi & Add-ons"
+  settings: "Pengaturan Platform", integration_settings: "Integrasi & Otomasi",
+  update: "Update Aplikasi", radius_server: "Radius Server", license: "Lisensi & Add-ons"
 };
 
 const EMPTY_FORM = {

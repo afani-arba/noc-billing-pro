@@ -6,6 +6,7 @@ Role Definitions:
   administrator - Alias for super_admin (backward-compatible)
   noc_engineer  - Full monitoring + network config, BLOCKED from billing
   billing_staff - Full billing access, BLOCKED from network config
+  branch_admin  - Akses mirip administrator namun tanpa setelan administrasi sistem
   helpdesk      - Read-only access to monitoring + customer list
   viewer        - Legacy alias for helpdesk
 """
@@ -40,48 +41,48 @@ if not JWT_SECRET:
         )
 
 # ── Role Constants ─────────────────────────────────────────────────────────
-VALID_ROLES = ["super_admin", "administrator", "noc_engineer", "billing_staff", "helpdesk", "viewer"]
+VALID_ROLES = ["super_admin", "administrator", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"]
 
 # Groups untuk kemudahan pengecekan
 ADMIN_ROLES      = {"super_admin", "administrator"}
-NOC_ROLES        = {"super_admin", "administrator", "noc_engineer"}
-BILLING_ROLES    = {"super_admin", "administrator", "billing_staff"}
-READONLY_ROLES   = {"super_admin", "administrator", "noc_engineer", "billing_staff", "helpdesk", "viewer"}
+NOC_ROLES        = {"super_admin", "administrator", "branch_admin", "noc_engineer"}
+BILLING_ROLES    = {"super_admin", "administrator", "branch_admin", "billing_staff"}
+READONLY_ROLES   = {"super_admin", "administrator", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"}
 
-# Services yang bisa di-assign per user
+# Services yang bisa di-assign per user (disesuaikan dgn NOC Billing Pro berjalan)
 ALL_SERVICES = [
-    "dashboard", "pppoe", "hotspot", "reports", "devices",
-    "bgp", "routing", "sdwan", "traffic_flow", "genieacs",
-    "wallboard", "bandwidth", "topology", "sla", "incidents",
-    "peering_eye", "looking_glass", "netwatch",
+    "dashboard", "wallboard", 
+    "reports", "devices", "genieacs",
+    "peering_eye", "bgp_steering",
     "billing", "hotspot_billing", "finance_report",
-    "notifications", "backups", "scheduler", "syslog",
-    "audit", "settings", "integration_settings", "update",
-    "ping", "wa_customer_service", "radius_server", "license",
+    "wa_customer_service",
+    "notifications", "backups", "settings", "integration_settings", "radius_server", "update", "license",
 ]
 
 # Default services per role
 ROLE_DEFAULT_SERVICES = {
     "super_admin":    ALL_SERVICES,
     "administrator":  ALL_SERVICES,
+    "branch_admin":   [
+        "dashboard", "wallboard", "reports", "devices", "genieacs",
+        "peering_eye", "bgp_steering",
+        "billing", "hotspot_billing", "finance_report",
+        "wa_customer_service"
+    ],
     "noc_engineer":   [
-        "dashboard", "pppoe", "hotspot", "reports", "devices",
-        "bgp", "routing", "sdwan", "genieacs",
-        "wallboard", "topology", "sla", "incidents",
-        "peering_eye", "ping", "audit",
+        "dashboard", "wallboard", "reports", "devices", "genieacs",
+        "peering_eye", "bgp_steering",
     ],
     "billing_staff":  [
-        "dashboard", "pppoe", "hotspot", "reports",
+        "dashboard", "wallboard", "reports",
         "billing", "hotspot_billing", "finance_report",
         "wa_customer_service"
     ],
     "helpdesk":       [
-        "dashboard", "pppoe", "hotspot", "reports",
-        "wallboard", "incidents", "sla",
+        "dashboard", "wallboard", "reports"
     ],
     "viewer":         [
-        "dashboard", "pppoe", "hotspot", "reports",
-        "wallboard", "topology", "sla", "incidents", "ping",
+        "dashboard", "wallboard", "reports"
     ],
 }
 
@@ -169,7 +170,7 @@ async def require_noc(request: Request, user=Depends(get_current_user)):
     if user.get("role") not in NOC_ROLES:
         explicit = user.get("allowed_services")
         if explicit is not None:
-             noc_services = {"dashboard", "pppoe", "hotspot", "reports", "devices", "bgp", "routing", "sdwan", "genieacs", "wallboard", "topology", "sla", "incidents", "peering_eye", "ping"}
+             noc_services = {"dashboard", "reports", "devices", "bgp_steering", "peering_eye", "genieacs", "wallboard"}
              if set(explicit) & noc_services:
                  return user
         raise HTTPException(
