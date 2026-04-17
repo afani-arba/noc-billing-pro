@@ -48,7 +48,7 @@ services:
   # 1. NOC BILLING PRO — BACKEND
   # ═════════════════════════════════════════════════════════════════
   noc-backend:
-    image: ghcr.io/afani-arba/noc-billing-pro-backend:latest
+    build: ./backend
     container_name: noc-billing-pro-backend
     restart: always
     logging: *default-logging
