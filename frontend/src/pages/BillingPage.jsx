@@ -1592,6 +1592,11 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const isEdit = !!initial;
 
+  // Reset package_id saat device berubah (agar paket yang tampil sesuai router)
+  const handleDeviceChange = (deviceId) => {
+    setForm(f => ({ ...f, device_id: deviceId, package_id: "" }));
+  };
+
   const genPass = () => set("pppoe_password", Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4));
 
   const handleNameChange = (val) => {
@@ -1726,7 +1731,7 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                     </Label>
                     <select 
                       value={form.device_id} 
-                      onChange={e => set("device_id", e.target.value)}
+                      onChange={e => handleDeviceChange(e.target.value)}
                       className="w-full h-9 text-xs rounded-sm border border-border/50 bg-background px-3 text-foreground font-medium focus:ring-1 focus:ring-primary/30 outline-none transition-all">
                       <option value="">Pilih Router MikroTik...</option>
                       {devices.map(d => (
@@ -1804,15 +1809,34 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Pilih Paket Berlangganan</Label>
-                  <select 
-                    value={form.package_id} 
-                    onChange={e => set("package_id", e.target.value)}
-                    className="w-full h-9 text-xs rounded-sm border border-border/50 bg-background px-3 text-emerald-500 font-bold focus:ring-1 focus:ring-emerald-500/30 outline-none transition-all">
-                    <option value="">â€” Belum ada paket dipilih â€”</option>
-                    {packages.filter(p => p.service_type === "pppoe").map(p => (
-                      <option key={p.id} value={p.id} className="text-foreground">{p.name} ({Rp(p.price)})</option>
-                    ))}
-                  </select>
+                  {(() => {
+                    // Filter: hanya tampilkan paket PPPoE dari router yang dipilih
+                    const filteredPkgs = packages.filter(p => {
+                      const isPppoe = p.service_type === "pppoe" || p.type === "pppoe";
+                      // jika belum milih router, tampilkan semua paket PPPoE
+                      if (!form.device_id) return isPppoe; 
+                      return isPppoe && (p.device_id === form.device_id || p.source_device_id === form.device_id);
+                    });
+
+                    return (
+                      <>
+                        <select 
+                          value={form.package_id} 
+                          onChange={e => set("package_id", e.target.value)}
+                          className="w-full h-9 text-xs rounded-sm border border-border/50 bg-background px-3 text-emerald-500 font-bold focus:ring-1 focus:ring-emerald-500/30 outline-none transition-all">
+                          <option value="">— Belum ada paket dipilih —</option>
+                          {filteredPkgs.map(p => (
+                            <option key={p.id} value={p.id} className="text-foreground">{p.name} ({Rp(p.price)})</option>
+                          ))}
+                        </select>
+                        {form.device_id && filteredPkgs.length === 0 && (
+                           <p className="text-[10px] text-amber-500 mt-1 font-bold">
+                             ⚠️ Router ini belum memiliki paket. Buat atau Sync Paket terlebih dahulu!
+                           </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
