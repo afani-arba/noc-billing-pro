@@ -60,11 +60,24 @@ async def _send_notification(
             except Exception as e:
                 logger.warning(f"Gagal kirim WA ke {phone}: {e}")
 
-# ── Helper: ambil db ──────────────────────────────────────────────────────────
-
 def _db():
     from core.db import get_db
     return get_db()
+
+_settings_cache = {}
+
+async def _get_settings(db, device_id: str = None) -> dict:
+    if device_id in _settings_cache:
+        return _settings_cache[device_id]
+        
+    s = None
+    if device_id and device_id != "GLOBAL":
+        s = await db.billing_settings.find_one({"device_id": device_id}, {"_id": 0})
+    if not s:
+        s = await db.billing_settings.find_one({"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}, {"_id": 0}) or {}
+        
+    _settings_cache[device_id] = s
+    return s
 
 
 def _now_iso():
@@ -146,11 +159,13 @@ async def run_auto_isolir():
     """
     try:
         db = _db()
-        settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-        if not settings.get("auto_isolir_enabled", False):
+        _settings_cache.clear() # bersihkan cache sebelum run
+        
+        global_settings = await _get_settings(db, None)
+        if not global_settings.get("auto_isolir_enabled", False):
             return  # Fitur dimatikan dari pengaturan
 
-        grace_days = int(settings.get("auto_isolir_grace_days", 1))
+        grace_days = int(global_settings.get("auto_isolir_grace_days", 1))
         cutoff = (date.today() - timedelta(days=grace_days)).isoformat()
 
         # Cari invoice overdue yang due_date + grace sudah terlampaui
@@ -175,16 +190,6 @@ async def run_auto_isolir():
             logger.info("[BillingScheduler] Auto-isolir: semua invoice overdue masih dalam masa Janji Bayar, dilewati.")
             return
 
-        wa_url = settings.get("wa_api_url", "")
-        wa_token = settings.get("wa_token", "")
-        wa_type = settings.get("wa_gateway_type", "fonnte")
-        wa_template = settings.get(
-            "wa_template_isolir",
-            "Yth. {customer_name}, layanan internet Anda (Invoice: {invoice_number}, "
-            "Paket: {package_name}) telah DIISOLIR karena tagihan {total} belum "
-            "dibayar sampai jatuh tempo {due_date}. Segera lakukan pembayaran."
-        )
-
         import httpx
         from mikrotik_api import get_api_client
 
@@ -193,6 +198,18 @@ async def run_auto_isolir():
                 customer = await db.customers.find_one({"id": inv["customer_id"]})
                 if not customer:
                     continue
+                
+                settings = await _get_settings(db, customer.get("device_id"))
+                
+                wa_url = settings.get("wa_api_url", "")
+                wa_token = settings.get("wa_token", "")
+                wa_type = settings.get("wa_gateway_type", "fonnte")
+                wa_template = settings.get(
+                    "wa_template_isolir",
+                    "Yth. {customer_name}, layanan internet Anda (Invoice: {invoice_number}, "
+                    "Paket: {package_name}) telah DIISOLIR karena tagihan {total} belum "
+                    "dibayar sampai jatuh tempo {due_date}. Segera lakukan pembayaran."
+                )
 
                 pkg = await db.billing_packages.find_one({"id": inv["package_id"]}) or {}
                 device = await db.devices.find_one({"id": customer.get("device_id", "")})
@@ -338,17 +355,7 @@ async def run_auto_generate_invoices():
         }).to_list(5000)
         
         created = 0
-        
-        settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-        wa_url = settings.get("wa_api_url", "")
-        wa_token = settings.get("wa_token", "")
-        wa_type = settings.get("wa_gateway_type", "fonnte")
-        wa_template = settings.get(
-            "wa_template_unpaid",
-            "Yth. {customer_name}, tagihan internet Anda sebesar {total} "
-            "(Invoice: {invoice_number}, Paket: {package_name}) jatuh tempo "
-            "pada {due_date}. Mohon segera melakukan pembayaran."
-        )
+        _settings_cache.clear()
 
         for c in customers:
             c_due_day = c.get("due_day", 10)
@@ -453,6 +460,12 @@ async def run_auto_generate_invoices():
             await db.invoices.insert_one(doc)
             created += 1
             
+            settings = await _get_settings(db, c.get("device_id"))
+            wa_template = settings.get("wa_template_unpaid", "Yth. {customer_name}, tagihan Anda jatuh tempo {due_date}.")
+            wa_url = settings.get("wa_api_url", "")
+            wa_token = settings.get("wa_token", "")
+            wa_type = settings.get("wa_gateway_type", "fonnte")
+            
             # Send WA & FCM Note
             if wa_template:
                 msg = (wa_template
@@ -501,10 +514,7 @@ async def process_reminders():
     """
     try:
         db = _db()
-        settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-        wa_url = settings.get("wa_api_url", "")
-        wa_token = settings.get("wa_token", "")
-        wa_type = settings.get("wa_gateway_type", "fonnte")
+        _settings_cache.clear()
         
         now = datetime.now(timezone.utc)
         today_date = now.date()
@@ -582,6 +592,28 @@ async def process_reminders():
                 customer = await db.customers.find_one({"id": inv["customer_id"]})
                 if not customer: continue
                 if not customer.get("phone") and not customer.get("fcm_token"): continue
+
+                settings = await _get_settings(db, customer.get("device_id"))
+                wa_url = settings.get("wa_api_url", "")
+                wa_token = settings.get("wa_token", "")
+                wa_type = settings.get("wa_gateway_type", "fonnte")
+                
+                # Fetch settings for template specific to device_id
+                if days_diff == 3:
+                    msg_body = settings.get("fcm_template_h3", "Tagihan {total} jatuh tempo 3 hari lagi ({due_date}).")
+                    wa_body = settings.get("wa_template_unpaid", "Tagihan {total} jatuh tempo {due_date}.")
+                elif days_diff == 2:
+                    msg_body = settings.get("fcm_template_h2", "Tagihan {total} jatuh tempo 2 hari lagi ({due_date}).")
+                    wa_body = settings.get("wa_template_unpaid", "Tagihan {total} jatuh tempo {due_date}.")
+                elif days_diff == 1:
+                    msg_body = settings.get("fcm_template_h1", "Besok batas pembayaran tagihan {total}. Mohon selesaikan kewajiban pembayaran.")
+                    wa_body = settings.get("wa_template_h1", "Besok jatuh tempo {total}.")
+                elif days_diff == 0:
+                    msg_body = settings.get("fcm_template_due", "HARI INI jatuh tempo pembayaran {total}.")
+                    wa_body = settings.get("wa_template_h1", "HARI INI jatuh tempo {total}.")
+                else: # Overdue
+                    msg_body = settings.get("fcm_template_overdue", "Layanan Anda TERISOLIR karena melewati batas waktu pembayaran. Segera lunasi {total}.")
+                    wa_body = settings.get("wa_template_isolir", "Layanan diisolir. Tagihan {total}.")
 
                 pkg = await db.billing_packages.find_one({"id": inv["package_id"]}) or {}
                 

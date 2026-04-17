@@ -78,8 +78,14 @@ logger = logging.getLogger(__name__)
 
 async def _bg_send_customer_greeting(customer: dict):
     db = get_db()
-    # Gunakan setting dari billing untuk WA
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    # Gunakan setting dari billing untuk WA dengan dukungan multi-cabang
+    dev_id = customer.get("device_id")
+    settings = None
+    if dev_id and dev_id != "GLOBAL":
+        settings = await db.billing_settings.find_one({"device_id": dev_id}, {"_id": 0})
+    if not settings:
+        settings = await db.billing_settings.find_one({"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}, {"_id": 0}) or {}
+        
     wa_type = settings.get("wa_gateway_type", "fonnte")
     url = settings.get("wa_api_url", "https://api.fonnte.com/send")
     token = settings.get("wa_token", "")

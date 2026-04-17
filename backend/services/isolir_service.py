@@ -15,11 +15,11 @@ async def auto_isolir_loop():
         try:
             now = datetime.now()
             db = get_db()
-            settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+            global_settings = await db.billing_settings.find_one({"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}, {"_id": 0}) or {}
             
-            is_enabled = settings.get("auto_isolir_enabled", False)
-            target_time_str = settings.get("auto_isolir_time", "00:05")
-            grace_days = settings.get("auto_isolir_grace_days", 1)
+            is_enabled = global_settings.get("auto_isolir_enabled", False)
+            target_time_str = global_settings.get("auto_isolir_time", "00:05")
+            grace_days = global_settings.get("auto_isolir_grace_days", 1)
             
             current_time_str = now.strftime("%H:%M")
             if is_enabled and current_time_str == target_time_str:
@@ -75,6 +75,14 @@ async def auto_isolir_loop():
                             continue
                         
                         try:
+                            # Ambil setting spesifik untuk device/cabang pelanggan (bila ada)
+                            dev_id = customer.get("device_id")
+                            settings = None
+                            if dev_id and dev_id != "GLOBAL":
+                                settings = await db.billing_settings.find_one({"device_id": dev_id}, {"_id": 0})
+                            if not settings:
+                                settings = global_settings
+                                
                             auto_isolir_method = settings.get("auto_isolir_method", "whatsapp")
                             username = customer.get("username", "")
                             

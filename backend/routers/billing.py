@@ -171,6 +171,7 @@ async def _after_paid_actions(invoice_id: str, db) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BillingSettingsUpdate(BaseModel):
+    device_id: Optional[str] = "GLOBAL"
     wa_gateway_type: Optional[str] = None
     wa_api_url: Optional[str] = None
     wa_token: Optional[str] = None
@@ -212,12 +213,25 @@ class BillingSettingsUpdate(BaseModel):
     bri_institution_code: Optional[str] = None
     bri_enabled: Optional[bool] = None
 
+async def fetch_billing_settings(db, device_id: Optional[str] = None) -> dict:
+    if device_id and device_id != "GLOBAL":
+        s = await db.billing_settings.find_one({"device_id": device_id}, {"_id": 0})
+        if s: return s
+    s_global = await db.billing_settings.find_one({"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}, {"_id": 0})
+    return s_global or {}
+
 @router.get("/settings")
-async def get_billing_settings(user=Depends(get_current_user)):
+async def get_billing_settings(device_id: Optional[str] = "GLOBAL", user=Depends(get_current_user)):
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0})
-    if not settings:
-        settings = {
+    
+    if device_id and device_id != "GLOBAL":
+        s = await db.billing_settings.find_one({"device_id": device_id}, {"_id": 0})
+        if s: return s
+
+    s_global = await db.billing_settings.find_one({"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}, {"_id": 0})
+    if not s_global:
+        s_global = {
+            "device_id": "GLOBAL",
             "wa_gateway_type": "fonnte",
             "wa_api_url": "https://api.fonnte.com/send",
             "wa_token": "",
@@ -239,9 +253,9 @@ async def get_billing_settings(user=Depends(get_current_user)):
             "auto_isolir_grace_days": 1,
             "moota_webhook_secret": "",
         }
-        await db.billing_settings.insert_one(settings)
-        settings.pop("_id", None)
-    return settings
+        await db.billing_settings.insert_one(s_global)
+        s_global.pop("_id", None)
+    return s_global
 
 @router.put("/settings")
 async def update_billing_settings(data: BillingSettingsUpdate, user=Depends(require_admin)):
@@ -250,13 +264,26 @@ async def update_billing_settings(data: BillingSettingsUpdate, user=Depends(requ
     if not update_data:
         raise HTTPException(400, "Tidak ada data yang dikirim")
     
-    doc = await db.billing_settings.find_one({})
-    if not doc:
-        await get_billing_settings()  # trigger default creation
+    dev_id = update_data.get("device_id", "GLOBAL")
+    
+    # 1. Search existing
+    query = {"device_id": dev_id}
+    if dev_id == "GLOBAL":
+        query = {"$or": [{"device_id": "GLOBAL"}, {"device_id": {"$exists": False}}]}
         
-    await db.billing_settings.update_one({}, {"$set": update_data})
-    doc = await db.billing_settings.find_one({}, {"_id": 0})
-    return doc
+    doc = await db.billing_settings.find_one(query)
+    
+    if doc:
+        filter_query = {"_id": doc["_id"]}
+        await db.billing_settings.update_one(filter_query, {"$set": update_data})
+    else:
+        update_data["device_id"] = dev_id
+        await db.billing_settings.insert_one(update_data)
+        
+    res = await db.billing_settings.find_one({"device_id": dev_id}, {"_id": 0})
+    if not res and dev_id == "GLOBAL":
+        res = await db.billing_settings.find_one({"device_id": {"$exists": False}}, {"_id": 0})
+    return res or {}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PACKAGES
@@ -1404,13 +1431,6 @@ class InvoiceBulkReminderReq(BaseModel):
 
 async def _bg_send_whatsapp_paid(invoice_id: str):
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-    wa_type = settings.get("wa_gateway_type", "fonnte")
-    url = settings.get("wa_api_url", "https://api.fonnte.com/send")
-    token = settings.get("wa_token", "")
-    template = settings.get("wa_template_paid", "Pembayaran {invoice_number} sebesar {total} berhasil diterima via {payment_method}.")
-    fcm_template = settings.get("fcm_template_paid", "Pembayaran {invoice_number} sebesar {total} telah kami terima.")
-
     inv = await db.invoices.find_one({"id": invoice_id})
     if not inv:
         return
@@ -1418,6 +1438,15 @@ async def _bg_send_whatsapp_paid(invoice_id: str):
     c = await db.customers.find_one({"id": inv.get("customer_id")})
     if not c or (not c.get("phone") and not c.get("fcm_token")):
         return
+
+    settings = await fetch_billing_settings(db, c.get("device_id") if c else None)
+    wa_type = settings.get("wa_gateway_type", "fonnte")
+    url = settings.get("wa_api_url", "https://api.fonnte.com/send")
+    token = settings.get("wa_token", "")
+    template = settings.get("wa_template_paid", "Pembayaran {invoice_number} sebesar {total} berhasil diterima via {payment_method}.")
+    fcm_template = settings.get("fcm_template_paid", "Pembayaran {invoice_number} sebesar {total} telah kami terima.")
+
+
 
     p = await db.billing_packages.find_one({"id": inv.get("package_id")})
     
@@ -1465,12 +1494,9 @@ async def _bg_send_whatsapp_paid(invoice_id: str):
 
 async def _bg_send_whatsapp_reminders(invoice_ids: list[str]):
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
-    wa_type = settings.get("wa_gateway_type", "fonnte")
-    url = settings.get("wa_api_url", "https://api.fonnte.com/send")
-    token = settings.get("wa_token", "")
-    delay = settings.get("wa_delay_ms", 10000) / 1000.0
-    template = settings.get("wa_template_unpaid", "Tagihan {invoice_number} sebesar {total}")
+    
+    # Base fallback in case any settings are needed globally
+    global_settings = await fetch_billing_settings(db, None)
 
     if not url:
         return
@@ -1609,7 +1635,7 @@ async def create_payment_for_invoice(
         raise HTTPException(400, "Invoice sudah lunas")
 
     customer = await db.customers.find_one({"id": inv.get("customer_id", "")}) or {}
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, customer.get("device_id"))
 
     if not settings.get("payment_gateway_enabled"):
         raise HTTPException(503, "Payment gateway belum diaktifkan. Aktifkan di menu Pengaturan Billing.")
@@ -1777,7 +1803,7 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
     db = get_db()
     
     # 0. Verifikasi HMAC Signature (Jika dikonfigurasi)
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, None)
     webhook_secret = settings.get("moota_webhook_secret", "").strip()
     
     if webhook_secret:
@@ -1957,7 +1983,7 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
                         logger.error(f"[Moota Webhook] Gagal simpan hotspot_vouchers/sales: {e}")
 
                 if phone and vc_user:
-                    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+                    settings = await fetch_billing_settings(db, device_id)
                     wa_url = settings.get("wa_api_url", "https://api.fonnte.com/send")
                     wa_token = settings.get("wa_token", "")
                     wa_type = settings.get("wa_gateway_type", "fonnte")
@@ -2028,7 +2054,7 @@ async def xendit_webhook(request: Request, background_tasks: BackgroundTasks):
     external_id format: INV-YYYY-MM-NNNN-<timestamp>
     """
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, None)
     webhook_token = settings.get("xendit_webhook_token", "").strip()
 
     # 1. Verifikasi x-callback-token
@@ -2125,7 +2151,7 @@ async def bca_webhook(request: Request, background_tasks: BackgroundTasks):
     BCA mengirim: FreeText1 = invoice_number, Amount = jumlah pembayaran.
     """
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, None)
 
     raw_body = await request.body()
 
@@ -2194,7 +2220,7 @@ async def bri_webhook(request: Request, background_tasks: BackgroundTasks):
     BRI mengirim: keterangan = invoice_number, amount = jumlah bayar.
     """
     db = get_db()
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, None)
 
     raw_body = await request.body()
 
@@ -2533,7 +2559,7 @@ async def get_hotspot_public_config():
     wa_number = (hs.get("wa_number") or "").strip()
     if not wa_number:
         # Fallback ke billing_settings jika hotspot_settings belum punya WA
-        bs = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+        bs = await fetch_billing_settings(db, device_id)
         wa_number = (bs.get("whatsapp") or bs.get("phone") or "6282228304543").strip()
 
     # 3. Payment info dari hotspot_settings
@@ -2930,7 +2956,7 @@ async def push_network_error_broadcast(
     """
     db = get_db()
 
-    settings = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+    settings = await fetch_billing_settings(db, None)
     template = settings.get(
         "fcm_template_network_error",
         "Yth {customer_name}, terdapat gangguan jaringan pada sistem kami. "
