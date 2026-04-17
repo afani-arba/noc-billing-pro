@@ -64,7 +64,7 @@ const navItems = [
   { to: "/radius-server",  icon: Radio,           label: "RADIUS Server",          serviceKey: "radius_server",  adminOnly: true },
   { to: "/integration-settings", icon: Cable,     label: "Integrasi & Otomasi",    serviceKey: "integration_settings", adminOnly: true },
   { to: "/settings",       icon: Settings,        label: "Pengaturan Platform",    serviceKey: "settings",       adminOnly: true },
-  { to: "/admin",          icon: Shield,          label: "User Management",        serviceKey: "settings",       superAdminOnly: true },
+  { to: "/admin",          icon: Shield,          label: "User Management",        serviceKey: "settings",       adminOnly: true },
   { to: "/update",         icon: Download,        label: "Update Aplikasi",        serviceKey: "update",         adminOnly: true },
   { to: "/admin/license",  icon: ShieldAlert,     label: "Lisensi Sistem",         serviceKey: "license",        adminOnly: true },
 ];
@@ -195,7 +195,6 @@ export default function Layout() {
   const BILLING_ROLES = ["super_admin", "administrator", "branch_admin", "billing_staff"];
 
   const isAdmin         = ADMIN_ROLES.includes(user?.role);
-  const isSuperAdmin    = user?.role === "super_admin"; // hanya super_admin yang bisa kelola user
   const isNOC           = NOC_ROLES.includes(user?.role);
   const isBillingRole   = BILLING_ROLES.includes(user?.role);
   const isBillingEnabled = features?.billing === true;
@@ -219,8 +218,6 @@ export default function Layout() {
     if (item.billingProHide && edition === "billing_pro") return false;
     // enterpriseOnly: hide if billing feature not available
     if (item.enterpriseOnly && !isBillingEnabled) return false;
-    // superAdminOnly: hanya super_admin yang bisa akses (misal User Management)
-    if (item.superAdminOnly && !isSuperAdmin) return false;
 
     // Check explicit RBAC
     const customAccess = item.serviceKey ? canSeeService(item.serviceKey) : true;
