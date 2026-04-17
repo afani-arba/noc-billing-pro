@@ -1378,7 +1378,11 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] font-mono text-muted-foreground">
-                          {showPwd[c.id] ? (c.password || "—") : "********"}
+                          {showPwd[c.id]
+                            ? (c.password
+                                ? c.password
+                                : <span className="text-amber-400/80 italic">(tidak tersimpan)</span>)
+                            : "••••••••"}
                           </span>
                           <button
                             onClick={() => setShowPwd(p => ({ ...p, [c.id]: !p[c.id] }))}

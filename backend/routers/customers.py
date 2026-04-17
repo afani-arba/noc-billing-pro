@@ -536,6 +536,9 @@ async def import_from_pppoe(
         name = comment if comment else username
         profile = secret.get("profile", "")
 
+        # MikroTik mengembalikan password di field "password" pada PPPoE secret
+        mt_password = secret.get("password", "") or None
+
         doc = {
             "id": str(uuid.uuid4()),
             "client_id": _generate_client_id(),
@@ -551,6 +554,8 @@ async def import_from_pppoe(
             "active": secret.get("disabled", "false") != "true",
             "created_at": _now(),
             "profile": profile,
+            "password": mt_password,      # Simpan password dari MikroTik jika tersedia
+            "auth_method": "local",
         }
         await db.customers.insert_one(doc)
         imported += 1
@@ -636,6 +641,8 @@ async def import_csv_customers(
         active = active_str in ["true", "1", "yes", "ya", "y"]
         service_type = "pppoe" # Force PPPoE for monthly customers
             
+        csv_password = row.get("password", "").strip() or None
+
         doc = {
             "id": str(uuid.uuid4()),
             "client_id": _generate_client_id(),
@@ -651,6 +658,8 @@ async def import_csv_customers(
             "active": active,
             "created_at": _now(),
             "profile": profile,
+            "password": csv_password,     # Simpan password dari CSV jika ada
+            "auth_method": "local",
         }
         await db.customers.insert_one(doc)
         imported += 1
