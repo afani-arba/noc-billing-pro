@@ -174,7 +174,7 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <div className="min-w-0 pr-2">
             <p className="text-xs font-mono text-muted-foreground truncate">{invoice.invoice_number}</p>
-            <h3 className="font-semibold truncate">{invoice.customer_name || "Ã¢â‚¬â€"}</h3>
+            <h3 className="font-semibold truncate">{invoice.customer_name || "—"}</h3>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 flex-wrap justify-end">
             <StatusBadge status={invoice.status} />
@@ -209,8 +209,8 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             {[
               ["Username", invoice.customer_username],
-              ["Telepon", invoice.customer_phone || "Ã¢â‚¬â€"],
-              ["Paket", invoice.package_name || pkg.name || "Ã¢â‚¬â€"],
+              ["Telepon", invoice.customer_phone || "—"],
+              ["Paket", invoice.package_name || pkg.name || "—"],
               ["Periode", `${fmtDate(invoice.period_start)} s/d ${fmtDate(invoice.period_end)}`],
               ["Jatuh Tempo", fmtDate(invoice.due_date)],
             ].map(([k, v]) => (
@@ -447,7 +447,6 @@ export default function BillingPage() {
     { id: "customers", label: "Pelanggan", icon: Users },
     { id: "packages", label: "Paket", icon: Package },
     { id: "monitoring", label: "Monitoring PPPoE", icon: Activity },
-    { id: "guide", label: "Panduan", icon: BookOpen },
   ];
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
@@ -526,7 +525,6 @@ export default function BillingPage() {
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
         {tab === "monitoring" && <PpoeMonitoringTab deviceId={globalDeviceId} />}
 
-        {tab === "guide" && <BillingGuidePage />}
       </div>
     </div>
   );
@@ -548,7 +546,7 @@ function DashboardTab({ month, year, deviceId }) {
       .then(r => setReport(r.data)).catch(() => {});
   }, [month, year, deviceId]);
 
-  // FIX B10: Hapus month/year dari deps Ã¢â‚¬â€ monthly-summary tidak butuh itu
+  // FIX B10: Hapus month/year dari deps — monthly-summary tidak butuh itu
   // Ini mencegah reload chart yang tidak diperlukan setiap bulan/tahun diganti
   useEffect(() => {
     api.get("/billing/monthly-summary", { params: { months: trendMonths, device_id: deviceId } })
@@ -795,7 +793,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
     loadPage(1);
   }, [month, year, activeTab, search, deviceId, serviceTypeFilter]); // eslint-disable-line
 
-  // Effect terpisah HANYA untuk paginasi Ã¢â‚¬â€ tidak tumpang tindih dengan filter change
+  // Effect terpisah HANYA untuk paginasi — tidak tumpang tindih dengan filter change
   const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
     loadPage(newPage);
@@ -949,7 +947,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">{inv.customer_username}</p>
                     </td>
                     <td className="px-3 py-2.5 text-[10px] font-mono text-muted-foreground">
-                      {inv.customer_phone || "Ã¢â‚¬â€"}
+                      {inv.customer_phone || "—"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.package_name}</td>
                     <td className="px-3 py-2.5 text-xs font-mono font-bold text-primary">{Rp(inv.total)}</td>
@@ -1134,7 +1132,7 @@ function CreateInvoiceModal({ packages, customers, month, year, serviceType, onC
               <option value="">Pilih paket...</option>
               {/* FIX B3: Fallback ke field 'type' agar paket lama tetap muncul */}
               {packages.filter(p => (p.service_type === serviceType || p.type === serviceType) && p.active !== false).map(p => (
-                <option key={p.id} value={p.id}>{p.name} Ã¢â‚¬â€ {Rp(p.price)}</option>
+                <option key={p.id} value={p.id}>{p.name} — {Rp(p.price)}</option>
               ))}
             </select>
           </div>
@@ -1373,7 +1371,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                             )}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground font-mono">{c.phone || "Ã¢â‚¬â€"}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{c.phone || "—"}</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-xs font-mono">{c.username}</td>
@@ -1381,7 +1379,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                         {c.password ? (
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] font-mono text-muted-foreground">
-                            {showPwd[c.id] ? c.password : "â—â—â—â—â—â—â—â—"}
+                            {showPwd[c.id] ? c.password : "********"}
                             </span>
                             <button
                               onClick={() => setShowPwd(p => ({ ...p, [c.id]: !p[c.id] }))}
@@ -1394,10 +1392,10 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground/40">Ã¢â‚¬â€</span>
+                          <span className="text-[10px] text-muted-foreground/40">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "Ã¢â‚¬â€"}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "—"}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}</td>
                       <td className="px-3 py-2.5 text-[10px] text-muted-foreground">Tgl {c.due_day}</td>
                       <td className="px-3 py-2.5">
@@ -1454,7 +1452,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                            <span className="text-[10px] font-mono text-indigo-400 mb-0.5">{c.client_id || c.id.substring(0, 8)}</span>
                            <p className="font-bold text-sm leading-tight text-white">{c.name}</p>
                            <p className="text-xs text-muted-foreground font-mono">{c.username}</p>
-                           <p className="text-[10px] text-muted-foreground mt-0.5">{c.phone || "Tidak ada HP"}</p>
+                           <p className="text-[10px] text-muted-foreground mt-0.5">{c.phone || "—"}</p>
                          </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -1464,7 +1462,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       </div>
                    </div>
                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/50">
-                      <div><span className="text-muted-foreground text-[10px] block">Router</span> {dev?.name || "Ã¢â‚¬â€"}</div>
+                      <div><span className="text-muted-foreground text-[10px] block">Router</span> {dev?.name || "—"}</div>
                       <div><span className="text-muted-foreground text-[10px] block">Jatuh Tempo</span> Tgl {c.due_day}</div>
                    </div>
                    <div className="text-xs pb-1">
@@ -2031,7 +2029,7 @@ function ImportModal({ onClose, onImported }) {
               {packageCheck.ok && (
                 <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-sm">
                   <p className="text-xs text-green-400 flex items-center gap-1.5">
-                    Ã¢Å“â€œ Semua {packageCheck.totalPackages} paket sudah memiliki harga Ã¢â‚¬â€ import siap dilakukan
+                    Ã¢Å“â€œ Semua {packageCheck.totalPackages} paket sudah memiliki harga — import siap dilakukan
                   </p>
                 </div>
               )}
@@ -2044,7 +2042,7 @@ function ImportModal({ onClose, onImported }) {
               {!packageCheck.ok && !packageCheck.noPackages && packageCheck.zeroPricePackages.length > 0 && (
                 <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-sm space-y-2">
                   <p className="text-xs font-semibold text-red-400">
-                    Ã¢Å“â€” Import diblokir Ã¢â‚¬â€ {packageCheck.zeroPricePackages.length} paket belum ada harga
+                    Ã¢Å“â€” Import diblokir — {packageCheck.zeroPricePackages.length} paket belum ada harga
                   </p>
                   <p className="text-[10px] text-muted-foreground mb-1">Isi harga paket berikut di <b>tab Paket</b> dahulu:</p>
                   <div className="space-y-1 max-h-28 overflow-y-auto">
@@ -2478,7 +2476,7 @@ function PpoeMonitoringTab({ deviceId }) {
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono bg-secondary/50 px-1 py-0.5 rounded text-[11px] min-w-[70px] inline-block">
-                            {showPwd[a.name] ? (a.password || "-") : "â—â—â—â—â—â—â—â—"}
+                            {showPwd[a.name] ? (a.password || "-") : "********"}
                           </span>
                           <button onClick={() => togglePwd(a.name)} className="text-muted-foreground hover:text-foreground">
                             {showPwd[a.name] ? <EyeOff className="w-3.5 h-3.5"/> : <Eye className="w-3.5 h-3.5"/>}

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
@@ -485,7 +485,7 @@ export default function HotspotBillingPage() {
     return res;
   };
   const tabs = [
-    { id: "wa_orders", label: "ðŸ“² Pesanan WA", icon: MessageCircle },
+    { id: "wa_orders", label: "Pesanan WA", icon: MessageCircle },
     { id: "vouchers", label: "Voucher History", icon: RpIcon },
     { id: "sales", label: "Laporan penjualan", icon: TrendingUp },
     { id: "packages", label: "Paket Layanan", icon: Package },
