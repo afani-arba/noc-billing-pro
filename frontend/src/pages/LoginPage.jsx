@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Server, Eye, EyeOff, Lock, User } from "lucide-react";
+import api from "@/lib/api";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -25,7 +26,8 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      await login(username, password);
+      const res = await api.post("/auth/login", { username, password });
+      login(res.data.token, res.data.user);
       toast.success("Login successful");
       navigate("/");
     } catch (err) {
