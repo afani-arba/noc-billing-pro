@@ -36,6 +36,7 @@ SSH "docker cp /opt/noc-billing-pro/backend/routers/customers.py noc-billing-pro
 SSH "docker cp /opt/noc-billing-pro/backend/routers/hotspot.py noc-billing-pro-backend:/app/routers/hotspot.py && echo 'hotspot OK'"
 SSH "docker cp /opt/noc-billing-pro/backend/routers/pppoe_monitoring.py noc-billing-pro-backend:/app/routers/pppoe_monitoring.py && echo 'pppoe OK'"
 SSH "docker cp /opt/noc-billing-pro/backend/routers/genieacs.py noc-billing-pro-backend:/app/routers/genieacs.py && echo 'genieacs OK'"
+SSH "docker cp /opt/noc-billing-pro/backend/routers/devices.py noc-billing-pro-backend:/app/routers/devices.py && echo 'devices OK'"
 SSH "docker restart noc-billing-pro-backend && echo 'BACKEND_RESTARTED'"
 
 Write-Host "`n=== [7] Final verification ===" -ForegroundColor Cyan

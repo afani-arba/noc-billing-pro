@@ -57,37 +57,85 @@ async def list_devices(
     model: str = Query(""),
     user=Depends(get_current_user),
 ):
-    """List CPE devices with optional search/filter. Filtered by RBAC allowed_devices."""
+    """List CPE devices with optional search/filter.
+    
+    RBAC Logic:
+    - Admin (super_admin/administrator): semua CPE ditampilkan
+    - User dengan allowed_devices: 
+        * CPE yang sudah punya PPPoE username → filter berdasarkan customer yang terdaftar
+        * CPE baru (belum punya PPPoE username) → cek IP-nya via DHCP lease ke MikroTik yang diizinkan
+        * ZTP tetap bisa digunakan untuk CPE yang IP-nya masuk ke range MikroTik user
+    """
     try:
         devices = await asyncio.to_thread(svc.get_devices, limit, search, model)
         normalized = _normalize_devices(devices)
 
         # ── RBAC: filter berdasarkan allowed_devices user ────────────────────────
         scope = get_user_allowed_devices(user)  # None = admin (semua), list = terbatas
-        if scope is not None and len(scope) > 0:
-            # Ambil semua PPPoE username dari customer yang terkait ke allowed devices
-            db = get_db()
-            allowed_customers = await db.customers.find(
-                {"device_id": {"$in": scope}},
-                {"_id": 0, "username": 1, "pppoe_username": 1}
-            ).to_list(5000)
-            allowed_usernames = set()
-            for c in allowed_customers:
-                if c.get("username"): allowed_usernames.add(c["username"].lower())
-                if c.get("pppoe_username"): allowed_usernames.add(c["pppoe_username"].lower())
+        if scope is None or len(scope) == 0:
+            # Admin atau user tanpa restriction → tampilkan semua
+            return normalized
 
-            if allowed_usernames:
-                # Filter: hanya tampilkan CPE yang PPPoE username-nya ada dalam list
-                normalized = [
-                    d for d in normalized
-                    if not d.get("pppoe_username")  # jika belum ada PPPoE username (baru), tampilkan
-                    or d.get("pppoe_username", "").lower() in allowed_usernames
-                ]
+        # User terbatas → pisahkan CPE berdasarkan apakah sudah punya PPPoE username
+        db = get_db()
+
+        # 1. Ambil semua PPPoE username dari customer yang terkait ke allowed devices
+        allowed_customers = await db.customers.find(
+            {"device_id": {"$in": scope}},
+            {"_id": 0, "username": 1, "pppoe_username": 1}
+        ).to_list(5000)
+        allowed_usernames = set()
+        for c in allowed_customers:
+            if c.get("username"): allowed_usernames.add(c["username"].lower())
+            if c.get("pppoe_username"): allowed_usernames.add(c["pppoe_username"].lower())
+
+        # 2. Ambil info MikroTik yang diizinkan (untuk cek DHCP lease)
+        allowed_mt_devices = await db.devices.find(
+            {"id": {"$in": scope}},
+            {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "api_mode": 1,
+             "api_username": 1, "api_password": 1, "api_port": 1,
+             "use_https": 1, "api_ssl": 1, "api_plaintext_login": 1}
+        ).to_list(100)
+
+        # 3. Kumpulkan semua IP dari DHCP leases di MikroTik yang diizinkan
+        dhcp_lease_ips = set()
+        for mt in allowed_mt_devices:
+            try:
+                from mikrotik_api import get_api_client
+                client = get_api_client(mt)
+                leases = await asyncio.to_thread(client.list_dhcp_leases)
+                for lease in (leases or []):
+                    ip = lease.get("address") or lease.get("ip-address") or ""
+                    if ip:
+                        dhcp_lease_ips.add(ip.strip())
+            except Exception as e:
+                logger.debug(f"DHCP lease check failed for {mt.get('name')}: {e}")
+
+        # 4. Filter CPE
+        filtered = []
+        for d in normalized:
+            pppoe_user = d.get("pppoe_username", "")
+            # management_ip = IP dari mana CPE terhubung ke GenieACS (dari DHCP MikroTik)
+            management_ip = d.get("management_ip", "")
+
+            if pppoe_user:
+                # CPE sudah terkonfigurasi → cek berdasarkan PPPoE username customer
+                if pppoe_user.lower() in allowed_usernames:
+                    filtered.append(d)
             else:
-                # Tidak ada customer pada allowed devices — tampilkan semua (baru)
-                normalized = [d for d in normalized if not d.get("pppoe_username")]
+                # CPE baru (belum ada PPPoE username) → cek management IP via DHCP lease MikroTik
+                # Ini memastikan ZTP tetap berfungsi untuk user yang CPE-nya berada di MikroTik mereka
+                if not dhcp_lease_ips:
+                    # Tidak bisa cek DHCP (koneksi MikroTik gagal) → tampilkan semua CPE baru
+                    filtered.append(d)
+                elif management_ip and management_ip in dhcp_lease_ips:
+                    # Management IP CPE ada di DHCP lease MikroTik yang diizinkan → tampilkan
+                    filtered.append(d)
+                elif not management_ip:
+                    # Tidak ada management IP sama sekali → tampilkan (CPE belum terhubung)
+                    filtered.append(d)
 
-        return normalized
+        return filtered
     except HTTPException:
         raise
     except Exception as e:
@@ -728,9 +776,32 @@ def _normalize_devices(devices: list) -> list:
 
         d_igd = d.get("InternetGatewayDevice") or {}
         d_dev = d.get("Device") or {}
-        
+
         dev_info = d_igd.get("DeviceInfo") or d_dev.get("DeviceInfo") or {}
         device_id = d.get("_id", "")
+
+        # Extract management IP from ConnectionRequestURL (misal: http://192.168.1.100:7547/)
+        management_ip = ""
+        dev_id_info = d.get("_deviceId", {})
+        if isinstance(dev_id_info, dict):
+            conn_url = dev_id_info.get("_ConnectionRequestURL", "") or ""
+            if conn_url:
+                import re
+                m = re.search(r'https?://([^:/]+)', conn_url)
+                if m:
+                    management_ip = m.group(1)
+        # Fallback: cek dari ManagementServer.ConnectionRequestURL
+        if not management_ip:
+            for root in [d_igd, d_dev]:
+                mgmt = root.get("ManagementServer", {})
+                if isinstance(mgmt, dict):
+                    url = _val(mgmt, "ConnectionRequestURL")
+                    if url:
+                        import re
+                        m = re.search(r'https?://([^:/]+)', url)
+                        if m:
+                            management_ip = m.group(1)
+                            break
 
         # 1. Gather WAN Connections for PPPoE/IP
         conns = []
@@ -917,6 +988,7 @@ def _normalize_devices(devices: list) -> list:
             "uptime": uptime,
             "ont_temp": ont_temp,
             "ip": pppoe_ip,
+            "management_ip": management_ip,   # IP dari DHCP management/TR-069 connection
             "pppoe_username": pppoe_username,
             "pppoe_ip": pppoe_ip,
             "ssid": ssid,

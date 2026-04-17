@@ -138,18 +138,29 @@ def _is_admin(user: dict) -> bool:
 # ── Role-based dependency injectors ───────────────────────────────────────
 
 async def require_admin(request: Request, user=Depends(get_current_user)):
-    """Requires administrator, but bypasses if custom allowed_services is granted for admin module."""
-    if request.method in ["POST", "PUT", "DELETE", "PATCH"] and user.get("role") in {"helpdesk", "viewer"}:
+    """Requires administrator or super_admin role.
+    Non-admin roles can bypass if they have specific admin-level services assigned.
+    Read-only roles (helpdesk/viewer) can never modify data.
+    """
+    role = user.get("role", "")
+
+    # Readonly roles cannot modify data
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"] and role in {"helpdesk", "viewer"}:
         raise HTTPException(status_code=403, detail="Role Read-Only tidak dapat memodifikasi data.")
 
-    if not _is_admin(user):
-        explicit = user.get("allowed_services")
-        if explicit is not None:
-            admin_services = {"settings", "integration_settings", "update", "license", "radius_server", "audit", "backups", "syslog", "scheduler", "notifications", "wa_customer_service"}
-            if set(explicit) & admin_services:
-                return user
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
+    # Admin roles always pass through — no further checks needed
+    if _is_admin(user):
+        return user
+
+    # Non-admin: check if they have explicit admin-level service access
+    explicit = user.get("allowed_services")
+    if explicit is not None:
+        admin_services = {"settings", "integration_settings", "update", "license", "radius_server",
+                          "audit", "backups", "syslog", "scheduler", "notifications", "wa_customer_service"}
+        if set(explicit) & admin_services:
+            return user
+
+    raise HTTPException(status_code=403, detail="Admin access required")
 
 
 async def require_super_admin(request: Request, user=Depends(get_current_user)):

@@ -65,11 +65,14 @@ class DeviceUpdate(BaseModel):
     topo_y: Optional[float] = None
 
 def filter_devices_for_user(devices: list, user: dict) -> list:
-    if user.get("role") == "administrator":
+    """Filter device list based on user role and allowed_devices."""
+    role = user.get("role", "")
+    # Admin roles: lihat semua device tanpa filter
+    if role in {"super_admin", "administrator"}:
         return devices
     allowed = user.get("allowed_devices", [])
     if not allowed:
-        return []
+        return devices  # non-admin tanpa restriction lihat semua (misal noc_engineer)
     return [d for d in devices if d.get("id") in allowed]
 
 
