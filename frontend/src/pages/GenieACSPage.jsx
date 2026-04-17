@@ -1290,6 +1290,7 @@ function GuideTab() {
 // â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function GenieACSPage() {
+  const { user } = useAuth();
   // ZTP tersedia untuk semua role kecuali viewer/helpdesk read-only
   const READONLY_ROLES = ["viewer", "helpdesk"];
   const isAdmin = !READONLY_ROLES.includes(user?.role);

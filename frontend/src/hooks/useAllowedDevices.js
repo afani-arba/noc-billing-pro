@@ -13,7 +13,7 @@
  * FIX: fetchDevices hanya dipanggil sekali on-mount menggunakan ref untuk
  * menghindari cascade re-render / page refresh.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
 
@@ -55,10 +55,11 @@ export function useAllowedDevices(autoSelectFirst = true) {
   // - Non-admin dengan allowed_devices: filter sesuai list
   // - Non-admin tanpa allowed_devices: semua device yang dikembalikan backend
   const allowedDeviceIds = user?.allowed_devices;
-  const filteredDevices =
-    isAdmin || !allowedDeviceIds || allowedDeviceIds.length === 0
+  const filteredDevices = useMemo(() => {
+    return isAdmin || !allowedDeviceIds || allowedDeviceIds.length === 0
       ? allDevices
       : allDevices.filter((d) => allowedDeviceIds.includes(d.id));
+  }, [allDevices, isAdmin, allowedDeviceIds]);
 
   // Apakah dropdown harus dikunci (hanya 1 device)
   const isLocked = !isAdmin && filteredDevices.length === 1;
