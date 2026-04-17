@@ -35,7 +35,6 @@ const BrushTick = ({ x, y, payload }) => <text x={x} y={y} dy={10} fill="#475569
 function formatBwTooltip(v) {
   if (v == null) return "—";
   const n = Number(v);
-  if (n >= 1000) return `${(n / 1000).toFixed(0)} Gbps`;
   if (n >= 1) return `${n.toFixed(0)} Mbps`;
   return `${(n * 1000).toFixed(0)} Kbps`;
 }
