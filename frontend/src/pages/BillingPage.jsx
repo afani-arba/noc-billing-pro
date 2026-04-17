@@ -520,7 +520,7 @@ export default function BillingPage() {
         {tab === "invoices" && <InvoicesTab month={month} year={year} packages={packages} customers={customers} deviceId={globalDeviceId} />}
         {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} />}
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
-        {tab === "monitoring" && <PpoeMonitoringTab />}
+        {tab === "monitoring" && <PpoeMonitoringTab deviceId={globalDeviceId} />}
         {tab === "settings" && <SettingsTab />}
         {tab === "guide" && <BillingGuidePage />}
       </div>
@@ -2679,7 +2679,7 @@ function ImportCsvModal({ onClose, onImported }) {
 // â”€â”€ Monitoring PPPoE Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // This file is appended to BillingPage.jsx by the build script
 
-function PpoeMonitoringTab() {
+function PpoeMonitoringTab({ deviceId }) {
   const [actives, setActives]       = useState([]);
   const [loading, setLoading]       = useState(false);
   const [showPwd, setShowPwd]       = useState({});
@@ -2689,46 +2689,45 @@ function PpoeMonitoringTab() {
     try { return JSON.parse(localStorage.getItem("ppoe_monitoring_enabled") ?? "true"); }
     catch { return true; }
   });
-  const [routers, setRouters]       = useState([]);
-  const [selectedRouter, setSelectedRouter] = useState("all");
   const [countdown, setCountdown]   = useState(15);
   const intervalRef  = useRef(null);
   const countdownRef = useRef(null);
 
-  useEffect(() => {
-    api.get("/pppoe-monitoring-routers")
-      .then(({ data }) => setRouters(data || []))
-      .catch(() => {});
-  }, []);
-
   const loadData = useCallback(async () => {
     if (!enabled) return;
+    if (!deviceId) {
+      setActives([]);
+      return;
+    }
     setLoading(true);
     setCountdown(15);
     try {
-      const params = selectedRouter !== "all" ? `?router_id=${selectedRouter}` : "";
-      const { data } = await api.get(`/pppoe-active-monitoring${params}`);
+      const { data } = await api.get(`/pppoe-active-monitoring?router_id=${deviceId}`);
       setActives(data || []);
     } catch (e) {
       toast.error("Gagal load data monitoring PPPoE");
     } finally {
       setLoading(false);
     }
-  }, [enabled, selectedRouter]);
+  }, [enabled, deviceId]);
 
   useEffect(() => {
     clearInterval(intervalRef.current);
     clearInterval(countdownRef.current);
     if (enabled) {
-      loadData();
-      intervalRef.current  = setInterval(loadData, 15000);
-      countdownRef.current = setInterval(() => setCountdown(c => c <= 1 ? 15 : c - 1), 1000);
+      if (deviceId) {
+        loadData();
+        intervalRef.current  = setInterval(loadData, 15000);
+        countdownRef.current = setInterval(() => setCountdown(c => c <= 1 ? 15 : c - 1), 1000);
+      } else {
+        setActives([]);
+      }
     } else {
       setActives([]);
       setCountdown(15);
     }
     return () => { clearInterval(intervalRef.current); clearInterval(countdownRef.current); };
-  }, [enabled, selectedRouter]); // eslint-disable-line
+  }, [enabled, deviceId, loadData]); // eslint-disable-line
 
   const toggleEnabled = () => {
     const next = !enabled;
@@ -2765,7 +2764,7 @@ function PpoeMonitoringTab() {
 
   const formatBps = (bps) => {
     const num = Number(bps);
-    if (isNaN(num) || num === 0) return null;
+    if (!bps || isNaN(num) || num === 0) return null;
     if (num > 1_000_000) return (num / 1_000_000).toFixed(1) + " Mbps";
     if (num > 1_000)     return (num / 1_000).toFixed(1) + " kbps";
     return num + " bps";
@@ -2815,7 +2814,7 @@ function PpoeMonitoringTab() {
           <h2 className="text-base font-bold flex items-center gap-2">
             <Activity className={`w-4 h-4 ${enabled ? "text-green-500 animate-pulse" : "text-muted-foreground"}`}/>
             Monitoring PPPoE Aktif
-            {enabled && (
+            {enabled && deviceId && (
               <span className="text-[10px] font-normal text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
                 Refresh dalam {countdown}s
               </span>
@@ -2827,21 +2826,7 @@ function PpoeMonitoringTab() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={selectedRouter}
-            onChange={e => setSelectedRouter(e.target.value)}
-            disabled={!enabled}
-            className="h-8 text-xs bg-secondary border border-border rounded-sm px-2 cursor-pointer disabled:opacity-40 min-w-[160px]"
-          >
-            <option value="all">- Semua Router -</option>
-            {routers.map(r => (
-              <option key={r.id} value={r.id}>
-                {r.name} {r.api_mode === "api" ? "(ROS6)" : "(ROS7)"}
-              </option>
-            ))}
-          </select>
-
-          <Button onClick={loadData} disabled={loading || !enabled} size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+          <Button onClick={loadData} disabled={loading || !enabled || !deviceId} size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}/> Refresh
           </Button>
 
@@ -2876,6 +2861,17 @@ function PpoeMonitoringTab() {
 
       {/* Search + Table */}
       {enabled && (
+        !deviceId ? (
+          <div className="flex flex-col items-center justify-center py-16 space-y-4 bg-card border border-border rounded-sm">
+            <Activity className="w-12 h-12 text-muted-foreground/30"/>
+            <div className="text-center">
+              <p className="font-semibold text-muted-foreground">Pilih Router Terlebih Dahulu</p>
+              <p className="text-xs text-muted-foreground/60 mt-1 max-w-xs mx-auto">
+                Kunci aktif: Data monitoring PPPoE hanya ditampilkan untuk spesifik device. Pilih dari dropdown pojok kanan atas.
+              </p>
+            </div>
+          </div>
+        ) : (
         <>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"/>
@@ -2913,7 +2909,7 @@ function PpoeMonitoringTab() {
                   </td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    {search ? `Tidak ditemukan untuk "${search}"` : `Tidak ada sesi PPPoE aktif${selectedRouter !== "all" ? " pada router ini" : ""}`}
+                    {search ? `Tidak ditemukan untuk "${search}"` : `Tidak ada sesi PPPoE aktif pada router ini`}
                   </td></tr>
                 ) : filtered.map((a, i) => (
                   <tr key={i} className={`hover:bg-secondary/20 transition-colors ${loading ? "opacity-60" : ""}`}>
@@ -3002,6 +2998,7 @@ function PpoeMonitoringTab() {
             )}
           </div>
         </>
+        )
       )}
     </div>
   );
