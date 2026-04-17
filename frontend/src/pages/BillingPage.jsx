@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
@@ -1376,24 +1376,20 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       </td>
                       <td className="px-3 py-2.5 text-xs font-mono">{c.username}</td>
                       <td className="px-3 py-2.5">
-                        {c.password ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] font-mono text-muted-foreground">
-                            {showPwd[c.id] ? c.password : "********"}
-                            </span>
-                            <button
-                              onClick={() => setShowPwd(p => ({ ...p, [c.id]: !p[c.id] }))}
-                              className="text-muted-foreground hover:text-foreground transition-colors"
-                              title={showPwd[c.id] ? "Sembunyikan" : "Tampilkan"}
-                            >
-                              {showPwd[c.id]
-                                ? <EyeOff className="w-3 h-3" />
-                                : <Eye className="w-3 h-3" />}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground/40">—</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                          {showPwd[c.id] ? (c.password || "—") : "********"}
+                          </span>
+                          <button
+                            onClick={() => setShowPwd(p => ({ ...p, [c.id]: !p[c.id] }))}
+                            className="text-muted-foreground hover:text-foreground transition-colors"
+                            title={showPwd[c.id] ? "Sembunyikan" : "Tampilkan"}
+                          >
+                            {showPwd[c.id]
+                              ? <EyeOff className="w-3 h-3" />
+                              : <Eye className="w-3 h-3" />}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "—"}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}</td>
