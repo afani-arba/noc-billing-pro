@@ -12,7 +12,10 @@ import json
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
 from pydantic import BaseModel
 from core.db import get_db
-from core.auth import get_current_user, require_admin, require_write, require_enterprise
+from core.auth import (
+    get_current_user, require_admin, require_write, require_enterprise,
+    check_device_access, get_user_allowed_devices, build_device_filter
+)
 
 router = APIRouter(
     prefix="/billing",
@@ -323,11 +326,38 @@ class PackageUpdate(BaseModel):
 
 
 @router.get("/packages")
-async def list_packages(service_type: str = Query(""), user=Depends(get_current_user)):
+async def list_packages(
+    service_type: str = Query(""),
+    device_id: str = Query(""),       # opsional filter per-router
+    user=Depends(get_current_user)
+):
     db = get_db()
     q = {}
     if service_type:
         q["service_type"] = service_type
+
+    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    scope = get_user_allowed_devices(user)  # None = admin (semua), [] = kosong
+    if scope is None:
+        # Admin → pakai filter device_id dari query param jika ada
+        if device_id:
+            q["$or"] = [
+                {"device_id": device_id},
+                {"source_device_id": device_id},
+            ]
+    else:
+        # Non-admin: batasi hanya device yang diizinkan,
+        # lalu intersect dengan device_id param jika ada
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return []   # tidak ada device yang diizinkan
+        q["$or"] = [
+            {"device_id": {"$in": allowed}},
+            {"source_device_id": {"$in": allowed}},
+        ]
+
     pkgs = await db.billing_packages.find(q, {"_id": 0}).to_list(1000)
     return pkgs
 
@@ -381,16 +411,24 @@ async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: s
 @router.post("/packages", status_code=201)
 async def create_package(data: PackageCreate, background_tasks: BackgroundTasks, user=Depends(require_write)):
     db = get_db()
+
+    # ── RBAC: pastikan user boleh membuat paket untuk device ini ────────────
+    if data.device_id and not check_device_access(user, data.device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk membuat paket pada router ini")
+
     device = None
     device_name = ""
     if data.device_id:
         device = await db.devices.find_one({"id": data.device_id})
-        if device:
-            device_name = device.get("name", device.get("host", data.device_id))
+        if not device:
+            raise HTTPException(404, f"Device dengan id '{data.device_id}' tidak ditemukan")
+        device_name = device.get("name", device.get("host", data.device_id))
 
     doc = {
         "id": str(uuid.uuid4()),
         **data.dict(),
+        # Simpan device_id sebagai tenant key utama dan juga di source_device_id untuk backward compat
+        "device_id": data.device_id or "",
         "source_device_id": data.device_id or "",
         "source_device_name": device_name,
         "profile_name": data.name,
@@ -416,10 +454,19 @@ async def create_package(data: PackageCreate, background_tasks: BackgroundTasks,
 @router.put("/packages/{pkg_id}")
 async def update_package(pkg_id: str, data: PackageUpdate, user=Depends(require_write)):
     db = get_db()
+
+    # ── RBAC: cek kepemilikan device dari paket ini ──────────────────────────
+    existing_pkg = await db.billing_packages.find_one({"id": pkg_id}, {"_id": 0})
+    if not existing_pkg:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    pkg_device_id = existing_pkg.get("device_id") or existing_pkg.get("source_device_id", "")
+    if pkg_device_id and not check_device_access(user, pkg_device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah paket pada router ini")
+
     update = {k: v for k, v in data.dict().items() if v is not None}
     if "service_type" in update:
         update["type"] = update["service_type"]
-        
+
     if not update:
         raise HTTPException(400, "Tidak ada perubahan")
     result = await db.billing_packages.update_one({"id": pkg_id}, {"$set": update})
@@ -431,6 +478,15 @@ async def update_package(pkg_id: str, data: PackageUpdate, user=Depends(require_
 @router.delete("/packages/{pkg_id}")
 async def delete_package(pkg_id: str, user=Depends(require_admin)):
     db = get_db()
+
+    # ── RBAC: admin non-super hanya bisa hapus paket dari routernya sendiri ─
+    existing_pkg = await db.billing_packages.find_one({"id": pkg_id}, {"_id": 0})
+    if not existing_pkg:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    pkg_device_id = existing_pkg.get("device_id") or existing_pkg.get("source_device_id", "")
+    if pkg_device_id and not check_device_access(user, pkg_device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus paket pada router ini")
+
     result = await db.billing_packages.delete_one({"id": pkg_id})
     if result.deleted_count == 0:
         raise HTTPException(404, "Paket tidak ditemukan")
@@ -609,10 +665,26 @@ async def billing_stats(
     period_prefix = f"{y}-{m:02d}"
     q = {"period_start": {"$regex": f"^{period_prefix}"}}
 
-    # Service type billing utama adalah pppoe, filter eksplisit
+    # ── RBAC: bangun cust_q berdasarkan allowed_devices ───────────────────
+    scope = get_user_allowed_devices(user)  # None = admin (semua)
     cust_q = {"service_type": "pppoe"}
-    if device_id:
-        cust_q["device_id"] = device_id
+    if scope is None:
+        # Admin: gunakan device_id dari param jika ada
+        if device_id:
+            cust_q["device_id"] = device_id
+    else:
+        # Non-admin: batasi ke allowed devices
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return {
+                "month": m, "year": y, "total_invoices": 0,
+                "total_amount": 0, "paid_count": 0, "paid_amount": 0,
+                "unpaid_count": 0, "unpaid_amount": 0, "overdue_count": 0,
+            }
+        cust_q["device_id"] = {"$in": allowed}
+
     customers = await db.customers.find(cust_q, {"id": 1}).to_list(None)
     q["customer_id"] = {"$in": [c["id"] for c in customers]}
 
@@ -676,18 +748,35 @@ async def list_invoices(
             q["status"] = status
     if customer_id:
         q["customer_id"] = customer_id
-    if device_id or service_type:
-        cust_q = {}
+
+    # ── RBAC: bangun filter customer berdasarkan allowed_devices ─────────────
+    scope = get_user_allowed_devices(user)  # None = admin, [] = kosong
+    cust_q = {}
+    if scope is None:
+        # Admin: gunakan device_id param jika ada
         if device_id:
             cust_q["device_id"] = device_id
-        if service_type:
-            # service_type bisa tersimpan di field 'service_type' atau field 'type'
-            cust_q["$or"] = [
-                {"service_type": service_type},
-                {"type": service_type}
-            ]
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return {"data": [], "total": 0, "page": page, "limit": limit, "pages": 1}
+        cust_q["device_id"] = {"$in": allowed}
+
+    if service_type:
+        cust_q["$or"] = [
+            {"service_type": service_type},
+            {"type": service_type}
+        ]
+
+    if cust_q and not customer_id:
         cust_ids = await db.customers.find(cust_q, {"id": 1}).to_list(None)
         q["customer_id"] = {"$in": [c["id"] for c in cust_ids]}
+    elif cust_q and customer_id:
+        # Masih perlu filter service_type jika ada
+        if service_type:
+            q["$and"] = [{"$or": cust_q.get("$or", [])}]
 
     invoices = await db.invoices.find(q, {"_id": 0}).sort("due_date", 1).to_list(5000)
 
@@ -878,9 +967,36 @@ async def financial_report(
     period_prefix = f"{y}-{m:02d}"
 
     q = {"period_start": {"$regex": f"^{period_prefix}"}}
-    if device_id:
-        custs = await db.customers.find({"device_id": device_id}, {"id": 1}).to_list(None)
-        q["customer_id"] = {"$in": [c["id"] for c in custs]}
+
+    # ── RBAC: bangun filter berdasarkan allowed_devices ──────────────────
+    scope = get_user_allowed_devices(user)
+    custs_q_for_inv = {}
+    if scope is None:
+        if device_id:
+            custs_q_for_inv["device_id"] = device_id
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            # Kembalikan laporan kosong jika tidak ada akses
+            import calendar as cal_mod
+            _, last_day = cal_mod.monthrange(y, m)
+            return {
+                "period": {"month": m, "year": y, "label": f"{cal_mod.month_name[m]} {y}"},
+                "summary": {"total_invoices": 0, "total_billed": 0, "total_billed_all": 0,
+                            "total_projected": 0, "total_collected": 0, "total_outstanding": 0,
+                            "paid_count": 0, "unpaid_count": 0, "overdue_count": 0,
+                            "collection_rate": 0, "active_customers_count": 0,
+                            "orphan_invoice_count": 0, "orphan_invoice_total": 0},
+                "payment_details": [], "method_breakdown": {},
+                "top_packages": [], "overdue_list": [], "daily_breakdown": []
+            }
+        custs_q_for_inv["device_id"] = {"$in": allowed}
+
+    if custs_q_for_inv:
+        custs_for_inv = await db.customers.find(custs_q_for_inv, {"id": 1}).to_list(None)
+        q["customer_id"] = {"$in": [c["id"] for c in custs_for_inv]}
 
     invoices = await db.invoices.find(q, {"_id": 0}).to_list(10000)
 
@@ -1113,6 +1229,12 @@ async def create_invoice(data: InvoiceCreate, background_tasks: BackgroundTasks,
     customer = await db.customers.find_one({"id": data.customer_id})
     if not customer:
         raise HTTPException(404, "Customer tidak ditemukan")
+
+    # ── RBAC: cek hak akses user ke device customer ini ────────────────
+    customer_device_id = customer.get("device_id", "")
+    if not check_device_access(user, customer_device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk membuat tagihan untuk pelanggan pada router ini")
+
     pkg = await db.billing_packages.find_one({"id": data.package_id})
     if not pkg:
         raise HTTPException(404, "Paket tidak ditemukan")
@@ -1137,12 +1259,16 @@ async def create_invoice(data: InvoiceCreate, background_tasks: BackgroundTasks,
         db, data.customer_id, data.amount - data.discount, period_prefix
     )
     total = data.amount - data.discount + unique_code
-    
+
     doc = {
         "id": str(uuid.uuid4()),
         "invoice_number": _invoice_num(count + 1),
         "customer_id": data.customer_id,
+        "customer_name": customer.get("name", ""),
+        "customer_username": customer.get("username", ""),
         "package_id": data.package_id,
+        # ── Tenant key: simpan device_id dari customer agar invoice terisolasi per router
+        "device_id": customer_device_id,
         "amount": data.amount,
         "discount": data.discount,
         "unique_code": unique_code,
@@ -1158,13 +1284,12 @@ async def create_invoice(data: InvoiceCreate, background_tasks: BackgroundTasks,
     }
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
-    
+
     # ── Trigger WA Notifikasi Tagihan Baru ──
-    # FIX B9: Hanya kirim WA jika pelanggan punya nomor telepon (anti-spam)
     customer_phone = customer.get("phone", "")
     if customer_phone:
         background_tasks.add_task(_bg_send_whatsapp_reminders, [doc["id"]])
-    
+
     return doc
 
 
@@ -1191,8 +1316,19 @@ async def bulk_create_invoices(
     q = {"active": True}
     if service_type:
         q["service_type"] = service_type
-    if device_id:
-        q["device_id"] = device_id
+
+    # ── RBAC: filter customer berdasarkan allowed_devices ──────────────────
+    scope = get_user_allowed_devices(user)
+    if scope is None:
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return {"message": "Tidak ada device yang diizinkan", "created": 0, "skipped": 0, "errors": []}
+        q["device_id"] = {"$in": allowed}
 
     customers = await db.customers.find(q).to_list(5000)
 
@@ -1234,7 +1370,11 @@ async def bulk_create_invoices(
             "id": str(uuid.uuid4()),
             "invoice_number": _invoice_num(count + 1),
             "customer_id": c["id"],
+            "customer_name": c.get("name", ""),
+            "customer_username": c.get("username", ""),
             "package_id": c["package_id"],
+            # ── Tenant key: simpan device_id dari customer ke setiap invoice ──
+            "device_id": c.get("device_id", ""),
             "amount": pkg["price"],
             "discount": 0,
             "unique_code": unique_code,

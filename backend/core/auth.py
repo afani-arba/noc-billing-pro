@@ -247,3 +247,37 @@ def get_user_services(user: dict) -> set:
         return set(explicit)
     role = user.get("role", "viewer")
     return set(ROLE_DEFAULT_SERVICES.get(role, []))
+
+
+def get_user_allowed_devices(user: dict, all_device_ids: list | None = None) -> list | None:
+    """
+    Return list of device IDs the user is allowed to access.
+
+    - super_admin / administrator : None  (means ALL — no filter needed)
+    - Other roles with allowed_devices set : list of allowed IDs
+    - Other roles with NO allowed_devices  : [] (empty — no access to anything)
+
+    Usage in queries:
+        scope = get_user_allowed_devices(user)
+        if scope is not None:
+            query["device_id"] = {"$in": scope}
+    """
+    if _is_admin(user):
+        return None   # No restriction — caller should skip filter
+    allowed = user.get("allowed_devices")
+    if allowed is None:
+        # Non-admin with no explicit list → no device access
+        return []
+    return list(allowed)
+
+
+def build_device_filter(user: dict) -> dict:
+    """
+    Return a MongoDB query fragment that filters by allowed_devices for non-admin users.
+    Returns {} (empty dict = no filter) for super_admin/administrator.
+    Usage:  query.update(build_device_filter(user))
+    """
+    scope = get_user_allowed_devices(user)
+    if scope is None:
+        return {}   # Admin → no restriction
+    return {"device_id": {"$in": scope}}

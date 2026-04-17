@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from core.db import get_db
-from core.auth import get_current_user, require_write
+from core.auth import get_current_user, require_write, check_device_access
 import logging
 import time
 
@@ -85,12 +85,17 @@ async def get_monitoring_routers(user=Depends(get_current_user)):
     Kembalikan daftar device MikroTik yang terdaftar di sistem.
     Digunakan frontend untuk mengisi dropdown router.
     """
+    from core.auth import get_user_allowed_devices
     db = get_db()
-    # Device disimpan dengan field 'device_type' bukan 'type'
     devices = await db.devices.find(
         {},
         {"id": 1, "name": 1, "api_mode": 1, "status": 1, "_id": 0}
     ).to_list(100)
+
+    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    scope = get_user_allowed_devices(user)  # None = admin, list = allowed
+    if scope is not None:
+        devices = [d for d in devices if d.get("id") in scope]
     return devices
 
 
@@ -101,12 +106,15 @@ async def get_pppoe_active(
 ):
     """
     Ambil sesi PPPoE aktif secara real-time langsung dari MikroTik.
-
     Query param:
       router_id  — wajib diisi; ID device dari tabel devices.
     """
     if not router_id:
         return []
+
+    # ── RBAC: cek apakah user memiliki akses ke router ini ────────────────
+    if not check_device_access(user, router_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk memantau router ini")
 
     db = get_db()
     device = await db.devices.find_one({"id": router_id})

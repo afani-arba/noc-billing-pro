@@ -13,7 +13,10 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional
 from core.db import get_db
-from core.auth import get_current_user, require_admin, require_write
+from core.auth import (
+    get_current_user, require_admin, require_write,
+    check_device_access, get_user_allowed_devices
+)
 from mikrotik_api import get_api_client
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -121,8 +124,22 @@ async def list_customers(
         q["service_type"] = service_type
     if active is not None:
         q["active"] = active
-    if device_id:
-        q["device_id"] = device_id
+
+    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    scope = get_user_allowed_devices(user)  # None = admin (semua), [] = tidak ada akses
+    if scope is None:
+        # Admin: gunakan device_id dari query param jika ada
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        # Non-admin: batasi ke device yang diizinkan
+        allowed = scope
+        if device_id:
+            # Filter lebih lanjut ke device tertentu jika ada dalam scope
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return []
+        q["device_id"] = {"$in": allowed}
 
     cursor = db.customers.find(q, {"_id": 0})
     results = await cursor.to_list(length=1000)
@@ -149,6 +166,10 @@ async def get_customer(customer_id: str, user=Depends(get_current_user)):
 @router.post("", status_code=201)
 async def create_customer(data: CustomerCreate, background_tasks: BackgroundTasks, user=Depends(require_write)):
     db = get_db()
+
+    # ── RBAC: Cek hak akses user ke device yang dipilih ──────────────────
+    if not check_device_access(user, data.device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk menambahkan pelanggan ke router ini")
 
     # Cek duplicate username+device
     existing = await db.customers.find_one(
@@ -387,6 +408,10 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(r
     if not customer:
         raise HTTPException(404, "Customer tidak ditemukan")
 
+    # ── RBAC: cek apakah user memiliki hak akses ke device customer ini ───
+    if not check_device_access(user, customer.get("device_id", "")):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah pelanggan pada router ini")
+
     update = {k: v for k, v in data.dict().items() if v is not None}
     if not update:
         raise HTTPException(400, "Tidak ada data yang diupdate")
@@ -437,6 +462,14 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(r
 @router.delete("/{customer_id}")
 async def delete_customer(customer_id: str, user=Depends(require_admin)):
     db = get_db()
+    customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    if not customer:
+        raise HTTPException(404, "Customer tidak ditemukan")
+
+    # ── RBAC: admin non-super hanya bisa hapus pelanggan dari routernya sendiri ─
+    if not check_device_access(user, customer.get("device_id", "")):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus pelanggan pada router ini")
+
     result = await db.customers.delete_one({"id": customer_id})
     if result.deleted_count == 0:
         raise HTTPException(404, "Customer tidak ditemukan")
