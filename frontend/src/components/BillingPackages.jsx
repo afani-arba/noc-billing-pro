@@ -547,7 +547,8 @@ export function PackagesTab({ packages, onRefresh, deviceId, defaultServiceType 
   const [editPrice, setEditPrice] = useState({});
   const [savingPrice, setSavingPrice] = useState({});
   const { user } = useAuth();
-  const isAdmin = user?.role === "administrator";
+  const READONLY_ROLES = ["viewer", "helpdesk"];
+  const isAdmin = !READONLY_ROLES.includes(user?.role);
 
   // ── Filter berdasarkan jenis layanan ──
   let filteredPackages = packages;

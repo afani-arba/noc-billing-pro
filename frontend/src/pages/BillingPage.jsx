@@ -768,7 +768,8 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
   const [confirm, setConfirm] = useState(null);
   const [paymentInv, setPaymentInv] = useState(null);
   const { user } = useAuth();
-  const isAdmin = user?.role === "administrator";
+  const READONLY_ROLES = ["viewer", "helpdesk"];
+  const isAdmin = !READONLY_ROLES.includes(user?.role);
 
   const loadPage = useCallback(async (pg) => {
     setLoading(true);
@@ -1204,7 +1205,8 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
   const [savingPhone, setSavingPhone] = useState({});
   const [showPwd, setShowPwd] = useState({});  // { [customerId]: bool }
   const { user } = useAuth();
-  const isAdmin = ["administrator", "super_admin", "branch_admin"].includes(user?.role);
+  const READONLY_ROLES = ["viewer", "helpdesk"];
+  const isAdmin = !READONLY_ROLES.includes(user?.role);
 
   // Sync selectedRouter jika parent mengubah deviceId (RBAC lock)
   useEffect(() => {

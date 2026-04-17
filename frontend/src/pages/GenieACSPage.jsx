@@ -952,7 +952,8 @@ function FaultsTab() {
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const { user } = useAuth();
-  const isAdmin = user?.role === "administrator";
+  const READONLY_ROLES = ["viewer", "helpdesk"];
+  const isAdmin = !READONLY_ROLES.includes(user?.role);
 
   const loadFaults = () => {
     setLoading(true);
