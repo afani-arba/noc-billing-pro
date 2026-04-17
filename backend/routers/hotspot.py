@@ -9,7 +9,10 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from core.db import get_db
-from core.auth import get_current_user, require_admin, require_write, require_enterprise
+from core.auth import (
+    get_current_user, require_admin, require_write, require_enterprise,
+    check_device_access, get_user_allowed_devices
+)
 
 router = APIRouter(tags=["hotspot"])
 
@@ -96,8 +99,20 @@ async def list_hotspot_vouchers(
 ):
     db = get_db()
     q = {}
-    if device_id:
-        q["device_id"] = device_id
+
+    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    scope = get_user_allowed_devices(user)  # None = admin (semua)
+    if scope is None:
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return []
+        q["device_id"] = {"$in": allowed}
+
     if status:
         q["status"] = status
     if search:
@@ -149,6 +164,14 @@ async def update_hotspot_voucher(
     user=Depends(require_write),
 ):
     db = get_db()
+    voucher = await db.hotspot_vouchers.find_one({"id": voucher_id}, {"_id": 0})
+    if not voucher:
+        raise HTTPException(404, "Voucher tidak ditemukan")
+
+    # ── RBAC ────────────────────────────────────────────────────
+    if not check_device_access(user, voucher.get("device_id", "")):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah voucher pada router ini")
+
     update = {k: v for k, v in data.dict().items() if v is not None}
     if not update:
         raise HTTPException(400, "Tidak ada perubahan")
@@ -160,8 +183,7 @@ async def update_hotspot_voucher(
     # Sync ke MikroTik jika password berubah
     if data.password:
         try:
-            voucher = await db.hotspot_vouchers.find_one({"id": voucher_id})
-            device = await db.devices.find_one({"id": voucher.get("device_id")}) if voucher else None
+            device = await db.devices.find_one({"id": voucher.get("device_id")})
             if device:
                 from mikrotik_api import get_api_client
                 mt = get_api_client(device)
@@ -178,6 +200,10 @@ async def toggle_hotspot_voucher_status(voucher_id: str, user=Depends(require_wr
     voucher = await db.hotspot_vouchers.find_one({"id": voucher_id}, {"_id": 0})
     if not voucher:
         raise HTTPException(404, "Voucher tidak ditemukan")
+
+    # ── RBAC ────────────────────────────────────────────────────
+    if not check_device_access(user, voucher.get("device_id", "")):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah status voucher pada router ini")
 
     current_status = voucher.get("status", "new")
     new_status = "disabled" if current_status != "disabled" else "new"
@@ -260,6 +286,10 @@ async def delete_hotspot_voucher(voucher_id: str, user=Depends(require_write)):
     if not voucher:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
+    # ── RBAC ────────────────────────────────────────────────────
+    if not check_device_access(user, voucher.get("device_id", "")):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus voucher pada router ini")
+
     # Delete from MikroTik
     try:
         device = await db.devices.find_one({"id": voucher.get("device_id")})
@@ -286,8 +316,19 @@ async def list_hotspot_sales(
 ):
     db = get_db()
     q = {}
-    if device_id:
-        q["device_id"] = device_id
+
+    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    scope = get_user_allowed_devices(user)
+    if scope is None:
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return []
+        q["device_id"] = {"$in": allowed}
 
     sales = await db.hotspot_sales.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return sales
@@ -437,6 +478,11 @@ async def batch_create_hotspot_users(
     user=Depends(require_write),
 ):
     db = get_db()
+
+    # ── RBAC ────────────────────────────────────────────────────
+    if not check_device_access(user, device_id):
+        raise HTTPException(403, "Anda tidak memiliki hak akses untuk membuat voucher pada router ini")
+
     device = await db.devices.find_one({"id": device_id})
     if not device:
         raise HTTPException(404, "Device tidak ditemukan")
