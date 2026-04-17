@@ -421,8 +421,13 @@ async def get_activation_options(user=Depends(get_current_user)):
     """
     db = get_db()
     try:
+        scope = get_user_allowed_devices(user)
+        query = {}
+        if scope is not None:
+            query["id"] = {"$in": scope}
+            
         devices = await db.devices.find(
-            {}, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "api_mode": 1}
+            query, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "api_mode": 1}
         ).to_list(200)
         
         # Cari di 'type' atau 'service_type' agar paket hasil sync MikroTik muncul

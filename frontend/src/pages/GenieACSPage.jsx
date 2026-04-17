@@ -417,7 +417,12 @@ function ZTPModal({ device, onClose, onSuccess }) {
 
   useEffect(() => {
     api.get("/genieacs/activation-options")
-      .then(r => setOptions(r.data))
+      .then(r => {
+        setOptions(r.data);
+        if (r.data?.mikrotik_devices?.length === 1) {
+          setForm(f => ({ ...f, mikrotik_device_id: r.data.mikrotik_devices[0].id }));
+        }
+      })
       .catch(() => toast.error("Gagal memuat opsi aktivasi"))
       .finally(() => setLoadingOptions(false));
   }, []);
