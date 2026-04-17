@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import {
   Webhook, MessageSquare, CreditCard,
-  Save, Cable, Bot, Send, Cloud, RefreshCw, CheckCircle2, XCircle, Loader2, Eye, EyeOff
+  Save, Cable, Bot, Send, Cloud, RefreshCw, CheckCircle2, XCircle, Loader2, Eye, EyeOff,
+  WifiOff, Smartphone, AlertTriangle, Activity, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -369,19 +370,259 @@ function AIIntegrationSection() {
   );
 }
 
+// ── Billing Settings Section (WA Templates, Auto Isolir, FCM, Payment Gateway) ─
+function BillingSettingsSection() {
+  const [settings, setSettings] = useState({
+    wa_template_unpaid: "", wa_template_paid: "", wa_template_h1: "", wa_template_isolir: "",
+    fcm_template_h3: "", fcm_template_h2: "", fcm_template_h1: "", fcm_template_due: "",
+    fcm_template_overdue: "", fcm_template_paid: "", fcm_template_network_error: "",
+    auto_isolir_enabled: false, auto_isolir_method: "whatsapp", auto_isolir_time: "00:05",
+    auto_isolir_grace_days: 0, moota_webhook_secret: "", n8n_webhook_url: "",
+    payment_gateway_enabled: false, default_payment_provider: "xendit",
+    xendit_secret_key: "", xendit_webhook_token: "", xendit_va_bank: "BNI", xendit_enabled: false,
+    bca_client_id: "", bca_client_secret: "", bca_company_code: "", bca_api_key: "", bca_api_secret: "", bca_enabled: false,
+    bri_client_id: "", bri_client_secret: "", bri_institution_code: "", bri_enabled: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get("/billing/settings")
+      .then(r => setSettings(p => ({ ...p, ...r.data })))
+      .catch(() => toast.error("Gagal memuat pengaturan billing"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try { await api.put("/billing/settings", settings); toast.success("Pengaturan Billing disimpan ✓"); }
+    catch { toast.error("Gagal menyimpan"); }
+    setSaving(false);
+  };
+
+  const VARS = "{customer_name} {invoice_number} {package_name} {period} {total} {due_date} {payment_method}";
+
+  if (loading) return <div className="bg-card border border-border rounded-sm p-6 text-center text-sm text-muted-foreground animate-pulse">Memuat konfigurasi billing...</div>;
+
+  return (
+    <div className="space-y-4">
+
+      {/* WA Templates */}
+      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+          <div className="w-8 h-8 rounded-sm bg-green-500/10 flex items-center justify-center"><MessageCircle className="w-4 h-4 text-green-500" /></div>
+          <div>
+            <h2 className="text-base font-semibold">Template Pesan WhatsApp</h2>
+            <p className="text-[10px] text-muted-foreground">Variabel: <code className="bg-secondary/50 px-1 rounded text-primary text-[10px]">{VARS}</code></p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[
+            ["wa_template_unpaid", "Tagihan Baru (Unpaid)"],
+            ["wa_template_paid", "Pembayaran Lunas"],
+            ["wa_template_h1", "Pengingat H-1"],
+            ["wa_template_isolir", "Layanan Terisolir"],
+          ].map(([key, label]) => (
+            <div key={key} className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50">
+              <label className="text-xs font-semibold text-foreground">{label}</label>
+              <textarea
+                value={settings[key] || ""}
+                onChange={e => setSettings({ ...settings, [key]: e.target.value })}
+                className="w-full h-20 text-xs rounded-sm border border-input bg-background p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+          ))}
+        </div>
+        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 transition-colors">
+          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Template WA"}
+        </button>
+      </div>
+
+      {/* Auto Isolir */}
+      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+          <div className="w-8 h-8 rounded-sm bg-orange-500/10 flex items-center justify-center"><WifiOff className="w-4 h-4 text-orange-400" /></div>
+          <div><h2 className="text-base font-semibold">Auto Isolir</h2><p className="text-[10px] text-muted-foreground">Putus otomatis pelanggan overdue sesuai jadwal</p></div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={settings.auto_isolir_enabled || false} onChange={e => setSettings({ ...settings, auto_isolir_enabled: e.target.checked })} className="rounded" />
+          <span className="text-sm font-medium">Aktifkan Auto Isolir Pelanggan</span>
+        </label>
+        {settings.auto_isolir_enabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pl-6">
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Metode Notifikasi</label>
+              <select value={settings.auto_isolir_method || "whatsapp"} onChange={e => setSettings({ ...settings, auto_isolir_method: e.target.value })}
+                className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground">
+                <option value="whatsapp">Hanya WhatsApp</option>
+                <option value="ssid">Hanya Ganti SSID</option>
+                <option value="both">WA + Ganti SSID</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Jam Eksekusi Harian</label>
+              <input type="time" value={settings.auto_isolir_time || "00:05"} onChange={e => setSettings({ ...settings, auto_isolir_time: e.target.value })}
+                className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">Toleransi (Hari)</label>
+              <input type="number" min="0" value={settings.auto_isolir_grace_days ?? 0} onChange={e => setSettings({ ...settings, auto_isolir_grace_days: Number(e.target.value) })}
+                className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground font-mono" />
+            </div>
+          </div>
+        )}
+        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 transition-colors">
+          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Isolir"}
+        </button>
+      </div>
+
+      {/* FCM Templates */}
+      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+          <div className="w-8 h-8 rounded-sm bg-purple-500/10 flex items-center justify-center"><Smartphone className="w-4 h-4 text-purple-400" /></div>
+          <div><h2 className="text-base font-semibold">Template Push Notification (FCM)</h2><p className="text-[10px] text-muted-foreground">Notifikasi aplikasi portal pelanggan Android</p></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[
+            ["fcm_template_h3", "H-3 (3 Hari Sebelum JT)"],
+            ["fcm_template_h2", "H-2"],
+            ["fcm_template_h1", "H-1 (Besok JT)"],
+            ["fcm_template_due", "Hari Jatuh Tempo"],
+            ["fcm_template_overdue", "Terisolir / Overdue"],
+            ["fcm_template_paid", "Pembayaran Lunas"],
+          ].map(([key, label]) => (
+            <div key={key} className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50">
+              <label className="text-xs font-semibold text-foreground">{label}</label>
+              <textarea
+                value={settings[key] || ""}
+                onChange={e => setSettings({ ...settings, [key]: e.target.value })}
+                className="w-full h-16 text-xs rounded-sm border border-input bg-background p-2 text-foreground resize-y font-mono mt-1"
+              />
+            </div>
+          ))}
+          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-orange-500/30 md:col-span-2">
+            <label className="text-xs font-semibold text-orange-400 flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5" /> Gangguan Jaringan (Push Manual)
+            </label>
+            <textarea
+              value={settings.fcm_template_network_error || ""}
+              onChange={e => setSettings({ ...settings, fcm_template_network_error: e.target.value })}
+              className="w-full h-12 text-xs rounded-sm border border-orange-500/30 bg-orange-500/5 p-2 text-foreground resize-y font-mono mt-1"
+            />
+            <button
+              onClick={async () => {
+                if(!confirm("Kirim Push Notifikasi gangguan ke SEMUA pelanggan sekarang?")) return;
+                try { const r = await api.post("/billing/push/network-error"); r.data.ok ? toast.success(r.data.message) : toast.warning(r.data.message); }
+                catch(e) { toast.error(e.response?.data?.detail || "Gagal"); }
+              }}
+              className="inline-flex items-center gap-1 text-[10px] h-7 px-2 rounded-sm border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 transition-colors mt-1"
+            >
+              <Send className="w-3 h-3" /> Push Manual ke Semua Pelanggan
+            </button>
+          </div>
+        </div>
+        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors">
+          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Template FCM"}
+        </button>
+      </div>
+
+      {/* Payment Gateway */}
+      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+          <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><CreditCard className="w-4 h-4 text-emerald-400" /></div>
+          <div><h2 className="text-base font-semibold">Payment Gateway</h2><p className="text-[10px] text-muted-foreground">Xendit (VA/QRIS), BCA SNAP, BRI BRIVA</p></div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={!!settings.payment_gateway_enabled} onChange={e => setSettings({ ...settings, payment_gateway_enabled: e.target.checked })} className="w-4 h-4 rounded" />
+          <span className="text-xs font-medium">Aktifkan Payment Gateway</span>
+        </label>
+        {settings.payment_gateway_enabled && (
+          <div className="space-y-4">
+            <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-sm text-[10px] text-blue-300 space-y-1">
+              <p className="font-semibold">Webhook URLs — Daftarkan ke dashboard provider:</p>
+              <p className="font-mono">Xendit: <span className="text-sky-300">[domain]/api/webhook/xendit</span></p>
+              <p className="font-mono">BCA SNAP: <span className="text-sky-300">[domain]/api/webhook/bca</span></p>
+              <p className="font-mono">BRI BRIVA: <span className="text-sky-300">[domain]/api/webhook/bri</span></p>
+            </div>
+            {/* Xendit */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={!!settings.xendit_enabled} onChange={e => setSettings({ ...settings, xendit_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label className="text-xs font-semibold text-emerald-400">Xendit (VA + QRIS + E-Wallet)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[["xendit_secret_key","Secret Key","xnd_production_..."],["xendit_webhook_token","Webhook Token","token dari dashboard"]].map(([k,lb,ph]) => (
+                  <div key={k} className="space-y-1">
+                    <label className="text-[10px] text-muted-foreground">{lb}</label>
+                    <input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
+                      placeholder={ph} className="w-full h-7 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
+                  </div>
+                ))}
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground">Bank VA Default</label>
+                  <select value={settings.xendit_va_bank || "BNI"} onChange={e => setSettings({ ...settings, xendit_va_bank: e.target.value })}
+                    className="w-full h-7 text-xs rounded-sm border border-border bg-secondary px-2">
+                    {["BNI","BCA","BRI","MANDIRI","PERMATA","BSI","BJB"].map(b => <option key={b}>{b}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            {/* BCA */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={!!settings.bca_enabled} onChange={e => setSettings({ ...settings, bca_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label className="text-xs font-semibold text-blue-400">BCA SNAP (Virtual Account BCA)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[["bca_client_id","Client ID"],["bca_client_secret","Client Secret"],["bca_company_code","Company Code"],["bca_api_key","API Key"],["bca_api_secret","API Secret"]].map(([k,lb]) => (
+                  <div key={k} className="space-y-1">
+                    <label className="text-[10px] text-muted-foreground">{lb}</label>
+                    <input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
+                      className="w-full h-7 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* BRI */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={!!settings.bri_enabled} onChange={e => setSettings({ ...settings, bri_enabled: e.target.checked })} className="w-3.5 h-3.5" />
+                <label className="text-xs font-semibold text-sky-400">BRI BRIVA (Virtual Account BRI)</label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[["bri_client_id","Client ID"],["bri_client_secret","Client Secret"],["bri_institution_code","Institution Code"]].map(([k,lb]) => (
+                  <div key={k} className="space-y-1">
+                    <label className="text-[10px] text-muted-foreground">{lb}</label>
+                    <input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
+                      className="w-full h-7 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Konfigurasi Gateway"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function IntegrationSettingsPage() {
   return (
     <div className="space-y-4 pb-16">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-sm bg-orange-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-orange-400" /></div>
-        <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook N8N, WhatsApp Gateway, AI Chat, dan Telegram NOC</p></div>
+        <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook, WhatsApp, AI, Telegram NOC, Notifikasi Billing & Payment Gateway</p></div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { icon: Webhook, color: "text-orange-400", bg: "bg-orange-500/10", title: "N8N Webhook", sub: "Notifikasi pembayaran ke N8N" },
-          { icon: MessageSquare, color: "text-green-500", bg: "bg-green-500/10", title: "WhatsApp Gateway", sub: "Fonnte / Wablas / Custom API" },
-          { icon: Cloud, color: "text-orange-400", bg: "bg-orange-500/10", title: "Cloudflare Tunnel", sub: "Akses publik tanpa buka port" },
-          { icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10", title: "AI Chat + Telegram", sub: "Gemini AI + Alert NOC" },
+          { icon: Webhook, color: "text-orange-400", bg: "bg-orange-500/10", title: "N8N Webhook", sub: "Notifikasi ke N8N" },
+          { icon: MessageSquare, color: "text-green-500", bg: "bg-green-500/10", title: "WhatsApp Gateway", sub: "Fonnte / Wablas" },
+          { icon: Cloud, color: "text-orange-400", bg: "bg-orange-500/10", title: "Cloudflare Tunnel", sub: "Akses publik" },
+          { icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10", title: "AI Chat + Telegram", sub: "Gemini AI + NOC" },
+          { icon: CreditCard, color: "text-emerald-400", bg: "bg-emerald-500/10", title: "Billing & PG", sub: "Template & Gateway" },
         ].map(s => (
           <div key={s.title} className="bg-card border border-border rounded-sm p-3 flex items-center gap-3">
             <div className={`w-8 h-8 rounded-sm ${s.bg} flex items-center justify-center flex-shrink-0`}><s.icon className={`w-4 h-4 ${s.color}`} /></div>
@@ -392,6 +633,16 @@ export default function IntegrationSettingsPage() {
       <IntegrationSection />
       <CloudflareSection />
       <AIIntegrationSection />
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><Activity className="w-4 h-4 text-emerald-400" /></div>
+          <div>
+            <h2 className="text-base font-semibold">Konfigurasi Notifikasi & Pembayaran Billing</h2>
+            <p className="text-xs text-muted-foreground">Template WA, Auto Isolir, Template Push Notification, Payment Gateway</p>
+          </div>
+        </div>
+        <BillingSettingsSection />
+      </div>
     </div>
   );
 }

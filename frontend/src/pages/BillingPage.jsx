@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
@@ -30,7 +30,7 @@ import BillingGuidePage from "@/pages/BillingGuidePage";
 import { PackagesTab, PackageForm } from "@/components/BillingPackages";
 import PaymentGatewayModal from "@/components/PaymentGatewayModal";
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Utilities Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Utilities ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 const Rp = (n) => `Rp ${(Number(n) || 0).toLocaleString("id-ID")}`;
 const fmtRpShort = (val) => {
@@ -81,10 +81,10 @@ function StatusBadge({ status }) {
   );
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Print Invoice (CSS print-only) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Print Invoice (CSS print-only) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Stat Card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Stat Card ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 function StatCard({ label, value, sub, color, badge }) {
   return (
@@ -99,7 +99,7 @@ function StatCard({ label, value, sub, color, badge }) {
   );
 }
 
-// â”€â”€ ConfirmDialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ ConfirmDialog Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function ConfirmDialog({ open, title, message, onConfirm, onCancel, danger }) {
   if (!open) return null;
   return (
@@ -118,7 +118,7 @@ function ConfirmDialog({ open, title, message, onConfirm, onCancel, danger }) {
   );
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Invoice Detail Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Invoice Detail Modal ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
 function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
   const [method, setMethod] = useState("cash");
@@ -174,7 +174,7 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <div className="min-w-0 pr-2">
             <p className="text-xs font-mono text-muted-foreground truncate">{invoice.invoice_number}</p>
-            <h3 className="font-semibold truncate">{invoice.customer_name || "â€”"}</h3>
+            <h3 className="font-semibold truncate">{invoice.customer_name || "Ã¢â‚¬â€"}</h3>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 flex-wrap justify-end">
             <StatusBadge status={invoice.status} />
@@ -209,8 +209,8 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             {[
               ["Username", invoice.customer_username],
-              ["Telepon", invoice.customer_phone || "â€”"],
-              ["Paket", invoice.package_name || pkg.name || "â€”"],
+              ["Telepon", invoice.customer_phone || "Ã¢â‚¬â€"],
+              ["Paket", invoice.package_name || pkg.name || "Ã¢â‚¬â€"],
               ["Periode", `${fmtDate(invoice.period_start)} s/d ${fmtDate(invoice.period_end)}`],
               ["Jatuh Tempo", fmtDate(invoice.due_date)],
             ].map(([k, v]) => (
@@ -300,7 +300,7 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
   );
 }
 
-// â”€â”€ Janji Bayar Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Janji Bayar Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function JanjiBayarModal({ invoice, onClose, onSaved }) {
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(invoice.promise_date || "");
@@ -384,7 +384,7 @@ function JanjiBayarModal({ invoice, onClose, onSaved }) {
 }
 
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Main Page Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 export default function BillingPage() {
   const [tab, setTab] = useState("dashboard");
@@ -447,7 +447,6 @@ export default function BillingPage() {
     { id: "customers", label: "Pelanggan", icon: Users },
     { id: "packages", label: "Paket", icon: Package },
     { id: "monitoring", label: "Monitoring PPPoE", icon: Activity },
-    { id: "settings", label: "Pengaturan", icon: Settings },
     { id: "guide", label: "Panduan", icon: BookOpen },
   ];
 
@@ -526,7 +525,7 @@ export default function BillingPage() {
         {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} isLocked={isLocked} />}
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
         {tab === "monitoring" && <PpoeMonitoringTab deviceId={globalDeviceId} />}
-        {tab === "settings" && <SettingsTab />}
+
         {tab === "guide" && <BillingGuidePage />}
       </div>
     </div>
@@ -549,7 +548,7 @@ function DashboardTab({ month, year, deviceId }) {
       .then(r => setReport(r.data)).catch(() => {});
   }, [month, year, deviceId]);
 
-  // FIX B10: Hapus month/year dari deps â€” monthly-summary tidak butuh itu
+  // FIX B10: Hapus month/year dari deps Ã¢â‚¬â€ monthly-summary tidak butuh itu
   // Ini mencegah reload chart yang tidak diperlukan setiap bulan/tahun diganti
   useEffect(() => {
     api.get("/billing/monthly-summary", { params: { months: trendMonths, device_id: deviceId } })
@@ -568,7 +567,7 @@ function DashboardTab({ month, year, deviceId }) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* â”€â”€ Professional Header â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Professional Header Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/30 p-4 rounded-sm border border-border/50 backdrop-blur-sm">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -586,7 +585,7 @@ function DashboardTab({ month, year, deviceId }) {
 
       {report && (
         <div className="space-y-6">
-          {/* â”€â”€ Financial Cards â”€â”€ */}
+          {/* Ã¢â€â‚¬Ã¢â€â‚¬ Financial Cards Ã¢â€â‚¬Ã¢â€â‚¬ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <BillingSummaryCard 
               label="TOTAL TAGIHAN" 
@@ -622,7 +621,7 @@ function DashboardTab({ month, year, deviceId }) {
             />
           </div>
 
-          {/* â”€â”€ Efficiency Metrics (Bars) â”€â”€ */}
+          {/* Ã¢â€â‚¬Ã¢â€â‚¬ Efficiency Metrics (Bars) Ã¢â€â‚¬Ã¢â€â‚¬ */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-card/50 border border-border rounded-sm p-4">
               <div className="flex justify-between items-end mb-2">
@@ -657,7 +656,7 @@ function DashboardTab({ month, year, deviceId }) {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* â”€â”€ Recent Payments â”€â”€ */}
+            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Recent Payments Ã¢â€â‚¬Ã¢â€â‚¬ */}
             <div className="bg-card border border-border rounded-sm p-4">
               <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
                 <History className="w-4 h-4 text-emerald-400" />
@@ -672,7 +671,7 @@ function DashboardTab({ month, year, deviceId }) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold truncate">{pay.customer_name}</p>
-                        <p className="text-[10px] text-muted-foreground">{pay.invoice_number} Ã¢â‚¬Â¢ {new Date(pay.paid_at).toLocaleDateString("id-ID")}</p>
+                        <p className="text-[10px] text-muted-foreground">{pay.invoice_number} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {new Date(pay.paid_at).toLocaleDateString("id-ID")}</p>
                       </div>
                     </div>
                     <p className="text-xs font-mono font-bold text-emerald-400 shrink-0">+{Rp(pay.total)}</p>
@@ -681,7 +680,7 @@ function DashboardTab({ month, year, deviceId }) {
               </div>
             </div>
 
-            {/* â”€â”€ Arrears (Daftar Tunggakan) â”€â”€ */}
+            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Arrears (Daftar Tunggakan) Ã¢â€â‚¬Ã¢â€â‚¬ */}
             <div className="bg-card border border-border rounded-sm p-4">
               <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -709,7 +708,7 @@ function DashboardTab({ month, year, deviceId }) {
             </div>
           </div>
 
-          {/* â”€â”€ Revenue Progress Chart â”€â”€ */}
+          {/* Ã¢â€â‚¬Ã¢â€â‚¬ Revenue Progress Chart Ã¢â€â‚¬Ã¢â€â‚¬ */}
           <div className="bg-card border border-border rounded-sm p-5">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xs font-bold flex items-center gap-2">
@@ -796,7 +795,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
     loadPage(1);
   }, [month, year, activeTab, search, deviceId, serviceTypeFilter]); // eslint-disable-line
 
-  // Effect terpisah HANYA untuk paginasi â€” tidak tumpang tindih dengan filter change
+  // Effect terpisah HANYA untuk paginasi Ã¢â‚¬â€ tidak tumpang tindih dengan filter change
   const handlePageChange = useCallback((newPage) => {
     setPage(newPage);
     loadPage(newPage);
@@ -950,7 +949,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">{inv.customer_username}</p>
                     </td>
                     <td className="px-3 py-2.5 text-[10px] font-mono text-muted-foreground">
-                      {inv.customer_phone || "â€”"}
+                      {inv.customer_phone || "Ã¢â‚¬â€"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{inv.package_name}</td>
                     <td className="px-3 py-2.5 text-xs font-mono font-bold text-primary">{Rp(inv.total)}</td>
@@ -1071,7 +1070,7 @@ function InvoicesTab({ month, year, packages, customers, deviceId }) {
   );
 }
 
-// â”€â”€ Create Invoice Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Create Invoice Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function CreateInvoiceModal({ packages, customers, month, year, serviceType, onClose, onCreated }) {
   const [form, setForm] = useState({
@@ -1135,7 +1134,7 @@ function CreateInvoiceModal({ packages, customers, month, year, serviceType, onC
               <option value="">Pilih paket...</option>
               {/* FIX B3: Fallback ke field 'type' agar paket lama tetap muncul */}
               {packages.filter(p => (p.service_type === serviceType || p.type === serviceType) && p.active !== false).map(p => (
-                <option key={p.id} value={p.id}>{p.name} â€” {Rp(p.price)}</option>
+                <option key={p.id} value={p.id}>{p.name} Ã¢â‚¬â€ {Rp(p.price)}</option>
               ))}
             </select>
           </div>
@@ -1186,7 +1185,7 @@ function CreateInvoiceModal({ packages, customers, month, year, serviceType, onC
   );
 }
 
-// â”€â”€ Customers Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Customers Tab Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
   const [customers, setCustomers] = useState([]);
@@ -1374,7 +1373,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                             )}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground font-mono">{c.phone || "â€”"}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{c.phone || "Ã¢â‚¬â€"}</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-xs font-mono">{c.username}</td>
@@ -1382,7 +1381,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                         {c.password ? (
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] font-mono text-muted-foreground">
-                            {showPwd[c.id] ? c.password : "●●●●●●●●"}
+                            {showPwd[c.id] ? c.password : "â—â—â—â—â—â—â—â—"}
                             </span>
                             <button
                               onClick={() => setShowPwd(p => ({ ...p, [c.id]: !p[c.id] }))}
@@ -1395,10 +1394,10 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground/40">â€”</span>
+                          <span className="text-[10px] text-muted-foreground/40">Ã¢â‚¬â€</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "â€”"}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "Ã¢â‚¬â€"}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}</td>
                       <td className="px-3 py-2.5 text-[10px] text-muted-foreground">Tgl {c.due_day}</td>
                       <td className="px-3 py-2.5">
@@ -1465,7 +1464,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       </div>
                    </div>
                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/50">
-                      <div><span className="text-muted-foreground text-[10px] block">Router</span> {dev?.name || "â€”"}</div>
+                      <div><span className="text-muted-foreground text-[10px] block">Router</span> {dev?.name || "Ã¢â‚¬â€"}</div>
                       <div><span className="text-muted-foreground text-[10px] block">Jatuh Tempo</span> Tgl {c.due_day}</div>
                    </div>
                    <div className="text-xs pb-1">
@@ -1521,7 +1520,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
   );
 }
 
-// â”€â”€ Bulk Package Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Bulk Package Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function BulkPackageModal({ packages, selectedIds, onClose, onSaved }) {
   const [targetPackageId, setTargetPackageId] = useState("");
@@ -1570,7 +1569,7 @@ function BulkPackageModal({ packages, selectedIds, onClose, onSaved }) {
   );
 }
 
-// â”€â”€ Customer Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Customer Form Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function CustomerForm({ packages, initial, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -1749,7 +1748,7 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                       <option value="">Pilih Router MikroTik...</option>
                       {devices.map(d => (
                         <option key={d.id} value={d.id} disabled={!d.ip_address} className={!d.ip_address ? "text-red-400" : ""}>
-                          {d.name} {d.ip_address ? `(${d.ip_address})` : "[Ã¢Å¡Â Ã¯Â¸Â TANPA IP/HOST]"}
+                          {d.name} {d.ip_address ? `(${d.ip_address})` : "[ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â TANPA IP/HOST]"}
                         </option>
                       ))}
                     </select>
@@ -1786,7 +1785,7 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                     </div>
                     {isEdit && form.pppoe_password && (
                       <p className="text-[10px] text-amber-400 leading-relaxed">
-                        âš  Password baru akan disimpan ke database (RADIUS) dan MikroTik (jika local mode).
+                        Ã¢Å¡Â  Password baru akan disimpan ke database (RADIUS) dan MikroTik (jika local mode).
                       </p>
                     )}
                   </div>
@@ -1837,14 +1836,14 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                           value={form.package_id} 
                           onChange={e => set("package_id", e.target.value)}
                           className="w-full h-9 text-xs rounded-sm border border-border/50 bg-background px-3 text-emerald-500 font-bold focus:ring-1 focus:ring-emerald-500/30 outline-none transition-all">
-                          <option value="">— Belum ada paket dipilih —</option>
+                          <option value="">â€” Belum ada paket dipilih â€”</option>
                           {filteredPkgs.map(p => (
                             <option key={p.id} value={p.id} className="text-foreground">{p.name} ({Rp(p.price)})</option>
                           ))}
                         </select>
                         {form.device_id && filteredPkgs.length === 0 && (
                            <p className="text-[10px] text-amber-500 mt-1 font-bold">
-                             ⚠️ Router ini belum memiliki paket. Buat atau Sync Paket terlebih dahulu!
+                             âš ï¸ Router ini belum memiliki paket. Buat atau Sync Paket terlebih dahulu!
                            </p>
                         )}
                       </>
@@ -1947,7 +1946,7 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
   );
 }
 
-// â”€â”€ Import Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Import Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function ImportModal({ onClose, onImported }) {
   const [devices, setDevices] = useState([]);
@@ -2032,20 +2031,20 @@ function ImportModal({ onClose, onImported }) {
               {packageCheck.ok && (
                 <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-sm">
                   <p className="text-xs text-green-400 flex items-center gap-1.5">
-                    âœ“ Semua {packageCheck.totalPackages} paket sudah memiliki harga â€” import siap dilakukan
+                    Ã¢Å“â€œ Semua {packageCheck.totalPackages} paket sudah memiliki harga Ã¢â‚¬â€ import siap dilakukan
                   </p>
                 </div>
               )}
               {packageCheck.noPackages && (
                 <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-sm space-y-1">
-                  <p className="text-xs font-semibold text-amber-400">âš  Device belum memiliki paket ter-sync</p>
+                  <p className="text-xs font-semibold text-amber-400">Ã¢Å¡Â  Device belum memiliki paket ter-sync</p>
                   <p className="text-[10px] text-muted-foreground">Lakukan Sync Profile dari tab Paket terlebih dahulu sebelum import pelanggan.</p>
                 </div>
               )}
               {!packageCheck.ok && !packageCheck.noPackages && packageCheck.zeroPricePackages.length > 0 && (
                 <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-sm space-y-2">
                   <p className="text-xs font-semibold text-red-400">
-                    âœ— Import diblokir â€” {packageCheck.zeroPricePackages.length} paket belum ada harga
+                    Ã¢Å“â€” Import diblokir Ã¢â‚¬â€ {packageCheck.zeroPricePackages.length} paket belum ada harga
                   </p>
                   <p className="text-[10px] text-muted-foreground mb-1">Isi harga paket berikut di <b>tab Paket</b> dahulu:</p>
                   <div className="space-y-1 max-h-28 overflow-y-auto">
@@ -2056,6 +2055,7 @@ function ImportModal({ onClose, onImported }) {
                       </div>
                     ))}
                   </div>
+                  <p className="text-[10px] text-red-400/70 italic">Tutup dialog ini Ã¢â€ â€™ buka Tab Paket Ã¢â€ â€™ isi harga Ã¢â€ â€™ buka kembali dialog ini</p>
                   <p className="text-[10px] text-red-400/70 italic">Tutup dialog ini â†’ buka Tab Paket â†’ isi harga â†’ buka kembali dialog ini</p>
                 </div>
               )}
@@ -2090,7 +2090,7 @@ function ImportModal({ onClose, onImported }) {
 }
 
 
-// â”€â”€ Bulk Reminder Modal (WA Massal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 
 function BulkReminderModal({ invoices, onClose }) {
   const [sending, setSending] = useState(false);
@@ -2162,502 +2162,7 @@ function BulkReminderModal({ invoices, onClose }) {
     </div>
   );
 }
-
-// â”€â”€ Settings Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function SettingsTab() {
-  const [settings, setSettings] = useState({
-    wa_gateway_type: "fonnte",
-    wa_api_url: "https://api.fonnte.com/send",
-    wa_token: "",
-    wa_delay_ms: 10000,
-    wa_template_unpaid: "",
-    wa_template_paid: "",
-    wa_template_h1: "",
-    wa_template_isolir: "",
-    fcm_template_h3: "",
-    fcm_template_h2: "",
-    fcm_template_h1: "",
-    fcm_template_due: "",
-    fcm_template_overdue: "",
-    fcm_template_paid: "",
-    fcm_template_network_error: "",
-    auto_isolir_enabled: false,
-    auto_isolir_method: "whatsapp",
-    auto_isolir_time: "00:05",
-    auto_isolir_grace_days: 0,
-    n8n_webhook_url: "",
-    moota_webhook_secret: "",
-    payment_gateway_enabled: false,
-    default_payment_provider: "xendit",
-    xendit_secret_key: "",
-    xendit_webhook_token: "",
-    xendit_va_bank: "BNI",
-    xendit_enabled: false,
-    bca_client_id: "",
-    bca_client_secret: "",
-    bca_company_code: "",
-    bca_api_key: "",
-    bca_api_secret: "",
-    bca_enabled: false,
-    bri_client_id: "",
-    bri_client_secret: "",
-    bri_institution_code: "",
-    bri_enabled: false,
-  });
-  
-  const [pppoeSettings, setPppoeSettings] = useState({
-    pool_name: "pppoe-pool",
-    pool_ranges: "10.20.30.2-10.20.30.254",
-    gateway_ip: "10.20.30.1",
-    dns_servers: "8.8.8.8,1.1.1.1",
-    profile_name: "default"
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [savingPppoe, setSavingPppoe] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      api.get("/billing/settings").then(r => setSettings(p => ({ ...p, ...r.data }))),
-      api.get("/pppoe-settings").then(r => setPppoeSettings(p => ({ ...p, ...r.data })))
-    ]).catch(() => toast.error("Gagal memuat pengaturan")).finally(() => setLoading(false));
-  }, []);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await api.put("/billing/settings", settings);
-      toast.success("Pengaturan WhatsApp tersimpan!");
-    } catch {
-      toast.error("Gagal menyimpan pengaturan");
-    }
-    setSaving(false);
-  };
-
-  const handleSavePppoe = async () => {
-    setSavingPppoe(true);
-    try {
-      const r = await api.post("/pppoe-setup-pool", pppoeSettings);
-      toast.success(r.data.message);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Gagal menyimpan konfigurasi PPPoE Pool");
-    }
-    setSavingPppoe(false);
-  };
-
-  if (loading) return <p className="text-muted-foreground text-sm text-center py-8 animate-pulse">Memuat pengaturan...</p>;
-
-  return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <Send className="w-4 h-4 text-green-400" /> Konfigurasi Auto WhatsApp Gateway
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Jenis Gateway API</Label>
-            <select value={settings.wa_gateway_type || "fonnte"} onChange={e => setSettings({ ...settings, wa_gateway_type: e.target.value })}
-              className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground">
-              <option value="fonnte">Fonnte (Default)</option>
-              <option value="wablas">Wablas</option>
-              <option value="custom">Custom Server JSON</option>
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Jeda Antar Pesan (Rekomendasi 10000ms)</Label>
-            <Input value={settings.wa_delay_ms || 10000} onChange={e => setSettings({ ...settings, wa_delay_ms: Number(e.target.value) })}
-              type="number" className="h-8 rounded-sm text-xs font-mono" />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">URL Endpoint API</Label>
-          <Input value={settings.wa_api_url || ""} onChange={e => setSettings({ ...settings, wa_api_url: e.target.value })}
-            placeholder="https://api.fonnte.com/send" className="h-8 rounded-sm text-xs font-mono" />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">API Token / Authorization Header</Label>
-          <Input value={settings.wa_token || ""} onChange={e => setSettings({ ...settings, wa_token: e.target.value })}
-            type="password" placeholder="Key token untuk validasi WA..." className="h-8 rounded-sm text-xs font-mono" />
-        </div>
-
-        <div className="pt-4 mt-2 border-t border-border/50">
-          <div className="mb-4">
-            <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-green-500" /> Template Pesan WhatsApp
-            </h4>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Variabel otomatis yang bisa digunakan: <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{customer_name}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{invoice_number}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{package_name}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{period}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{total}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{due_date}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{payment_method}'}</code>
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-              <Label className="text-xs font-semibold text-foreground">Tagihan Baru (Unpaid)</Label>
-              <textarea
-                value={settings.wa_template_unpaid || ""}
-                onChange={e => setSettings({ ...settings, wa_template_unpaid: e.target.value })}
-                className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Halo {customer_name}, tagihan #{invoice_number} sebesar {total} jatuh tempo {due_date}..."
-              />
-            </div>
-
-            <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-              <Label className="text-xs font-semibold text-foreground">Pembayaran Lunas</Label>
-              <textarea
-                value={settings.wa_template_paid || ""}
-                onChange={e => setSettings({ ...settings, wa_template_paid: e.target.value })}
-                className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Terima kasih {customer_name}, pembayaran {invoice_number} via {payment_method} telah diterima."
-              />
-            </div>
-
-            <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-              <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                Pengingat H-1 (Besok Jatuh Tempo)
-              </Label>
-              <textarea
-                value={settings.wa_template_h1 || ""}
-                onChange={e => setSettings({ ...settings, wa_template_h1: e.target.value })}
-                className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Besok adalah batas akhir pembayaran..."
-              />
-            </div>
-
-            <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-              <Label className="text-xs font-semibold text-foreground">Layanan Terisolir / Diputus</Label>
-              <textarea
-                value={settings.wa_template_isolir || ""}
-                onChange={e => setSettings({ ...settings, wa_template_isolir: e.target.value })}
-                className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Yth. {customer_name}, koneksi Anda telah diisolir karena tunggakan..."
-              />
-            </div>
-          </div>
-        </div>
-
-        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 mt-4">
-          <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Pengaturan"}
-        </Button>
-      </div>
-
-      {/* FCM Push Notifications Settings */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <Smartphone className="w-4 h-4 text-purple-400" /> Template Notifikasi Aplikasi Android (Push)
-        </h3>
-        <p className="text-[10px] text-muted-foreground mt-1">
-          Variabel otomatis yang bisa digunakan: <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{customer_name}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{invoice_number}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{package_name}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{total}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{due_date}'}</code> <code className="bg-secondary/50 px-1 py-0.5 rounded text-primary">{'{payment_method}'}</code>
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">H-3 (3 Hari Sebelum Jatuh Tempo)</Label>
-            <textarea
-              value={settings.fcm_template_h3 || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_h3: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="Tagihan internet Anda {total} jatuh tempo dalam 3 hari pada {due_date}."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">H-2 (2 Hari Sebelum Jatuh Tempo)</Label>
-            <textarea
-              value={settings.fcm_template_h2 || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_h2: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="Tagihan internet Anda {total} jatuh tempo dalam 2 hari pada {due_date}."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">H-1 (Besok Jatuh Tempo)</Label>
-            <textarea
-              value={settings.fcm_template_h1 || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_h1: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="Besok adalah batas akhir pembayaran tagihan internet Anda sebesar {total}."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">Hari Jatuh Tempo / Due Date</Label>
-            <textarea
-              value={settings.fcm_template_due || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_due: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="HARI INI jatuh tempo pembayaran internet {total}. Mohon segera dilunasi."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">Terisolir / Overdue Lanjut</Label>
-            <textarea
-              value={settings.fcm_template_overdue || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_overdue: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="Layanan Anda telah TERISOLIR karena melewati batas waktu pembayaran. Segera lunasi {total}."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-border/50 shadow-sm">
-            <Label className="text-xs font-semibold text-foreground">Pembayaran Lunas & Dikonfirmasi</Label>
-            <textarea
-              value={settings.fcm_template_paid || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_paid: e.target.value })}
-              className="w-full h-24 text-xs rounded-sm border border-input bg-background/80 p-2 text-foreground resize-y font-mono mt-1"
-              placeholder="Terima kasih {customer_name}! Pembayaran tagihan #{invoice_number} berhasil."
-            />
-          </div>
-
-          <div className="space-y-1.5 bg-secondary/10 p-3 rounded-sm border border-orange-500/30 shadow-sm md:col-span-2 relative">
-            <Label className="text-xs font-semibold text-orange-400 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-orange-400" /> Pemberitahuan Jaringan Error (Push Manual)
-            </Label>
-            <textarea
-              value={settings.fcm_template_network_error || ""}
-              onChange={e => setSettings({ ...settings, fcm_template_network_error: e.target.value })}
-              className="w-full h-16 text-xs rounded-sm border border-orange-500/30 bg-orange-500/5 p-2 text-foreground resize-y font-mono mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-orange-500/50"
-              placeholder="Yth {customer_name}, terdapat gangguan jaringan pada sistem kami. Mohon maaf atas ketidaknyamanan ini."
-            />
-            <Button
-              onClick={async () => {
-                if(!confirm("Kirim Push Notifikasi gangguan massal ke SEMUA Pelanggan di Aplikasi Android sekarang?")) return;
-                try {
-                  const r = await api.post("/billing/push/network-error");
-                  if (r.data.ok) {
-                    toast.success(r.data.message || "Push Terkirim âœ…");
-                  } else {
-                    // ok:false = belum ada device terdaftar, bukan error fatal
-                    toast.warning(r.data.message || "Belum ada perangkat terdaftar.");
-                  }
-                } catch(e) {
-                  toast.error(e.response?.data?.detail || e.message || "Gagal mengirim Push Notifikasi");
-                }
-              }}
-              variant="outline"
-              size="sm"
-              className="mt-2 text-[10px] h-7 border-orange-500/30 text-orange-400 hover:bg-orange-500/10 gap-1 w-full sm:w-auto"
-            >
-              <Send className="w-3 h-3" /> Push Manual ke Semua Pelanggan
-            </Button>
-          </div>
-        </div>
-
-        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 mt-4 border-purple-500/30 text-purple-400 hover:bg-purple-500/10" variant="outline">
-          <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Pengaturan Aplikasi"}
-        </Button>
-      </div>
-
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <WifiOff className="w-4 h-4 text-orange-400" /> Konfigurasi Auto Isolir (Otomatis Putus)
-        </h3>
-        
-        <div className="space-y-3 bg-secondary/10 rounded-sm">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={settings.auto_isolir_enabled || false} onChange={e => setSettings({ ...settings, auto_isolir_enabled: e.target.checked })} className="rounded" />
-            <span className="text-sm font-medium">Aktifkan Auto Isolir Pelanggan</span>
-          </label>
-          <p className="text-[10px] text-muted-foreground pl-6">Sistem akan otomatis memutus koneksi pelanggan di MikroTik yang memiliki tagihan overdue sesuai jadwal eksekusi di bawah.</p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 pt-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Metode Notifikasi Isolir</Label>
-              <select value={settings.auto_isolir_method || "whatsapp"} onChange={e => setSettings({ ...settings, auto_isolir_method: e.target.value })}
-                className="w-full h-8 text-xs rounded-sm border border-border bg-secondary px-2 text-foreground break-all" disabled={!settings.auto_isolir_enabled}>
-                <option value="whatsapp">Hanya Kirim Pesan WhatsApp</option>
-                <option value="ssid">Hanya Ganti Nama WiFi (SSID)</option>
-                <option value="both">Keduanya (WA + Ganti Nama WiFi)</option>
-              </select>
-            </div>
-            
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Jam Eksekusi Harian</Label>
-              <Input value={settings.auto_isolir_time || "00:05"} onChange={e => setSettings({ ...settings, auto_isolir_time: e.target.value })}
-                type="time" className="h-8 rounded-sm text-xs font-mono" disabled={!settings.auto_isolir_enabled} />
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs text-muted-foreground">Toleransi Keterlambatan (Hari lewat jatuh tempo)</Label>
-              <Input value={settings.auto_isolir_grace_days ?? 0} onChange={e => setSettings({ ...settings, auto_isolir_grace_days: Number(e.target.value) })}
-                type="number" min="0" className="h-8 rounded-sm text-xs font-mono" disabled={!settings.auto_isolir_enabled} />
-            </div>
-          </div>
-        </div>
-
-        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 mt-4 border-orange-500/30 text-orange-400 hover:bg-orange-500/10" variant="outline">
-          <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Pengaturan Isolir"}
-        </Button>
-      </div>
-
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          Webhook & Integrasi Eksternal
-        </h3>
-        
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Moota Webhook Secret (Verifikasi Keamanan Bank)</Label>
-          <Input value={settings.moota_webhook_secret || ""} onChange={e => setSettings({ ...settings, moota_webhook_secret: e.target.value })}
-            type="password" placeholder="Simpan rahasia dari Moota di sini (opsional tapi sangat disarankan)" className="h-8 rounded-sm text-xs font-mono" />
-          <p className="text-[10px] text-muted-foreground">Isi dengan fitur <b>Secret / Signature</b> dari web dashboard Moota agar tidak ada attacker yang bisa memalsukan transaksi.</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">N8N Webhook URL (Notifikasi Pembayaran Eksternal)</Label>
-          <Input value={settings.n8n_webhook_url || ""} onChange={e => setSettings({ ...settings, n8n_webhook_url: e.target.value })}
-            placeholder="https://n8n.domain.com/webhook/..." className="h-8 rounded-sm text-xs font-mono" />
-        </div>
-
-        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 mt-4 border-blue-500/30 text-blue-400 hover:bg-blue-500/10" variant="outline">
-          <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Pengaturan Integrasi"}
-        </Button>
-      </div>
-
-      {/* Payment Gateway Settings */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <CreditCard className="w-4 h-4 text-emerald-400" /> Payment Gateway (VA / QRIS / E-Wallet)
-        </h3>
-        <div className="flex items-center gap-3 p-3 bg-secondary/30 rounded-sm border border-border/50">
-          <input type="checkbox" id="pg_enabled" checked={!!settings.payment_gateway_enabled}
-            onChange={e => setSettings({ ...settings, payment_gateway_enabled: e.target.checked })}
-            className="w-4 h-4 rounded" />
-          <label htmlFor="pg_enabled" className="text-xs font-medium cursor-pointer">
-            Aktifkan Payment Gateway (VA / QRIS / E-Wallet untuk Pembayaran Tagihan PPPoE)
-          </label>
-        </div>
-
-        {settings.payment_gateway_enabled && (
-          <div className="space-y-4">
-            <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-sm text-[10px] text-blue-300 space-y-1">
-              <p className="font-semibold">Webhook URLs — Daftarkan ke dashboard masing-masing provider:</p>
-              <p className="font-mono">Xendit: <span className="text-sky-300">[domain]/api/webhook/xendit</span></p>
-              <p className="font-mono">BCA SNAP: <span className="text-sky-300">[domain]/api/webhook/bca</span></p>
-              <p className="font-mono">BRI BRIVA: <span className="text-sky-300">[domain]/api/webhook/bri</span></p>
-            </div>
-
-            {/* Xendit */}
-            <div className="border border-border/50 rounded-sm p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="xendit_enabled" checked={!!settings.xendit_enabled}
-                  onChange={e => setSettings({ ...settings, xendit_enabled: e.target.checked })} className="w-3.5 h-3.5" />
-                <label htmlFor="xendit_enabled" className="text-xs font-semibold text-emerald-400 cursor-pointer">Xendit (VA + QRIS + E-Wallet)</label>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Secret Key</Label>
-                  <Input type="password" value={settings.xendit_secret_key || ""} onChange={e => setSettings({ ...settings, xendit_secret_key: e.target.value })}
-                    className="h-7 rounded-sm text-xs font-mono" placeholder="xnd_production_..." />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Webhook Token</Label>
-                  <Input type="password" value={settings.xendit_webhook_token || ""} onChange={e => setSettings({ ...settings, xendit_webhook_token: e.target.value })}
-                    className="h-7 rounded-sm text-xs font-mono" placeholder="token dari dashboard Xendit" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Bank VA Default</Label>
-                  <select value={settings.xendit_va_bank || "BNI"} onChange={e => setSettings({ ...settings, xendit_va_bank: e.target.value })}
-                    className="w-full h-7 text-xs rounded-sm border border-border bg-secondary px-2">
-                    {["BNI","BCA","BRI","MANDIRI","PERMATA","BSI","BJB"].map(b => <option key={b}>{b}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* BCA */}
-            <div className="border border-border/50 rounded-sm p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="bca_enabled" checked={!!settings.bca_enabled}
-                  onChange={e => setSettings({ ...settings, bca_enabled: e.target.checked })} className="w-3.5 h-3.5" />
-                <label htmlFor="bca_enabled" className="text-xs font-semibold text-blue-400 cursor-pointer">BCA SNAP (Virtual Account BCA)</label>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[["bca_client_id","Client ID"],["bca_client_secret","Client Secret"],["bca_company_code","Company Code"],["bca_api_key","API Key"],["bca_api_secret","API Secret"]].map(([k,lb]) => (
-                  <div key={k} className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground">{lb}</Label>
-                    <Input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
-                      className="h-7 rounded-sm text-xs font-mono" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* BRI */}
-            <div className="border border-border/50 rounded-sm p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="bri_enabled" checked={!!settings.bri_enabled}
-                  onChange={e => setSettings({ ...settings, bri_enabled: e.target.checked })} className="w-3.5 h-3.5" />
-                <label htmlFor="bri_enabled" className="text-xs font-semibold text-sky-400 cursor-pointer">BRI BRIVA (Virtual Account BRI)</label>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[["bri_client_id","Client ID"],["bri_client_secret","Client Secret"],["bri_institution_code","Institution Code"]].map(([k,lb]) => (
-                  <div key={k} className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground">{lb}</Label>
-                    <Input type="password" value={settings[k] || ""} onChange={e => setSettings({ ...settings, [k]: e.target.value })}
-                      className="h-7 rounded-sm text-xs font-mono" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" variant="outline">
-              <Save className="w-3.5 h-3.5" /> {saving ? "Menyimpan..." : "Simpan Konfigurasi Gateway"}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
-        <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border/50 pb-2 mb-2">
-          <Activity className="w-4 h-4 text-primary" /> Setup Otomatis IP Pool &amp; DNS PPPoE
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Nama IP Pool</Label>
-            <Input value={pppoeSettings.pool_name || ""} onChange={e => setPppoeSettings({ ...pppoeSettings, pool_name: e.target.value })}
-              className="h-8 rounded-sm text-xs" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Range IP Pool</Label>
-            <Input value={pppoeSettings.pool_ranges || ""} onChange={e => setPppoeSettings({ ...pppoeSettings, pool_ranges: e.target.value })}
-              className="h-8 rounded-sm text-xs font-mono" placeholder="10.20.30.2-10.20.30.254" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">IP Local (Gateway Pelanggan)</Label>
-            <Input value={pppoeSettings.gateway_ip || ""} onChange={e => setPppoeSettings({ ...pppoeSettings, gateway_ip: e.target.value })}
-              className="h-8 rounded-sm text-xs font-mono" placeholder="10.20.30.1" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Nama Profile MikroTik Target</Label>
-            <Input value={pppoeSettings.profile_name || ""} onChange={e => setPppoeSettings({ ...pppoeSettings, profile_name: e.target.value })}
-              className="h-8 rounded-sm text-xs" placeholder="default" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs text-muted-foreground">DNS Servers</Label>
-            <Input value={pppoeSettings.dns_servers || ""} onChange={e => setPppoeSettings({ ...pppoeSettings, dns_servers: e.target.value })}
-              className="h-8 rounded-sm text-xs font-mono" placeholder="8.8.8.8,1.1.1.1" />
-            <p className="text-[10px] text-muted-foreground">DNS yang akan diterima client. Contoh: 8.8.8.8,1.1.1.1</p>
-          </div>
-        </div>
-
-        <Button onClick={handleSavePppoe} disabled={savingPppoe} className="w-full sm:w-auto text-xs h-8 rounded-sm gap-2 mt-4 border-primary/30 text-primary hover:bg-primary/10" variant="outline">
-          <Save className="w-3.5 h-3.5" /> {savingPppoe ? "Menyimpan & Push ke Mikrotik..." : "Simpan & Konfigurasikan MikroTik"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// â”€â”€ Import CSV Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Import CSV Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 function ImportCsvModal({ onClose, onImported }) {
   const [file, setFile] = useState(null);
@@ -2713,7 +2218,7 @@ function ImportCsvModal({ onClose, onImported }) {
   );
 }
 
-// â”€â”€ Monitoring PPPoE Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Ã¢â€â‚¬Ã¢â€â‚¬ Monitoring PPPoE Tab Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // This file is appended to BillingPage.jsx by the build script
 
 function PpoeMonitoringTab({ deviceId }) {
@@ -2973,7 +2478,7 @@ function PpoeMonitoringTab({ deviceId }) {
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono bg-secondary/50 px-1 py-0.5 rounded text-[11px] min-w-[70px] inline-block">
-                            {showPwd[a.name] ? (a.password || "-") : "●●●●●●●●"}
+                            {showPwd[a.name] ? (a.password || "-") : "â—â—â—â—â—â—â—â—"}
                           </span>
                           <button onClick={() => togglePwd(a.name)} className="text-muted-foreground hover:text-foreground">
                             {showPwd[a.name] ? <EyeOff className="w-3.5 h-3.5"/> : <Eye className="w-3.5 h-3.5"/>}
@@ -3034,7 +2539,7 @@ function PpoeMonitoringTab({ deviceId }) {
                     : `${actives.length} sesi PPPoE aktif`}
                   {actives.filter(a => a.is_radius).length > 0 && (
                     <span className="ml-2 text-purple-400">
-                      • {actives.filter(a => a.is_radius).length} via RADIUS
+                      â€¢ {actives.filter(a => a.is_radius).length} via RADIUS
                     </span>
                   )}
                 </span>

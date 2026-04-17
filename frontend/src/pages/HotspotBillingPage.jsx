@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { PackagesTab } from "@/components/BillingPackages";
 import { toast } from "sonner";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const fmt = (n) => `Rp ${parseInt(n || 0).toLocaleString("id-ID")}`;
 
 const VoucherStatusBadge = ({ status }) => {
@@ -64,11 +64,11 @@ const TabBtn = ({ active, onClick, icon: Icon, label }) => (
   </button>
 );
 
-// ─── RADIUS Status Badge ───────────────────────────────────────────────────────
+// â”€â”€â”€ RADIUS Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const RadiusBadge = ({ enabled, loading }) => {
   if (loading) return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-muted text-muted-foreground border-border">
-      <Loader2 className="w-3 h-3 animate-spin" /> Memeriksa…
+      <Loader2 className="w-3 h-3 animate-spin" /> Memeriksaâ€¦
     </span>
   );
   return enabled
@@ -76,7 +76,7 @@ const RadiusBadge = ({ enabled, loading }) => {
     : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-red-500/10 text-red-400 border-red-500/20"><XCircle className="w-3 h-3" /> RADIUS Tidak Aktif</span>;
 };
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function HotspotBillingPage() {
   const { user } = useAuth();
   const isViewer = user?.role === "viewer" || user?.role === "helpdesk";
@@ -304,7 +304,7 @@ export default function HotspotBillingPage() {
   }, [activeTab, fetchVouchers, fetchSales, fetchWaOrders]);
 
   // FIX: Satu interval yang menggabungkan ticker 1s (UI) dan refresh 10s (data)
-  // Sebelumnya ada 2 interval terpisah — mubazir dan bisa bentrok
+  // Sebelumnya ada 2 interval terpisah â€” mubazir dan bisa bentrok
   useEffect(() => {
     let tick = 0;
     const timer = setInterval(() => {
@@ -354,7 +354,7 @@ export default function HotspotBillingPage() {
     if (v.rem_validity_secs === undefined || v.rem_validity_secs === null || v.rem_validity_secs >= 999999999) return "Unlimited";
     
     let rem = v.rem_validity_secs;
-    // Validitas berbasis kalender — terus mundur saat active MAUPUN offline
+    // Validitas berbasis kalender â€” terus mundur saat active MAUPUN offline
     // Hanya berhenti jika voucher berstatus 'new' (belum pernah dipakai sama sekali)
     if (v.status === "active" || v.status === "offline") {
       const diff = Math.floor((now - lastFetchTime.current) / 1000);
@@ -399,7 +399,7 @@ export default function HotspotBillingPage() {
           uptime_limit: form.uptime_limit, validity: form.validity });
       }
       await api.post(`/hotspot-users/batch?device_id=${selectedDevice}`, { users: batch });
-      toast.success(`✅ ${form.count} voucher berhasil dibuat dan disimpan ke database!`);
+      toast.success(`âœ… ${form.count} voucher berhasil dibuat dan disimpan ke database!`);
       setGeneratedVouchers(preview);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal membuat voucher");
@@ -446,7 +446,7 @@ export default function HotspotBillingPage() {
   const vOffline = vouchers.filter(v => v.session_start_time && v.status !== "active" && v.status !== "expired").length;
   const vExpired = vouchers.filter(v => v.status === "expired").length;
 
-  const fmtDt = (s) => s ? new Date(s).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
+  const fmtDt = (s) => s ? new Date(s).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "â€”";
 
   const parseUptime = (str) => {
     if (!str) return 0;
@@ -485,12 +485,11 @@ export default function HotspotBillingPage() {
     return res;
   };
   const tabs = [
-    { id: "wa_orders", label: "📲 Pesanan WA", icon: MessageCircle },
+    { id: "wa_orders", label: "ðŸ“² Pesanan WA", icon: MessageCircle },
     { id: "vouchers", label: "Voucher History", icon: RpIcon },
     { id: "sales", label: "Laporan penjualan", icon: TrendingUp },
     { id: "packages", label: "Paket Layanan", icon: Package },
     { id: "generator", label: "Generator", icon: Zap },
-    { id: "settings", label: "Settings", icon: Settings2 },
   ];
 
   return (
@@ -527,11 +526,11 @@ export default function HotspotBillingPage() {
                       <div className="flex items-center gap-2">
                         <span>{d.name}</span>
                         {rs?.loading ? (
-                          <span className="text-[9px] text-muted-foreground">…</span>
+                          <span className="text-[9px] text-muted-foreground">â€¦</span>
                         ) : rs?.radius_enabled ? (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">RADIUS ✓</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">RADIUS âœ“</span>
                         ) : (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">RADIUS ✗</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">RADIUS âœ—</span>
                         )}
                       </div>
                     </SelectItem>
@@ -615,7 +614,7 @@ export default function HotspotBillingPage() {
           <DialogHeader>
             <DialogTitle>Tandai Lunas Manual</DialogTitle>
             <DialogDescription>
-              Pesanan <b>{waPayModal?.name || waPayModal?.invoice}</b> — konfirmasi metode pembayaran sebelum melanjutkan.
+              Pesanan <b>{waPayModal?.name || waPayModal?.invoice}</b> â€” konfirmasi metode pembayaran sebelum melanjutkan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -625,10 +624,10 @@ export default function HotspotBillingPage() {
                 <SelectValue placeholder="Pilih metode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">💵 Cash / Tunai</SelectItem>
-                <SelectItem value="transfer">🏦 Transfer Bank</SelectItem>
-                <SelectItem value="qris">📱 QRIS</SelectItem>
-                <SelectItem value="transfer_moota">🤖 Transfer (Auto-Moota)</SelectItem>
+                <SelectItem value="cash">ðŸ’µ Cash / Tunai</SelectItem>
+                <SelectItem value="transfer">ðŸ¦ Transfer Bank</SelectItem>
+                <SelectItem value="qris">ðŸ“± QRIS</SelectItem>
+                <SelectItem value="transfer_moota">ðŸ¤– Transfer (Auto-Moota)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -659,7 +658,7 @@ export default function HotspotBillingPage() {
                 <h2 className="text-base font-semibold flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-green-400" /> Pesanan Voucher dari WhatsApp AI
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Invoice otomatis dari AI Sales Agent (Sherly/Niken) — tersimpan TERPISAH dari tagihan PPPoE</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Invoice otomatis dari AI Sales Agent (Sherly/Niken) â€” tersimpan TERPISAH dari tagihan PPPoE</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {["", "unpaid", "paid"].map(f => (
@@ -671,7 +670,7 @@ export default function HotspotBillingPage() {
                           : "border-border text-foreground bg-muted"
                         : "border-border/30 text-muted-foreground/50"
                     }`}>
-                    {f === "" ? "Semua" : f === "unpaid" ? "⏳ Belum Bayar" : "✅ Sudah Bayar"}
+                    {f === "" ? "Semua" : f === "unpaid" ? "â³ Belum Bayar" : "âœ… Sudah Bayar"}
                   </button>
                 ))}
                 <button onClick={fetchWaOrders}
@@ -698,7 +697,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {waOrdersLoading ? (
                       <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan WA…
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan WAâ€¦
                       </td></tr>
                     ) : waOrders.length === 0 ? (
                       <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
@@ -709,10 +708,10 @@ export default function HotspotBillingPage() {
                       <tr key={o.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.invoice_number}</td>
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-sm">{o.customer_name || '—'}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{o.customer_phone || '—'}</p>
+                          <p className="font-semibold text-sm">{o.customer_name || 'â€”'}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{o.customer_phone || 'â€”'}</p>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.package_name || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.package_name || 'â€”'}</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-primary">{fmt(o.total)}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -720,10 +719,10 @@ export default function HotspotBillingPage() {
                             : o.status === 'overdue' ? 'bg-red-500/10 text-red-400 border-red-500/20'
                             : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           }`}>
-                            {o.status === 'paid' ? '✅ Lunas' : o.status === 'overdue' ? '⚠️ Kedaluwarsa' : '⏳ Pending'}
+                            {o.status === 'paid' ? 'âœ… Lunas' : o.status === 'overdue' ? 'âš ï¸ Kedaluwarsa' : 'â³ Pending'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '—'}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : 'â€”'}</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1 justify-center">
                             {/* FIX: Tambah tombol Tandai Lunas untuk order yang belum bayar */}
@@ -803,7 +802,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {vLoading ? (
                       <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat…
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuatâ€¦
                       </td></tr>
                     ) : vouchers.length === 0 ? (
                       <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
@@ -812,12 +811,12 @@ export default function HotspotBillingPage() {
                       </td></tr>
                     ) : vouchers.map(v => (
                       <tr key={v.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "—"}</td>
+                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "â€”"}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{v.username} <div className="text-[10px] text-muted-foreground">Pass: {v.password}</div></td>
-                        <td className="px-4 py-3 text-xs">{v.profile || "—"}</td>
+                        <td className="px-4 py-3 text-xs">{v.profile || "â€”"}</td>
                         <td className="px-4 py-3 text-xs">
                           {v.uptime_limit ? <div className="text-primary font-semibold">Limit: {v.uptime_limit}</div> : null}
-                          <div className="text-[10px] text-muted-foreground">Aktif: {v.validity || "—"}</div>
+                          <div className="text-[10px] text-muted-foreground">Aktif: {v.validity || "â€”"}</div>
                         </td>
                         <td className="px-4 py-3 text-xs">
                            <span className="font-mono bg-muted/50 px-1 py-0.5 rounded">{getLiveUptime(v)}</span>
@@ -843,7 +842,7 @@ export default function HotspotBillingPage() {
 
                         <td className="px-4 py-3 text-right font-medium">{fmt(v.price)}</td>
                         <td className="px-4 py-3 text-center"><VoucherStatusBadge status={v.status} /></td>
-                        {/* Kolom Login Pertama — menggunakan session_start_time dari backend */}
+                        {/* Kolom Login Pertama â€” menggunakan session_start_time dari backend */}
                         <td className="px-4 py-3 text-xs min-w-[120px]">
                           {v.session_start_time ? (
                             <div className="space-y-0.5">
@@ -924,7 +923,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {salesLoading ? (
                       <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat laporan…
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat laporanâ€¦
                       </td></tr>
                     ) : sales.length === 0 ? (
                       <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">
@@ -935,7 +934,7 @@ export default function HotspotBillingPage() {
                       <tr key={s.id || i} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{s.username}</td>
                         <td className="px-4 py-3 text-right font-semibold text-green-400">{fmt(s.price)}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{s.device_name || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{s.device_name || "â€”"}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDt(s.created_at)}</td>
                       </tr>
                     ))}
@@ -963,7 +962,7 @@ export default function HotspotBillingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Jumlah Voucher (1–100)</Label>
+                <Label className="text-xs text-muted-foreground">Jumlah Voucher (1â€“100)</Label>
                 <Input type="number" min={1} max={100} value={form.count}
                   onChange={e => setForm({ ...form, count: parseInt(e.target.value) || 0 })}
                   className="h-9 text-sm rounded-sm" />
@@ -1072,121 +1071,6 @@ export default function HotspotBillingPage() {
           </div>
         )}
 
-        {activeTab === "settings" && (
-          <div className="max-w-2xl mx-auto">
-            {/* WA & N8N Integration */}
-            <div className="bg-card border border-border rounded-lg p-5 space-y-4">
-              <div>
-                <h2 className="text-sm font-semibold flex items-center gap-2"><MessageSquare className="w-4 h-4 text-primary" /> WA & N8N Integration</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Konfigurasi WhatsApp & N8N Webhook untuk Login Page</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">📱 Nomor WA Bot (untuk Login Page)</Label>
-                <Input value={settings.wa_number || ""}
-                  onChange={e => setSettings({ ...settings, wa_number: e.target.value })}
-                  placeholder="628xxxxxxxxxx"
-                  className="h-9 text-sm rounded-sm font-mono" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Key className="w-3 h-3" /> ZTP Webhook Key</Label>
-                <Input value={settings.ztp_webhook_key || ""}
-                  onChange={e => setSettings({ ...settings, ztp_webhook_key: e.target.value })}
-                  type="password" placeholder="Secret key..." className="h-9 text-sm rounded-sm font-mono" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="w-3 h-3" /> URL N8N Webhook</Label>
-                <Input value={settings.n8n_webhook_url || ""}
-                  onChange={e => setSettings({ ...settings, n8n_webhook_url: e.target.value })}
-                  placeholder="https://..." className="h-9 text-sm rounded-sm" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Image className="w-3 h-3" /> URL Gambar QRIS Statis</Label>
-                <Input value={settings.qris_image_url || ""}
-                  onChange={e => setSettings({ ...settings, qris_image_url: e.target.value })}
-                  placeholder="https://..." className="h-9 text-sm rounded-sm" />
-              </div>
-              
-              <hr className="border-border my-6" />
-
-              <div>
-                <h2 className="text-sm font-semibold flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" /> Pembayaran Portal (Moota)</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Konfigurasi transfer bank otomatis untuk pembelian paket langsung di portal</p>
-              </div>
-
-              <div className="flex items-center gap-2 py-2">
-                <input type="checkbox" id="payment_enabled" className="rounded bg-background" 
-                  checked={settings.payment_enabled || false}
-                  onChange={e => setSettings({ ...settings, payment_enabled: e.target.checked })} />
-                <Label htmlFor="payment_enabled" className="text-sm cursor-pointer font-medium">Aktifkan Pembelian Mandiri di Portal</Label>
-              </div>
-
-              {settings.payment_enabled && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-lg border border-border mt-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Nama Bank</Label>
-                    <Input value={settings.bank_name || ""}
-                      onChange={e => setSettings({ ...settings, bank_name: e.target.value })}
-                      placeholder="Contoh: BCA" className="h-9 text-sm rounded-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Nomor Rekening</Label>
-                    <Input value={settings.bank_account_number || ""}
-                      onChange={e => setSettings({ ...settings, bank_account_number: e.target.value })}
-                      placeholder="Contoh: 8520..." className="h-9 text-sm rounded-sm font-mono" />
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label className="text-xs text-muted-foreground">Atas Nama</Label>
-                    <Input value={settings.bank_account_name || ""}
-                      onChange={e => setSettings({ ...settings, bank_account_name: e.target.value })}
-                      placeholder="Contoh: PT Arsya Barokah Abadi" className="h-9 text-sm rounded-sm" />
-                  </div>
-                </div>
-              )}
-
-              <hr className="border-border my-6" />
-
-              <div>
-                <h2 className="text-sm font-semibold flex items-center gap-2"><Image className="w-4 h-4 text-primary" /> Branding Portal Login</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Sesuaikan tampilan Captive Portal Anda</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Judul Portal</Label>
-                  <Input value={settings.portal_title || ""}
-                    onChange={e => setSettings({ ...settings, portal_title: e.target.value })}
-                    placeholder="Hotspot Internet" className="h-9 text-sm rounded-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Tema Warna (Hex)</Label>
-                  <div className="flex gap-2">
-                    <Input type="color" value={settings.portal_color || "#38bdf8"}
-                      onChange={e => setSettings({ ...settings, portal_color: e.target.value })}
-                      className="w-12 h-9 p-1 cursor-pointer rounded-sm bg-background border border-border" />
-                    <Input value={settings.portal_color || ""}
-                      onChange={e => setSettings({ ...settings, portal_color: e.target.value })}
-                      placeholder="#38bdf8" className="h-9 text-sm rounded-sm flex-1 font-mono uppercase" />
-                  </div>
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs text-muted-foreground">Deskripsi / Tagline Singkat</Label>
-                  <Textarea value={settings.portal_subtitle || ""}
-                    onChange={e => setSettings({ ...settings, portal_subtitle: e.target.value })}
-                    placeholder="Nikmati akses internet cepat dan stabil" className="text-sm rounded-sm resize-none h-16" />
-                </div>
-              </div>
-
-              <Button onClick={handleSaveSettings} disabled={savingSettings || isViewer} className="w-full gap-2 rounded-sm mt-4">
-                {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
-                Simpan Pengaturan Hotspot
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
