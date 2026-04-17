@@ -1004,15 +1004,19 @@ function PeeringEyePageInner() {
     api.get("/peering-eye/devices")
       .then(r => {
         const allPeeringDevs = r.data || [];
-        // Filter peering devices berdasarkan allowed_devices RBAC
+        // RBAC filter: tunggu allowedDevList selesai load (jangan filter kalau masih kosong saat loading)
+        // Gunakan isAdmin dari hook untuk bedakan "admin lihat semua" vs "user tanpa device"
         const filtered = allowedDevList.length === 0
-          ? allPeeringDevs
+          ? allPeeringDevs  // admin atau belum load: tampilkan semua
           : allPeeringDevs.filter(pd => allowedDevList.some(d => d.id === pd.device_id));
         setPeeringDevices(filtered);
-        // Auto-select jika terkunci (1 device)
+        // Auto-select & lock jika user hanya punya 1 device
         if (isLocked && defaultDeviceId) {
           const locked = filtered.find(pd => pd.device_id === defaultDeviceId);
           if (locked) setSelectedDev(locked);
+        } else if (isLocked && filtered.length === 1) {
+          // Fallback: lock ke device pertama yg tersedia meski defaultDeviceId berbeda
+          setSelectedDev(filtered[0]);
         }
       })
       .catch(() => {});
@@ -1020,6 +1024,16 @@ function PeeringEyePageInner() {
       .then(r => setBgpSettings(r.data))
       .catch(() => {});
   }, [allowedDevList, isLocked, defaultDeviceId]);
+  // Pastikan selectedDev selalu terkunci jika isLocked (misal jika user coba reset)
+  useEffect(() => {
+    if (isLocked && defaultDeviceId && peeringDevices.length > 0) {
+      const locked = peeringDevices.find(pd => pd.device_id === defaultDeviceId)
+        || peeringDevices[0];
+      if (locked && (!selectedDev || selectedDev.device_id !== locked.device_id)) {
+        setSelectedDev(locked);
+      }
+    }
+  }, [isLocked, defaultDeviceId, peeringDevices, selectedDev]);
 
   // Alias agar tidak perlu ubah referensi lama
   const devices = peeringDevices;
@@ -1172,37 +1186,51 @@ function PeeringEyePageInner() {
             )}
           </div>
 
-          {/* Device Picker */}
+          {/* Device Picker — dikunci jika isLocked (user hanya punya 1 device) */}
           <div className="relative">
-            <button
-              onClick={() => { setShowDevDropdown(v => !v); setShowRangeDropdown(false); }}
-              className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-sm text-xs hover:bg-secondary/20 transition-colors min-w-[160px] justify-between"
-            >
-              <div className="flex items-center gap-1.5 truncate">
-                <Server className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                <span className="truncate">{selectedDev ? selectedDev.device_name : "Semua Router"}</span>
+            {isLocked ? (
+              // LOCKED: tampilkan label statis, tidak bisa diklik
+              <div className="flex items-center gap-2 px-3 py-2 bg-card border border-primary/40 rounded-sm text-xs min-w-[160px] cursor-not-allowed opacity-90">
+                <Server className="w-3 h-3 text-primary flex-shrink-0" />
+                <span className="truncate text-primary font-semibold">
+                  {selectedDev?.device_name || peeringDevices[0]?.device_name || "Memuat..."}
+                </span>
+                <span className="ml-auto text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Terkunci</span>
               </div>
-              <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-            </button>
-            {showDevDropdown && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-sm shadow-xl min-w-[220px] max-h-64 overflow-y-auto">
+            ) : (
+              // NOT LOCKED: dropdown normal
+              <>
                 <button
-                  onClick={() => { setSelectedDev(null); setShowDevDropdown(false); }}
-                  className={`w-full text-left px-3 py-2.5 text-xs hover:bg-secondary/30 flex items-center gap-2 ${!selectedDev ? "text-primary bg-primary/10" : ""}`}
+                  onClick={() => { setShowDevDropdown(v => !v); setShowRangeDropdown(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-sm text-xs hover:bg-secondary/20 transition-colors min-w-[160px] justify-between"
                 >
-                  <Globe className="w-3 h-3" /> Semua Router
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Server className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                    <span className="truncate">{selectedDev ? selectedDev.device_name : "Semua Router"}</span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                 </button>
-                {devices.map(d => (
-                  <button
-                    key={d.device_id}
-                    onClick={() => { setSelectedDev(d); setShowDevDropdown(false); }}
-                    className={`w-full text-left px-3 py-2.5 text-xs hover:bg-secondary/30 flex items-center gap-2 justify-between ${selectedDev?.device_id === d.device_id ? "text-primary bg-primary/10" : ""}`}
-                  >
-                    <span className="truncate">{d.device_name}</span>
-                    <span className="text-[9px] text-muted-foreground font-mono shrink-0">{fmtNum(d.total_hits)} hits</span>
-                  </button>
-                ))}
-              </div>
+                {showDevDropdown && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-sm shadow-xl min-w-[220px] max-h-64 overflow-y-auto">
+                    <button
+                      onClick={() => { setSelectedDev(null); setShowDevDropdown(false); }}
+                      className={`w-full text-left px-3 py-2.5 text-xs hover:bg-secondary/30 flex items-center gap-2 ${!selectedDev ? "text-primary bg-primary/10" : ""}`}
+                    >
+                      <Globe className="w-3 h-3" /> Semua Router
+                    </button>
+                    {devices.map(d => (
+                      <button
+                        key={d.device_id}
+                        onClick={() => { setSelectedDev(d); setShowDevDropdown(false); }}
+                        className={`w-full text-left px-3 py-2.5 text-xs hover:bg-secondary/30 flex items-center gap-2 justify-between ${selectedDev?.device_id === d.device_id ? "text-primary bg-primary/10" : ""}`}
+                      >
+                        <span className="truncate">{d.device_name}</span>
+                        <span className="text-[9px] text-muted-foreground font-mono shrink-0">{fmtNum(d.total_hits)} hits</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
