@@ -2,22 +2,62 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from core.db import get_db
 from core.auth import get_current_user, require_write
 import logging
+import time
 
 router = APIRouter(tags=["pppoe-monitoring"])
 logger = logging.getLogger(__name__)
 
+# Cache traffic untuk menghitung BPS (Bandwidth)
+# Format: { router_id: { interface_name: { "rx_byte": int, "tx_byte": int, "ts": float } } }
+_TRAFFIC_CACHE = {}
 
-def _normalize_session(raw: dict, dev: dict) -> dict:
+
+def _normalize_session(raw: dict, dev: dict, ifaces_map: dict, router_id: str) -> dict:
     """
     Normalisasi field dari MikroTik /ppp/active ke format yang diharapkan frontend.
-
-    MikroTik mengembalikan field dengan tanda hubung (caller-id, tx-byte, dst)
-    namun kita expose ke frontend dengan underscore agar konsisten dengan Python.
+    Menambahkan data total bytes (rx_byte, tx_byte) dari /interface
+    Menghitung bps berdasarkan _TRAFFIC_CACHE.
     """
+    name = raw.get("name", "")
+    
+    # Cari interface pppoe
+    # Interface name biasanya <pppoe-username>
+    iface_name = f"<pppoe-{name}>"
+    iface = ifaces_map.get(iface_name, {})
+    
+    # Ambil byte aktual dari interface kalau ada
+    rx_byte = int(iface.get("rx-byte", raw.get("rx-byte", 0)) or 0)
+    tx_byte = int(iface.get("tx-byte", raw.get("tx-byte", 0)) or 0)
+    
+    # Hitung bps
+    now = time.time()
+    rx_bps = 0
+    tx_bps = 0
+    
+    if router_id not in _TRAFFIC_CACHE:
+        _TRAFFIC_CACHE[router_id] = {}
+        
+    prev = _TRAFFIC_CACHE[router_id].get(iface_name)
+    if prev:
+        dt = now - prev["ts"]
+        if dt > 0:
+            rx_diff = rx_byte - prev["rx_byte"]
+            tx_diff = tx_byte - prev["tx_byte"]
+            # Cegah negatif (counter reset saat reconect)
+            if rx_diff >= 0: rx_bps = int((rx_diff * 8) / dt)
+            if tx_diff >= 0: tx_bps = int((tx_diff * 8) / dt)
+
+    # Simpan state untuk tick selanjutnya
+    _TRAFFIC_CACHE[router_id][iface_name] = {
+        "rx_byte": rx_byte,
+        "tx_byte": tx_byte,
+        "ts": now
+    }
+
     return {
         # Identitas user
-        "name":          raw.get("name", ""),
-        "customer_name": raw.get("name", ""),   # akan di-enrich dari billing DB jika ada
+        "name":          name,
+        "customer_name": name,                   # akan di-enrich dari billing DB jika ada
         "is_radius":     raw.get("radius", "false") not in (False, "false", "no", None, ""),
         "password":      "",                     # tidak tersedia di /ppp/active, harus dari secret
         # Jaringan
@@ -26,13 +66,13 @@ def _normalize_session(raw: dict, dev: dict) -> dict:
         # Uptime
         "uptime":        raw.get("uptime", ""),
         # Bytes (total data)
-        "tx_byte":       int(raw.get("tx-byte", 0) or 0),
-        "rx_byte":       int(raw.get("rx-byte", 0) or 0),
+        "tx_byte":       tx_byte,
+        "rx_byte":       rx_byte,
         # Bandwidth realtime (bps)
-        "tx_bps":        int(raw.get("tx-bps", 0) or 0),
-        "rx_bps":        int(raw.get("rx-bps", 0) or 0),
+        "tx_bps":        tx_bps,
+        "rx_bps":        rx_bps,
         # Info router
-        "router_id":     dev.get("id", ""),
+        "router_id":     router_id,
         "router_name":   dev.get("name", "MikroTik"),
         # MikroTik internal id (untuk kick)
         "mt_id":         raw.get(".id", ""),
@@ -64,15 +104,11 @@ async def get_pppoe_active(
 
     Query param:
       router_id  — wajib diisi; ID device dari tabel devices.
-                   Jika tidak diisi, return [] (tidak menampilkan semua device sekaligus
-                   agar tidak membebani semua router).
     """
     if not router_id:
-        # Bukan error, tapi memang sengaja dibatasi hanya per-device
         return []
 
     db = get_db()
-    # Cari device berdasarkan 'id' (UUID) — tidak pakai filter type
     device = await db.devices.find_one({"id": router_id})
     if not device:
         raise HTTPException(404, f"Device dengan id '{router_id}' tidak ditemukan")
@@ -80,16 +116,42 @@ async def get_pppoe_active(
     try:
         from mikrotik_api import get_api_client
         mt = get_api_client(device)
-
-        # list_pppoe_active() tersedia di semua class (REST & API Protocol)
+        
+        # 1. Ambil list active
         raw_list = await mt.list_pppoe_active()
         if not isinstance(raw_list, list):
             raw_list = []
 
-        # Normalize semua entri
-        result = [_normalize_session(r, device) for r in raw_list]
+        # 2. Ambil list interface untuk mendapatkan rx-byte dan tx-byte
+        # Coba cara paling ringan dulu
+        ifaces_map = {}
+        if raw_list:
+            try:
+                ifaces = await mt._async_req("GET", "interface") \
+                         if hasattr(mt, "_async_req") \
+                         else await mt._async_req("GET", "/interface/print") # asumsi api protocol tidak digunakan, diganti to_thread kalau mikrotiklegacy
+            except Exception:
+                try:
+                    import asyncio
+                    ifaces = await asyncio.to_thread(mt._list_resource, "/interface")
+                except Exception as e:
+                    logger.debug(f"[pppoe-monitoring] Gagal fetch /interface: {e}")
+                    ifaces = []
 
-        # Enrich password dari ppp/secret jika tersedia (best-effort, tidak block jika gagal)
+            for i in (ifaces if isinstance(ifaces, list) else []):
+                ifaces_map[i.get("name", "")] = i
+        
+        # 3. Normalize semua entri (termasuk BPS)
+        result = [_normalize_session(r, device, ifaces_map, router_id) for r in raw_list]
+
+        # 4. Cleanup cache untuk username yang sudah disconnect 
+        if router_id in _TRAFFIC_CACHE:
+            active_names = {f"<pppoe-{r['name']}>" for r in raw_list}
+            keys_to_del = [k for k in _TRAFFIC_CACHE[router_id] if k not in active_names]
+            for k in keys_to_del:
+                del _TRAFFIC_CACHE[router_id][k]
+
+        # 5. Enrich password dari ppp/secret jika tersedia
         try:
             secrets = await mt.list_pppoe_secrets()
             if isinstance(secrets, list):
@@ -105,7 +167,7 @@ async def get_pppoe_active(
         return result
 
     except Exception as e:
-        logger.error(f"[pppoe-monitoring] Gagal query {device.get('name')}: {e}")
+        logger.error(f"[pppoe-monitoring] Gagal query {str(e)}")
         raise HTTPException(500, f"Gagal mengambil data PPPoE dari router: {str(e)}")
 
 
@@ -128,10 +190,8 @@ async def kick_pppoe_user(req: KickRequest, user=Depends(require_write)):
         from mikrotik_api import get_api_client
         mt = get_api_client(device)
 
-        # remove_pppoe_active_session tersedia di semua class
         removed = await mt.remove_pppoe_active_session(req.username)
         if removed == 0:
-            # Coba alternatif: cari dengan list dan delete manual
             actives = await mt.list_pppoe_active()
             removed = 0
             for s in (actives or []):
@@ -139,8 +199,6 @@ async def kick_pppoe_user(req: KickRequest, user=Depends(require_write)):
                     mt_id = s.get(".id", "")
                     if mt_id:
                         try:
-                            from mikrotik_api import get_api_client as _gac
-                            # Panggil via client yang sama
                             await mt._async_req("DELETE", f"ppp/active/{mt_id}") \
                                 if hasattr(mt, "_async_req") else None
                             removed += 1

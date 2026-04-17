@@ -2692,7 +2692,6 @@ function PpoeMonitoringTab({ deviceId }) {
   const [countdown, setCountdown]   = useState(15);
   const intervalRef  = useRef(null);
   const countdownRef = useRef(null);
-
   const loadData = useCallback(async () => {
     if (!enabled) return;
     if (!deviceId) {
@@ -2700,7 +2699,7 @@ function PpoeMonitoringTab({ deviceId }) {
       return;
     }
     setLoading(true);
-    setCountdown(15);
+    setCountdown(30);
     try {
       const { data } = await api.get(`/pppoe-active-monitoring?router_id=${deviceId}`);
       setActives(data || []);
@@ -2717,14 +2716,14 @@ function PpoeMonitoringTab({ deviceId }) {
     if (enabled) {
       if (deviceId) {
         loadData();
-        intervalRef.current  = setInterval(loadData, 15000);
-        countdownRef.current = setInterval(() => setCountdown(c => c <= 1 ? 15 : c - 1), 1000);
+        intervalRef.current  = setInterval(loadData, 30000);
+        countdownRef.current = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000);
       } else {
         setActives([]);
       }
     } else {
       setActives([]);
-      setCountdown(15);
+      setCountdown(30);
     }
     return () => { clearInterval(intervalRef.current); clearInterval(countdownRef.current); };
   }, [enabled, deviceId, loadData]); // eslint-disable-line
@@ -2796,7 +2795,7 @@ function PpoeMonitoringTab({ deviceId }) {
   };
 
   const q = search.toLowerCase().trim();
-  const filtered = q
+  const filtered = (q
     ? actives.filter(a =>
         a.name.toLowerCase().includes(q) ||
         (a.customer_name || "").toLowerCase().includes(q) ||
@@ -2804,7 +2803,16 @@ function PpoeMonitoringTab({ deviceId }) {
         (a.caller_id || "").toLowerCase().includes(q) ||
         (a.router_name || "").toLowerCase().includes(q)
       )
-    : actives;
+    : [...actives]).sort((a, b) => {
+      // Urutkan berdasarkan total bandwidth (rx_bps + tx_bps) tertinggi, fallback ke bytes rx+tx
+      const bTotalBps = (b.rx_bps || 0) + (b.tx_bps || 0);
+      const aTotalBps = (a.rx_bps || 0) + (a.tx_bps || 0);
+      if (bTotalBps !== aTotalBps) return bTotalBps - aTotalBps;
+      
+      const bTotalBytes = (b.rx_byte || 0) + (b.tx_byte || 0);
+      const aTotalBytes = (a.rx_byte || 0) + (a.tx_byte || 0);
+      return bTotalBytes - aTotalBytes;
+    });
 
   return (
     <div className="space-y-4">
