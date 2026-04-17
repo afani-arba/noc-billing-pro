@@ -2905,7 +2905,7 @@ function PpoeMonitoringTab({ deviceId }) {
               <tbody className="divide-y divide-border/50">
                 {loading && actives.length === 0 ? (
                   <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2"/>Memuat data dari {routers.length} router...
+                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2"/>Memuat data PPPoE aktif...
                   </td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
