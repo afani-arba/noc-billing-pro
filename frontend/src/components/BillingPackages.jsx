@@ -32,8 +32,6 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
     night_rate_limit:   initial?.night_rate_limit || "",
     night_start:        initial?.night_start || "22:00",
     night_end:          initial?.night_end   || "06:00",
-    boost_rate_limit:     initial?.boost_rate_limit || "",
-    boost_duration_hours: initial?.boost_duration_hours || 24,
     enable_early_promo:   initial?.enable_early_promo ?? false,
     promo_amount:         initial?.promo_amount || 0,
   });
@@ -62,7 +60,6 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
         billing_cycle:        Number(form.billing_cycle),
         device_id:            form.device_id || null,
         fup_limit_gb:         form.fup_limit_gb ? Number(form.fup_limit_gb) : 0,
-        boost_duration_hours: Number(form.boost_duration_hours),
         enable_early_promo:   form.enable_early_promo,
         promo_amount:         Number(form.promo_amount) || 0,
       };
@@ -78,9 +75,12 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
     { id: "basic",   label: "Dasar"       },
     { id: "fup",     label: "FUP",        badge: form.fup_enabled       },
     { id: "night",   label: "Night Mode", badge: form.day_night_enabled },
-    { id: "booster", label: "Booster"     },
+    { id: "booster", label: "Booster",    badge: form.booster_enabled },
     { id: "promo",   label: "Promo",      badge: form.enable_early_promo },
-  ];
+  ].filter(tab => {
+    if (defaultServiceType === "hotspot" && tab.id !== "basic") return false;
+    return true;
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
@@ -330,44 +330,6 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
             </div>
           )}
 
-          {/* ── TAB BOOSTER ───────────────────────────── */}
-          {formTab === "booster" && (
-            <div className="space-y-3">
-              <div className="p-3 bg-secondary/30 rounded-sm border border-border">
-                <p className="text-xs font-semibold">⚡ Speed Booster</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Admin atau pelanggan dapat mengaktifkan kecepatan sementara on-demand.
-                  Kembali otomatis ke normal setelah durasi habis.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Speed Booster</Label>
-                <Input value={form.boost_rate_limit}
-                  onChange={e => set("boost_rate_limit", e.target.value)}
-                  className="h-8 rounded-sm text-xs font-mono"
-                  placeholder="Contoh: 30M/30M (kosongkan = nonaktif)" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Durasi Default (Jam)</Label>
-                <div className="flex items-center gap-2">
-                  <Input value={form.boost_duration_hours}
-                    onChange={e => set("boost_duration_hours", e.target.value)}
-                    type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="h-8 rounded-sm text-xs flex-1" />
-                  <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-sm border border-border">Jam</span>
-                </div>
-              </div>
-              {form.boost_rate_limit && (
-                <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-sm text-[10px] text-purple-300 space-y-0.5">
-                  <p className="font-semibold text-xs">Preview Speed Booster:</p>
-                  <p>• Speed boost: <span className="font-mono text-white">{form.boost_rate_limit}</span></p>
-                  <p>• Durasi default: {form.boost_duration_hours} jam</p>
-                  <p>• Aktivasi: via Admin Panel atau WA Bot</p>
-                  <p>• Tidak perlu disconnect pelanggan</p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ── TAB PROMO ───────────────────────────── */}
           {formTab === "promo" && (
