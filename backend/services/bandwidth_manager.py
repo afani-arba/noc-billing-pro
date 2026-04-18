@@ -157,8 +157,11 @@ async def _create_pppoe_profile(mt, profile_name: str, rate_limit: str, existing
 async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_limit: str, framed_ip: str = "") -> dict:
     """RADIUS CoA: RFC 3576 Change of Authorization — port 3799.
     
-    Menyertakan Framed-IP-Address jika tersedia agar MikroTik dapat
-    mengidentifikasi sesi dengan tepat tanpa error 'Radius with no ip provided'.
+    Identifikasi sesi hanya via User-Name (tanpa Framed-IP-Address).
+    Alasan: Jika Framed-IP-Address disertakan, modul HOTSPOT MikroTik ikut
+    memproses CoA dan mengeluarkan error 'Radius request for unknown ip'
+    meskipun CoA untuk PPPoE sudah berhasil (CoA-ACK tetap dikirim).
+    PPPoE module sudah cukup identifikasi sesi lewat User-Name saja.
     """
     if not nas_ip or not nas_secret:
         return {"success": False, "method": "coa", "reason": "Missing NAS IP or secret"}
@@ -169,7 +172,6 @@ async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_lim
         import io
         import asyncio
 
-        # Inline dictionary specifically for MikroTik Rate Limit VSA
         dict_str = """
 ATTRIBUTE User-Name 1 string
 ATTRIBUTE NAS-IP-Address 4 ipaddr
@@ -184,20 +186,13 @@ END-VENDOR MikroTik
         client = Client(server=nas_ip, secret=nas_secret.encode('utf-8'), dict=d)
         client.coaport = 3799
 
+        # Identifikasi sesi via User-Name saja — JANGAN tambahkan Framed-IP-Address
+        # agar hotspot module tidak ikut memproses CoA yang ditujukan untuk PPPoE
         req = client.CreateCoAPacket(User_Name=username)
         req.AddAttribute("MikroTik-Rate-Limit", rate_limit)
-        
-        # Sertakan Framed-IP-Address jika tersedia — mencegah 'Radius with no ip provided'
-        if framed_ip:
-            try:
-                req.AddAttribute("Framed-IP-Address", framed_ip)
-                logger.debug(f"[BW] CoA {username}: Framed-IP-Address={framed_ip}")
-            except Exception as ip_err:
-                logger.warning(f"[BW] Gagal tambah Framed-IP-Address '{framed_ip}': {ip_err}")
 
         loop = asyncio.get_event_loop()
 
-        # client.SendPacket is blocking, run in executor
         reply = await asyncio.wait_for(
             loop.run_in_executor(None, client.SendPacket, req),
             timeout=5.0
