@@ -40,6 +40,9 @@ class DeviceCreate(BaseModel):
     device_type: str = "MikroTik"
     topo_x: Optional[float] = None
     topo_y: Optional[float] = None
+    # ── RADIUS / Billing ──────────────────────────────────────────────────────
+    radius_secret: Optional[str] = None   # Shared secret untuk RADIUS CoA (port 3799)
+    hotspot_secret: Optional[str] = None  # Shared secret khusus Hotspot (fallback = radius_secret)
 
 
 
@@ -63,6 +66,9 @@ class DeviceUpdate(BaseModel):
     device_type: Optional[str] = None
     topo_x: Optional[float] = None
     topo_y: Optional[float] = None
+    # ── RADIUS / Billing ──────────────────────────────────────────────────────
+    radius_secret: Optional[str] = None   # Shared secret untuk RADIUS CoA (port 3799)
+    hotspot_secret: Optional[str] = None  # Shared secret khusus Hotspot (fallback = radius_secret)
 
 def filter_devices_for_user(devices: list, user: dict) -> list:
     """Filter device list based on user role and allowed_devices."""

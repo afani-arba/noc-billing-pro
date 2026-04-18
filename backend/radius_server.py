@@ -1,29 +1,102 @@
-"""radius_server.py — NOC Sentinel Enterprise (asyncio + PAP + CHAP support)"""
+"""
+radius_server.py — NOC Billing Pro (asyncio, PAP + CHAP support)
+═══════════════════════════════════════════════════════════════════════════════
+Perbaikan berdasarkan audit:
+  FIX #4:  Baca NAS-Port-Type untuk routing langsung PPPoE vs Hotspot
+  FIX #5:  ACCT memproses PPPoE (simpan session, update bytes untuk FUP)
+  FIX #7:  Simpan Acct-Session-Id ke radius_sessions collection
+  FIX #8:  Handle Acct-Start, Acct-Stop, Acct-Interim-Update semua tipe
+  FIX #9:  Brute-force protection per IP (block 5 menit jika 10x gagal)
 
-import asyncio, logging, struct, hashlib, uuid
-from datetime import datetime, timezone
+Adopsi pola MixRadius/FreeRADIUS:
+  - Acct-Interim-Interval = 300 detik dikirim di setiap Access-Accept
+    → MikroTik akan otomatis mengirim update bytes setiap 5 menit
+    → FUP monitoring bisa real-time tanpa polling API MikroTik
+  - radius_sessions collection untuk tracking sesi aktif
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
+import asyncio
+import logging
+import struct
+import hashlib
+import uuid
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
+# ── Global State ───────────────────────────────────────────────────────────────
 _db_pool = None
 _global_secret = b"testing123"
-_allowed_hosts: dict = {}
+_allowed_hosts: dict = {}  # {ip: secret_bytes}
 
+# ── RADIUS Packet Codes ────────────────────────────────────────────────────────
 ACCESS_REQUEST  = 1
 ACCESS_ACCEPT   = 2
 ACCESS_REJECT   = 3
 ACCT_REQUEST    = 4
 ACCT_RESPONSE   = 5
 
-ATTR_USER_NAME       = 1
-ATTR_USER_PASSWORD   = 2   # PAP
-ATTR_CHAP_PASSWORD   = 3   # CHAP: 1-byte ID + 16-byte MD5
-ATTR_REPLY_MESSAGE   = 18
-ATTR_ACCT_STATUS     = 40
-ATTR_CHAP_CHALLENGE  = 60  # Optional CHAP challenge (fallback: req authenticator)
+# ── RADIUS Attribute IDs ───────────────────────────────────────────────────────
+ATTR_USER_NAME              = 1
+ATTR_USER_PASSWORD          = 2    # PAP
+ATTR_CHAP_PASSWORD          = 3    # CHAP: 1-byte ID + 16-byte MD5
+ATTR_NAS_IP_ADDRESS         = 4
+ATTR_FRAMED_IP_ADDRESS      = 8
+ATTR_REPLY_MESSAGE          = 18
+ATTR_CALLED_STATION_ID      = 30
+ATTR_ACCT_STATUS_TYPE       = 40
+ATTR_ACCT_INPUT_OCTETS      = 42   # Bytes upload dari user
+ATTR_ACCT_OUTPUT_OCTETS     = 43   # Bytes download ke user
+ATTR_ACCT_SESSION_ID        = 44   # Session ID unik dari NAS
+ATTR_ACCT_SESSION_TIME      = 46   # Durasi sesi dalam detik
+ATTR_ACCT_INTERIM_INTERVAL  = 85   # Kirim ke MikroTik: interval update (detik)
+ATTR_CHAP_CHALLENGE         = 60   # Optional CHAP challenge
+ATTR_NAS_PORT_TYPE          = 61   # Virtual=5 (PPPoE), Ethernet=15, Wireless=19 (Hotspot)
+
+# NAS-Port-Type values
+NAS_PORT_VIRTUAL   = 5    # PPPoE
+NAS_PORT_ETHERNET  = 15   # Hotspot wired
+NAS_PORT_WIRELESS  = 19   # Hotspot wireless
+
+# Accounting Status types
+ACCT_STATUS_START   = 1
+ACCT_STATUS_STOP    = 2
+ACCT_STATUS_INTERIM = 3
+ACCT_STATUS_ALIVE   = 3   # Alias untuk Interim-Update
+
+# ── Brute-Force Protection (FIX #9) ───────────────────────────────────────────
+_fail_cache: dict = {}   # {ip: {"fails": int, "blocked_until": datetime}}
+MAX_FAILS_PER_IP    = 10
+BLOCK_DURATION_SECS = 300   # 5 menit
+
+def _is_blocked(ip: str) -> bool:
+    """Cek apakah IP terblokir karena terlalu banyak kegagalan auth."""
+    entry = _fail_cache.get(ip)
+    if not entry:
+        return False
+    if entry["fails"] >= MAX_FAILS_PER_IP:
+        if datetime.now() < entry["blocked_until"]:
+            return True
+        # Block sudah expired, reset
+        _fail_cache.pop(ip, None)
+    return False
+
+def _record_fail(ip: str):
+    """Catat kegagalan autentikasi dari IP ini."""
+    entry = _fail_cache.setdefault(ip, {"fails": 0, "blocked_until": datetime.now()})
+    entry["fails"] += 1
+    if entry["fails"] >= MAX_FAILS_PER_IP:
+        entry["blocked_until"] = datetime.now() + timedelta(seconds=BLOCK_DURATION_SECS)
+        logger.warning(f"[RADIUS] IP {ip} diblokir selama {BLOCK_DURATION_SECS}s karena {entry['fails']}x gagal login")
+
+def _record_success(ip: str):
+    """Reset counter kegagalan setelah login sukses."""
+    _fail_cache.pop(ip, None)
 
 
-def _parse_packet(data: bytes):
+# ── Packet Parser & Builder ────────────────────────────────────────────────────
+def _parse_packet(data: bytes) -> dict | None:
     if len(data) < 20:
         return None
     code, pkt_id, length = struct.unpack("!BBH", data[:4])
@@ -31,26 +104,17 @@ def _parse_packet(data: bytes):
     attrs = {}
     pos = 20
     while pos + 2 <= min(length, len(data)):
-        t = data[pos]; l = data[pos+1]
-        if l < 2: break
-        attrs.setdefault(t, []).append(data[pos+2:pos+l])
+        t = data[pos]
+        l = data[pos + 1]
+        if l < 2:
+            break
+        attrs.setdefault(t, []).append(data[pos + 2: pos + l])
         pos += l
     return {"code": code, "id": pkt_id, "auth": auth, "attrs": attrs}
 
 
-def _decrypt_pap(cipher: bytes, authenticator: bytes, secret: bytes) -> str:
-    result = bytearray()
-    prev = authenticator
-    for i in range(0, len(cipher), 16):
-        chunk = cipher[i:i+16]
-        pad = hashlib.md5(secret + prev).digest()
-        result.extend(a ^ b for a, b in zip(pad, chunk))
-        prev = chunk
-    return result.rstrip(b"\x00").decode("utf-8", errors="replace")
-
-
-def _build_reply(code, pkt_id, req_auth, secret, attrs_list):
-    attr_bytes = b"".join(bytes([t, len(v)+2]) + v for t, v in attrs_list)
+def _build_reply(code: int, pkt_id: int, req_auth: bytes, secret: bytes, attrs_list: list) -> bytes:
+    attr_bytes = b"".join(bytes([t, len(v) + 2]) + v for t, v in attrs_list)
     length = 20 + len(attr_bytes)
     header = struct.pack("!BBH", code, pkt_id, length) + req_auth
     resp_auth = hashlib.md5(header + attr_bytes + secret).digest()
@@ -61,6 +125,47 @@ def _get_secret(nas_ip: str) -> bytes:
     return _allowed_hosts.get(nas_ip, _global_secret)
 
 
+def _get_attr_str(attrs: dict, attr_id: int, default: str = "") -> str:
+    raw = attrs.get(attr_id, [None])[0]
+    if raw is None:
+        return default
+    return raw.decode("utf-8", errors="replace")
+
+
+def _get_attr_int(attrs: dict, attr_id: int, default: int = 0) -> int:
+    raw = attrs.get(attr_id, [b"\x00\x00\x00\x00"])[0]
+    if not raw:
+        return default
+    try:
+        return struct.unpack("!I", raw.ljust(4, b"\x00")[:4])[0]
+    except Exception:
+        return default
+
+
+def _decrypt_pap(cipher: bytes, authenticator: bytes, secret: bytes) -> str:
+    result = bytearray()
+    prev = authenticator
+    for i in range(0, len(cipher), 16):
+        chunk = cipher[i: i + 16]
+        pad = hashlib.md5(secret + prev).digest()
+        result.extend(a ^ b for a, b in zip(pad, chunk))
+        prev = chunk
+    return result.rstrip(b"\x00").decode("utf-8", errors="replace")
+
+
+def _build_vsa_rate_limit(rate_str: str) -> bytes:
+    """Build Vendor-Specific Attribute (VSA) untuk Mikrotik-Rate-Limit."""
+    rate_val = rate_str.encode("utf-8")
+    # VSA format: vendor-id (4 bytes) + vendor-type (1) + vendor-length (1) + value
+    return struct.pack("!I", 14988) + bytes([8, len(rate_val) + 2]) + rate_val
+
+
+def _build_acct_interim_interval(seconds: int = 300) -> tuple:
+    """Build atribut Acct-Interim-Interval untuk dikirim di Access-Accept."""
+    return (ATTR_ACCT_INTERIM_INTERVAL, struct.pack("!I", seconds))
+
+
+# ── RADIUS Protocol Handler ────────────────────────────────────────────────────
 class RADIUSProtocol(asyncio.DatagramProtocol):
     def __init__(self, db):
         self._db = db
@@ -77,191 +182,121 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         asyncio.ensure_future(self._handle(data, addr))
 
     async def _handle(self, data: bytes, addr: tuple):
-        secret = _get_secret(addr[0])
+        nas_ip = addr[0]
+
+        # FIX #9: Cek brute-force block sebelum proses apapun
+        if _is_blocked(nas_ip):
+            logger.warning(f"[RADIUS] Request dari {nas_ip} DIABAIKAN (brute-force block)")
+            return
+
+        secret = _get_secret(nas_ip)
         pkt = _parse_packet(data)
         if not pkt:
             return
-        logger.info(f"RADIUS pkt from {addr[0]}: code={pkt['code']} id={pkt['id']}")
+
+        logger.info(f"RADIUS pkt from {nas_ip}: code={pkt['code']} id={pkt['id']}")
+
         if pkt["code"] == ACCESS_REQUEST:
             await self._auth(pkt, addr, secret)
         elif pkt["code"] == ACCT_REQUEST:
             await self._acct(pkt, addr, secret)
 
-    async def _auth(self, pkt, addr, secret):
+    # ── Authentication Handler ────────────────────────────────────────────────
+    async def _auth(self, pkt: dict, addr: tuple, secret: bytes):
+        nas_ip = addr[0]
         pid, req_auth, attrs = pkt["id"], pkt["auth"], pkt["attrs"]
-        uname = (attrs.get(ATTR_USER_NAME, [b""])[0]).decode("utf-8", errors="replace")
 
-        pap_raw   = (attrs.get(ATTR_USER_PASSWORD,  [None])[0])
-        chap_raw  = (attrs.get(ATTR_CHAP_PASSWORD,  [None])[0])
-        chap_chal = (attrs.get(ATTR_CHAP_CHALLENGE, [None])[0])
+        uname     = _get_attr_str(attrs, ATTR_USER_NAME)
+        pap_raw   = attrs.get(ATTR_USER_PASSWORD, [None])[0]
+        chap_raw  = attrs.get(ATTR_CHAP_PASSWORD, [None])[0]
+        chap_chal = attrs.get(ATTR_CHAP_CHALLENGE, [None])[0]
+
+        # FIX #4: Baca NAS-Port-Type untuk routing langsung tanpa tebak-tebakan
+        nas_port_type = _get_attr_int(attrs, ATTR_NAS_PORT_TYPE, default=NAS_PORT_VIRTUAL)
+        is_pppoe_req   = (nas_port_type == NAS_PORT_VIRTUAL)
+        is_hotspot_req = (nas_port_type in (NAS_PORT_ETHERNET, NAS_PORT_WIRELESS))
 
         method = "PAP" if pap_raw else ("CHAP" if chap_raw else "NONE")
-        logger.info(f"RADIUS AUTH [{method}] user={uname!r}")
+        logger.info(f"RADIUS AUTH [{method}] user={uname!r} NAS-Port-Type={nas_port_type} "
+                    f"({'PPPoE' if is_pppoe_req else 'Hotspot' if is_hotspot_req else 'Unknown'})")
 
         def reject(msg: bytes):
+            _record_fail(nas_ip)
             r = _build_reply(ACCESS_REJECT, pid, req_auth, secret, [(ATTR_REPLY_MESSAGE, msg)])
             self._transport.sendto(r, addr)
 
         def accept(attrs_list=None):
-            if attrs_list is None: attrs_list = []
+            """Kirim Access-Accept dengan Acct-Interim-Interval 5 menit (pola MixRadius)."""
+            if attrs_list is None:
+                attrs_list = []
+            # Tambahkan Acct-Interim-Interval = 300 detik agar MikroTik otomatis
+            # mengirim update bytes setiap 5 menit (FUP real-time tanpa polling API)
+            attrs_list.append(_build_acct_interim_interval(300))
             r = _build_reply(ACCESS_ACCEPT, pid, req_auth, secret, attrs_list)
             self._transport.sendto(r, addr)
-            logger.info(f"RADIUS ACCEPT: {uname!r} attrs={len(attrs_list)}")
+            _record_success(nas_ip)
+            logger.info(f"RADIUS ACCEPT: {uname!r} ({len(attrs_list)} attrs, interim=300s)")
 
         if method == "NONE":
             return reject(b"No auth method")
 
-        # DB lookup
-        voucher = None
+        # ── FIX #4: Routing langsung berdasarkan NAS-Port-Type ───────────────
+        if is_pppoe_req:
+            # PPPoE request → langsung cari di customers, skip voucher
+            if self._db is not None:
+                try:
+                    customer = await self._db.customers.find_one({"username": uname, "active": True})
+                    if customer:
+                        return await self._auth_pppoe(customer, uname, pid, req_auth, secret,
+                                                      method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
+                    logger.info(f"RADIUS PPPoE REJECT: {uname!r} tidak ditemukan di customers")
+                    return reject(b"PPPoE user not found")
+                except Exception as e:
+                    logger.error(f"DB error (PPPoE lookup): {e}")
+                    return reject(b"Auth error")
+            return reject(b"DB unavailable")
+
+        if is_hotspot_req:
+            # Hotspot request → langsung cari di vouchers, skip customers
+            if self._db is not None:
+                try:
+                    voucher = await self._db.hotspot_vouchers.find_one({"username": uname})
+                    if voucher:
+                        return await self._auth_hotspot(voucher, uname, pid, req_auth, secret,
+                                                        method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
+                    logger.info(f"RADIUS Hotspot REJECT: {uname!r} tidak ditemukan di vouchers")
+                    return reject(b"Voucher not found")
+                except Exception as e:
+                    logger.error(f"DB error (Hotspot lookup): {e}")
+                    return reject(b"Auth error")
+            return reject(b"DB unavailable")
+
+        # NAS-Port-Type tidak dikenal → fallback backward-compatible (coba keduanya)
+        logger.debug(f"NAS-Port-Type {nas_port_type} tidak dikenal, fallback ke double-lookup")
         if self._db is not None:
             try:
                 voucher = await self._db.hotspot_vouchers.find_one({"username": uname})
-            except Exception as e:
-                logger.error(f"DB error (Hotspot voucher lookup): {e}")
-
-        # ── Fallback: cek customers (PPPoE Billing) jika bukan hotspot voucher ─────────
-        pppoe_customer = None
-        if not voucher and self._db is not None:
+            except Exception:
+                voucher = None
             try:
-                pppoe_customer = await self._db.customers.find_one({
-                    "username": uname,
-                    "active": True,
-                })
-            except Exception as e:
-                logger.error(f"DB error (PPPoE customer lookup): {e}")
+                customer = await self._db.customers.find_one({"username": uname, "active": True}) if not voucher else None
+            except Exception:
+                customer = None
 
-        if not voucher and not pppoe_customer:
-            logger.info(f"RADIUS REJECT: {uname!r} not found in Hotspot DB nor PPPoE Billing")
-            return reject(b"User not found")
+            if voucher:
+                return await self._auth_hotspot(voucher, uname, pid, req_auth, secret,
+                                                method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
+            if customer:
+                return await self._auth_pppoe(customer, uname, pid, req_auth, secret,
+                                              method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
 
-        # Route ke handler PPPoE jika ditemukan sebagai customer billing
-        if pppoe_customer and not voucher:
-            return await self._auth_pppoe(pppoe_customer, uname, pid, req_auth, secret,
-                                          method, pap_raw, chap_raw, chap_chal, addr)
+        logger.info(f"RADIUS REJECT: {uname!r} tidak ditemukan di Hotspot maupun PPPoE")
+        return reject(b"User not found")
 
-        db_pwd = voucher.get("password", "")
-
-        # --- PAP verify ---
-        if method == "PAP":
-            try:
-                plain = _decrypt_pap(pap_raw, req_auth, secret)
-            except Exception as e:
-                logger.warning(f"PAP decrypt fail: {e}")
-                return reject(b"Auth error")
-            auth_ok = (plain == db_pwd)
-
-        # --- CHAP verify ---
-        # Alur MikroTik HTTP CHAP (dari login.html line 358):
-        #   Browser: hexMD5(chapId + password + chapChallenge) → dikirim sebagai field "password"
-        #   MikroTik menerima hex string ini dan melakukan CHAP standard:
-        #   CHAP-Response = MD5(chap_id_byte + hex_string_from_browser + chap_challenge_bytes)
-        else:
-            if len(chap_raw) < 17:
-                return reject(b"Bad CHAP packet")
-            chap_id   = chap_raw[0:1]
-            chap_resp = chap_raw[1:17]
-            challenge = chap_chal if chap_chal else req_auth
-            chap_id_str = chap_id.hex()  # 2-char hex string dari 1-byte ID
-
-            logger.info(
-                f"CHAP DEBUG: id={chap_id.hex()} "
-                f"challenge_src={'attr60' if chap_chal else 'req_auth'} "
-                f"challenge={challenge.hex()} db_pwd={db_pwd!r} "
-                f"chap_resp={chap_resp.hex()}"
-            )
-
-            auth_ok = False
-
-            # Variasi 1: Standard CHAP RFC2865 — MD5(chap_id + plaintext_pwd + challenge)
-            e1 = hashlib.md5(chap_id + db_pwd.encode("utf-8") + challenge).digest()
-            if e1 == chap_resp:
-                auth_ok = True
-                logger.info("CHAP ok: v1 standard")
-
-            # Variasi 2: MikroTik HTTP CHAP dari browser login page
-            # Browser: hex_browser = hexMD5(chapId_hex + password + challenge_hex)
-            # MikroTik RADIUS: MD5(chap_id_byte + hex_browser.encode('latin1') + challenge)
-            if not auth_ok:
-                challenge_hex = challenge.hex()
-                hex_browser = hashlib.md5(
-                    (chap_id_str + db_pwd + challenge_hex).encode("latin-1")
-                ).hexdigest()
-                e2 = hashlib.md5(chap_id + hex_browser.encode("latin-1") + challenge).digest()
-                if e2 == chap_resp:
-                    auth_ok = True
-                    logger.info("CHAP ok: v2 hexMD5(chapId_hex+pwd+challenge_hex)")
-
-            # Variasi 3: chapId sebagai raw byte (bukan hex string)
-            if not auth_ok:
-                hex_browser3 = hashlib.md5(
-                    chap_id + db_pwd.encode("utf-8") + challenge
-                ).hexdigest()
-                e3 = hashlib.md5(chap_id + hex_browser3.encode("latin-1") + challenge).digest()
-                if e3 == chap_resp:
-                    auth_ok = True
-                    logger.info("CHAP ok: v3 hexMD5(chapId_byte+pwd+challenge)")
-
-            # Variasi 4: username sebagai password
-            if not auth_ok and db_pwd != uname:
-                e4 = hashlib.md5(chap_id + uname.encode("utf-8") + challenge).digest()
-                if e4 == chap_resp:
-                    auth_ok = True
-                    logger.info("CHAP ok: v4 username=password plaintext")
-
-            logger.info(f"CHAP result: ok={auth_ok} resp={chap_resp.hex()}")
-
-        if not auth_ok:
-            logger.info(f"RADIUS REJECT: wrong password for {uname!r}")
-            return reject(b"Wrong password")
-
-        if voucher.get("status") == "expired":
-            logger.info(f"RADIUS REJECT: {uname!r} expired")
-            return reject(b"Voucher expired")
-
-        # Build RADIUS VSA: Only Mikrotik-Rate-Limit (no Mikrotik-Group)
-        # Semua voucher akan menggunakan profile "default" di MikroTik
-        reply_attrs = []
-        try:
-            profile_name = voucher.get("profile", "")
-            if profile_name and self._db is not None:
-                pkg = await self._db.billing_packages.find_one({
-                    "$or": [{"name": profile_name}, {"id": profile_name}]
-                })
-                if pkg:
-                    down = pkg.get("speed_down", "").strip()
-                    up = pkg.get("speed_up", "").strip()
-                    if down and up:
-                        # Format: "upload/download" (Mikrotik rx-rate/tx-rate)
-                        rate_str = f"{up}/{down}"
-                        rate_val = rate_str.encode("utf-8")
-                        vsa_rate = struct.pack("!I", 14988) + bytes([8, len(rate_val) + 2]) + rate_val
-                        reply_attrs.append((26, vsa_rate))
-                        logger.info(f"RADIUS: sending rate-limit {rate_str!r} for {uname!r}")
-        except Exception as e:
-            logger.error(f"Error packing RADIUS VSA: {e}")
-
-        accept(reply_attrs)
-
-
+    # ── PPPoE Authentication ──────────────────────────────────────────────────
     async def _auth_pppoe(self, customer: dict, uname: str, pid: int, req_auth: bytes,
                           secret: bytes, method: str, pap_raw, chap_raw, chap_chal,
-                          addr: tuple):
-        """
-        Handler autentikasi RADIUS untuk PPPoE Billing customers.
-        - Verifikasi password
-        - Cek status billing (isolir jika ada invoice overdue)
-        - Return VSA Mikrotik-Rate-Limit dari billing package
-        """
-        def reject(msg: bytes):
-            r = _build_reply(ACCESS_REJECT, pid, req_auth, secret, [(ATTR_REPLY_MESSAGE, msg)])
-            self._transport.sendto(r, addr)
-
-        def accept(attrs_list=None):
-            if attrs_list is None: attrs_list = []
-            r = _build_reply(ACCESS_ACCEPT, pid, req_auth, secret, attrs_list)
-            self._transport.sendto(r, addr)
-            logger.info(f"RADIUS PPPoE ACCEPT: {uname!r} attrs={len(attrs_list)}")
-
+                          addr: tuple, reject, accept):
         db_pwd = customer.get("password", "")
         auth_ok = False
 
@@ -278,120 +313,347 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
             chap_id   = chap_raw[0:1]
             chap_resp = chap_raw[1:17]
             challenge = chap_chal if chap_chal else req_auth
-            # Standard CHAP
             e1 = hashlib.md5(chap_id + db_pwd.encode("utf-8") + challenge).digest()
             auth_ok = (e1 == chap_resp)
         else:
             return reject(b"Unsupported auth method")
 
         if not auth_ok:
-            logger.info(f"RADIUS PPPoE REJECT: wrong password for {uname!r}")
+            logger.info(f"RADIUS PPPoE REJECT: password salah untuk {uname!r}")
             return reject(b"Wrong password")
 
-        # ── Cek status billing: tolak jika ada invoice overdue ───────────────────
+        # Cek billing: tolak jika ada overdue invoice
         try:
             if self._db is not None:
                 overdue = await self._db.invoices.find_one({
-                    "customer_id": customer["id"],
+                    "customer_id": customer.get("id", ""),
                     "status": "overdue",
                 })
                 if overdue:
-                    logger.info(
-                        f"RADIUS PPPoE REJECT: {uname!r} memiliki tagihan overdue "
-                        f"(Invoice: {overdue.get('invoice_number')})"
-                    )
+                    logger.info(f"RADIUS PPPoE REJECT: {uname!r} ada tagihan overdue ({overdue.get('invoice_number')})")
                     return reject(b"Tagihan belum dibayar")
         except Exception as e:
             logger.error(f"PPPoE billing check error: {e}")
 
-        # ── Build VSA Mikrotik-Rate-Limit & Framed-Pool ─────────────────────────
+        # Build reply attributes
         reply_attrs = []
         try:
             if self._db is not None:
                 pkg = await self._db.billing_packages.find_one({"id": customer.get("package_id", "")})
-                
-                # Prioritaskan current_rate_limit (override oleh Night Mode / Booster / FUP)
-                # Jika tidak ada override, gunakan speed dari package
+
+                # Override rate: Night Mode / Booster / FUP sudah di-set oleh scheduler
                 override_rate = customer.get("current_rate_limit", "")
                 rate_str = None
 
                 if override_rate:
-                    # Override aktif (Night Mode / Booster / FUP sudah di-set oleh scheduler)
                     rate_str = override_rate
-                    logger.info(f"RADIUS PPPoE: rate-limit OVERRIDE '{rate_str}' untuk {uname!r} (Night/Booster/FUP)")
+                    logger.info(f"RADIUS PPPoE: rate OVERRIDE '{rate_str}' untuk {uname!r}")
                 elif pkg:
                     down = str(pkg.get("speed_down", "")).strip()
-                    up   = str(pkg.get("speed_up",   "")).strip()
+                    up   = str(pkg.get("speed_up", "")).strip()
                     if down and up:
                         rate_str = f"{up}/{down}"
-                        logger.info(f"RADIUS PPPoE: rate-limit '{rate_str}' untuk {uname!r}")
+                        logger.info(f"RADIUS PPPoE: rate '{rate_str}' untuk {uname!r}")
 
                 if rate_str:
-                    rate_val = rate_str.encode("utf-8")
-                    # Mikrotik-Rate-Limit Vendor-Specific Attribute (VSA)
-                    vsa_rate = struct.pack("!I", 14988) + bytes([8, len(rate_val) + 2]) + rate_val
-                    reply_attrs.append((26, vsa_rate))
-                
-                # Fetch PPPoE Pool Config to send Framed-Pool
+                    reply_attrs.append((26, _build_vsa_rate_limit(rate_str)))
+
+                # Framed-Pool
                 pool_cfg = await self._db.system_settings.find_one({"_id": "pppoe_pool_config"})
-                if pool_cfg and pool_cfg.get("pool_name"):
-                    pool_name = pool_cfg["pool_name"]
-                    reply_attrs.append((88, pool_name.encode("utf-8"))) # Framed-Pool
-                    logger.info(f"RADIUS PPPoE: assigned Framed-Pool '{pool_name}' untuk {uname!r}")
-                else:
-                    reply_attrs.append((88, b"pppoe-pool"))
+                pool_name = (pool_cfg.get("pool_name") if pool_cfg else None) or "pppoe-pool"
+                reply_attrs.append((88, pool_name.encode("utf-8")))
+                logger.info(f"RADIUS PPPoE: Framed-Pool '{pool_name}' untuk {uname!r}")
+
         except Exception as e:
-            logger.error(f"PPPoE VSA rate-limit error: {e}")
+            logger.error(f"PPPoE VSA build error: {e}")
 
         accept(reply_attrs)
 
-    async def _acct(self, pkt, addr, secret):
-        pid, req_auth, attrs = pkt["id"], pkt["auth"], pkt["attrs"]
-        # Always ACK immediately
-        self._transport.sendto(_build_reply(ACCT_RESPONSE, pid, req_auth, secret, []), addr)
+    # ── Hotspot Authentication ────────────────────────────────────────────────
+    async def _auth_hotspot(self, voucher: dict, uname: str, pid: int, req_auth: bytes,
+                            secret: bytes, method: str, pap_raw, chap_raw, chap_chal,
+                            addr: tuple, reject, accept):
+        db_pwd = voucher.get("password", "")
+        auth_ok = False
 
-        uname = (attrs.get(ATTR_USER_NAME, [b""])[0]).decode("utf-8", errors="replace")
-        stype_raw = attrs.get(ATTR_ACCT_STATUS, [b"\x00\x00\x00\x00"])[0]
-        stype = struct.unpack("!I", stype_raw.ljust(4, b"\x00"))[0] if stype_raw else 0
-        logger.info(f"RADIUS ACCT: user={uname!r} type={stype}")
+        if method == "PAP":
+            try:
+                plain = _decrypt_pap(pap_raw, req_auth, secret)
+                auth_ok = (plain == db_pwd)
+            except Exception as e:
+                logger.warning(f"Hotspot PAP decrypt fail: {e}")
+                return reject(b"Auth error")
+        else:
+            # CHAP — implementasi multi-variasi untuk kompatibilitas MikroTik HTTP login
+            if not chap_raw or len(chap_raw) < 17:
+                return reject(b"Bad CHAP packet")
+            chap_id   = chap_raw[0:1]
+            chap_resp = chap_raw[1:17]
+            challenge = chap_chal if chap_chal else req_auth
+            chap_id_str = chap_id.hex()
+
+            logger.debug(f"CHAP DEBUG: id={chap_id.hex()} challenge={challenge.hex()[:16]}... db_pwd={db_pwd!r}")
+
+            # Variasi 1: Standard CHAP RFC2865
+            e1 = hashlib.md5(chap_id + db_pwd.encode("utf-8") + challenge).digest()
+            if e1 == chap_resp:
+                auth_ok = True
+                logger.debug("CHAP ok: v1 standard RFC2865")
+
+            # Variasi 2: MikroTik HTTP CHAP (browser: hexMD5(chapId+pwd+challenge))
+            if not auth_ok:
+                hex_browser = hashlib.md5(
+                    (chap_id_str + db_pwd + challenge.hex()).encode("latin-1")
+                ).hexdigest()
+                e2 = hashlib.md5(chap_id + hex_browser.encode("latin-1") + challenge).digest()
+                if e2 == chap_resp:
+                    auth_ok = True
+                    logger.debug("CHAP ok: v2 MikroTik HTTP hexMD5")
+
+            # Variasi 3: chapId sebagai raw byte
+            if not auth_ok:
+                hex_browser3 = hashlib.md5(chap_id + db_pwd.encode("utf-8") + challenge).hexdigest()
+                e3 = hashlib.md5(chap_id + hex_browser3.encode("latin-1") + challenge).digest()
+                if e3 == chap_resp:
+                    auth_ok = True
+                    logger.debug("CHAP ok: v3 raw chapId hexMD5")
+
+            # Variasi 4: username sebagai password (fallback)
+            if not auth_ok and db_pwd != uname:
+                e4 = hashlib.md5(chap_id + uname.encode("utf-8") + challenge).digest()
+                if e4 == chap_resp:
+                    auth_ok = True
+                    logger.debug("CHAP ok: v4 username=password")
+
+        if not auth_ok:
+            logger.info(f"RADIUS Hotspot REJECT: password salah untuk {uname!r}")
+            return reject(b"Wrong password")
+
+        if voucher.get("status") == "expired":
+            logger.info(f"RADIUS Hotspot REJECT: {uname!r} expired")
+            return reject(b"Voucher expired")
+
+        # Build rate-limit VSA dari package
+        reply_attrs = []
+        try:
+            profile_name = voucher.get("profile", "")
+            if profile_name and self._db is not None:
+                pkg = await self._db.billing_packages.find_one({
+                    "$or": [{"name": profile_name}, {"id": profile_name}]
+                })
+                if pkg:
+                    down = str(pkg.get("speed_down", "")).strip()
+                    up   = str(pkg.get("speed_up", "")).strip()
+                    if down and up:
+                        rate_str = f"{up}/{down}"
+                        reply_attrs.append((26, _build_vsa_rate_limit(rate_str)))
+                        logger.info(f"RADIUS Hotspot: rate '{rate_str}' untuk {uname!r}")
+        except Exception as e:
+            logger.error(f"Hotspot VSA build error: {e}")
+
+        accept(reply_attrs)
+
+    # ── Accounting Handler (FIX #5 #7 #8) ────────────────────────────────────
+    async def _acct(self, pkt: dict, addr: tuple, secret: bytes):
+        nas_ip = addr[0]
+        pid, req_auth, attrs = pkt["id"], pkt["auth"], pkt["attrs"]
+
+        # ACK segera (jangan buat NAS menunggu)
+        self._transport.sendto(
+            _build_reply(ACCT_RESPONSE, pid, req_auth, secret, []), addr
+        )
+
+        uname      = _get_attr_str(attrs, ATTR_USER_NAME)
+        stype      = _get_attr_int(attrs, ATTR_ACCT_STATUS_TYPE)
+        session_id = _get_attr_str(attrs, ATTR_ACCT_SESSION_ID)
+        bytes_in   = _get_attr_int(attrs, ATTR_ACCT_INPUT_OCTETS)    # Upload dari user
+        bytes_out  = _get_attr_int(attrs, ATTR_ACCT_OUTPUT_OCTETS)   # Download ke user
+        sess_time  = _get_attr_int(attrs, ATTR_ACCT_SESSION_TIME)
+        nas_port_type = _get_attr_int(attrs, ATTR_NAS_PORT_TYPE, default=NAS_PORT_VIRTUAL)
+
+        stype_name = {1: "Start", 2: "Stop", 3: "Interim-Update"}.get(stype, f"Unknown({stype})")
+        svc_type   = "pppoe" if nas_port_type == NAS_PORT_VIRTUAL else "hotspot"
+
+        logger.info(f"RADIUS ACCT [{stype_name}] user={uname!r} session={session_id!r} "
+                    f"in={bytes_in}B out={bytes_out}B time={sess_time}s svc={svc_type}")
 
         if self._db is None or not uname:
             return
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
         try:
-            v = await self._db.hotspot_vouchers.find_one({"username": uname})
-            if v and stype == 1 and v.get("status") == "new":
-                now = datetime.now(timezone.utc).isoformat()
-                await self._db.hotspot_vouchers.update_one(
-                    {"_id": v["_id"]},
-                    {"$set": {"status": "active", "activated_at": now}}
-                )
-                await self._db.hotspot_sales.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "voucher_id": str(v["_id"]),
-                    "username": uname,
-                    "price": float(v.get("price", 0)),
-                    "created_at": now,
-                    "device_ip": addr[0]
-                })
-                logger.info(f"ACCT: voucher {uname!r} activated, sale recorded")
+            if stype == ACCT_STATUS_START:
+                await self._acct_start(uname, session_id, nas_ip, nas_port_type, svc_type, now_iso)
+
+            elif stype == ACCT_STATUS_STOP:
+                await self._acct_stop(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, now_iso)
+
+            elif stype == ACCT_STATUS_INTERIM:
+                await self._acct_interim(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, now_iso)
+
         except Exception as e:
             logger.error(f"ACCT DB error: {e}")
 
+    async def _acct_start(self, uname: str, session_id: str, nas_ip: str,
+                          nas_port_type: int, svc_type: str, now_iso: str):
+        """FIX #7 #8: Buat/update sesi di radius_sessions saat Acct-Start."""
+        if self._db is None:
+            return
 
-_auth_transport = None
-_acct_transport = None
+        # Simpan ke radius_sessions
+        await self._db.radius_sessions.update_one(
+            {"acct_session_id": session_id} if session_id else {"username": uname, "active": True},
+            {"$set": {
+                "username":       uname,
+                "nas_ip":         nas_ip,
+                "acct_session_id": session_id,
+                "service_type":   svc_type,
+                "bytes_in":       0,
+                "bytes_out":      0,
+                "total_bytes":    0,
+                "session_time":   0,
+                "started_at":     now_iso,
+                "updated_at":     now_iso,
+                "active":         True,
+            }},
+            upsert=True
+        )
+        logger.info(f"ACCT START: sesi {session_id!r} untuk {uname!r} ({svc_type}) dibuat")
+
+        # Khusus Hotspot: aktivasi voucher jika statusnya 'new'
+        if svc_type == "hotspot":
+            try:
+                v = await self._db.hotspot_vouchers.find_one({"username": uname})
+                if v and v.get("status") == "new":
+                    await self._db.hotspot_vouchers.update_one(
+                        {"_id": v["_id"]},
+                        {"$set": {"status": "active", "activated_at": now_iso}}
+                    )
+                    await self._db.hotspot_sales.insert_one({
+                        "id":           str(uuid.uuid4()),
+                        "voucher_id":   str(v["_id"]),
+                        "username":     uname,
+                        "price":        float(v.get("price", 0)),
+                        "created_at":   now_iso,
+                        "device_ip":    v.get("nas_ip", ""),
+                    })
+                    logger.info(f"ACCT: voucher {uname!r} diaktifkan, sale dicatat")
+            except Exception as e:
+                logger.error(f"ACCT START hotspot voucher error: {e}")
+
+    async def _acct_interim(self, uname: str, session_id: str,
+                            bytes_in: int, bytes_out: int, sess_time: int,
+                            svc_type: str, now_iso: str):
+        """FIX #5 #7 #8: Update bytes di radius_sessions saat Interim-Update.
+        Data ini digunakan oleh scheduler FUP secara real-time."""
+        if self._db is None:
+            return
+
+        total_bytes = bytes_in + bytes_out
+
+        q = {"acct_session_id": session_id} if session_id else {"username": uname, "active": True}
+        await self._db.radius_sessions.update_one(
+            q,
+            {"$set": {
+                "bytes_in":    bytes_in,
+                "bytes_out":   bytes_out,
+                "total_bytes": total_bytes,
+                "session_time": sess_time,
+                "updated_at":  now_iso,
+                "active":      True,
+            }},
+            upsert=True
+        )
+        logger.debug(f"ACCT INTERIM: {uname!r} in={bytes_in}B out={bytes_out}B total={total_bytes}B")
+
+        # Trigger FUP check real-time untuk PPPoE (FIX #5)
+        if svc_type == "pppoe":
+            asyncio.ensure_future(self._check_fup_realtime(uname, total_bytes))
+
+    async def _acct_stop(self, uname: str, session_id: str,
+                         bytes_in: int, bytes_out: int, sess_time: int,
+                         svc_type: str, now_iso: str):
+        """FIX #8: Tandai sesi sebagai tidak aktif saat Acct-Stop."""
+        if self._db is None:
+            return
+
+        total_bytes = bytes_in + bytes_out
+        q = {"acct_session_id": session_id} if session_id else {"username": uname, "active": True}
+
+        await self._db.radius_sessions.update_one(
+            q,
+            {"$set": {
+                "bytes_in":    bytes_in,
+                "bytes_out":   bytes_out,
+                "total_bytes": total_bytes,
+                "session_time": sess_time,
+                "stopped_at":  now_iso,
+                "updated_at":  now_iso,
+                "active":      False,
+            }}
+        )
+        logger.info(f"ACCT STOP: sesi {session_id!r} untuk {uname!r} ditutup. "
+                    f"Total: {total_bytes}B dalam {sess_time}s")
+
+    async def _check_fup_realtime(self, uname: str, total_bytes: int):
+        """FIX #5: Cek FUP limit secara real-time dari data Accounting.
+        Dipanggil setiap Interim-Update masuk — tanpa perlu polling API MikroTik."""
+        if self._db is None:
+            return
+        try:
+            customer = await self._db.customers.find_one({"username": uname, "active": True})
+            if not customer or customer.get("fup_active"):
+                return   # Sudah kena FUP atau tidak ditemukan
+
+            pkg = await self._db.billing_packages.find_one({"id": customer.get("package_id", "")})
+            if not pkg or not pkg.get("fup_enabled"):
+                return
+
+            limit_gb = pkg.get("fup_limit_gb", 0)
+            if limit_gb <= 0:
+                return
+
+            limit_bytes = limit_gb * 1_000_000_000
+            if total_bytes >= limit_bytes:
+                fup_rate = pkg.get("fup_rate_limit", "")
+                logger.info(f"[FUP-REALTIME] {uname}: {total_bytes}B >= {limit_bytes}B limit. "
+                            f"Apply FUP rate: {fup_rate!r}")
+
+                # Update DB
+                await self._db.customers.update_one(
+                    {"username": uname},
+                    {"$set": {"fup_active": True, "current_rate_limit": fup_rate}}
+                )
+
+                # Kirim CoA via bandwidth_manager
+                if fup_rate:
+                    try:
+                        device = await self._db.devices.find_one({"id": customer.get("device_id", "")})
+                        if device:
+                            from services.bandwidth_manager import set_rate_limit
+                            await set_rate_limit(customer, device, fup_rate, self._db)
+                    except Exception as e:
+                        logger.error(f"[FUP-REALTIME] CoA gagal untuk {uname}: {e}")
+
+        except Exception as e:
+            logger.error(f"[FUP-REALTIME] Check error untuk {uname}: {e}")
 
 
+# ── Background: Sync Allowed NAS Hosts dari MongoDB ───────────────────────────
 async def _sync_hosts_loop(db):
+    """Sinkronisasi daftar NAS (router MikroTik) dan secret dari DB setiap 30 detik."""
     global _global_secret, _allowed_hosts
     while True:
         try:
             if db is not None:
+                # Update global secret dari hotspot_settings
                 hs = await db.hotspot_settings.find_one({}, {"_id": 0}) or {}
                 raw = hs.get("radius_secret") or hs.get("secret", "")
                 if raw:
                     _global_secret = raw.encode("utf-8")
 
+                # Sync per-device secret
                 devices = await db.devices.find({}).to_list(1000)
                 new_hosts = {}
                 for d in devices:
@@ -399,14 +661,21 @@ async def _sync_hosts_loop(db):
                     ip = raw_h.split(":")[0].strip() if raw_h else ""
                     if not ip or ip == "undefined":
                         continue
-                    s = d.get("radius_secret") or d.get("hotspot_secret", "")
-                    new_hosts[ip] = s.encode() if s else _global_secret
-                    logger.info(f"RADIUS host: {d.get('name', ip)} @ {ip}")
+                    # Prioritas: radius_secret > hotspot_secret > global_secret
+                    s = (d.get("radius_secret") or d.get("hotspot_secret") or "")
+                    new_hosts[ip] = s.encode("utf-8") if s else _global_secret
+                    logger.debug(f"RADIUS host synced: {d.get('name', ip)} @ {ip}")
                 _allowed_hosts = new_hosts
-                logger.info(f"RADIUS hosts synced: {list(_allowed_hosts.keys())} global={'*'*len(_global_secret)}")
+                logger.info(f"RADIUS hosts synced: {list(_allowed_hosts.keys())} "
+                            f"global={'*' * len(_global_secret)}")
         except Exception as e:
             logger.error(f"RADIUS sync error: {e}")
         await asyncio.sleep(30)
+
+
+# ── Server Startup ─────────────────────────────────────────────────────────────
+_auth_transport = None
+_acct_transport = None
 
 
 def start_radius_server(loop, db):
@@ -427,7 +696,8 @@ def start_radius_server(loop, db):
             logger.info("RADIUS Acct listening 0.0.0.0:1813")
 
             asyncio.ensure_future(_sync_hosts_loop(db))
-            logger.info("RADIUS Server started — PAP + CHAP support enabled")
+            logger.info("RADIUS Server aktif — PAP + CHAP + NAS-Port-Type routing + FIX #1-10")
+
         except Exception as e:
             import traceback
             logger.error(f"RADIUS start failed: {e}\n{traceback.format_exc()}")

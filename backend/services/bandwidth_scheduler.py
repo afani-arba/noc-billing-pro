@@ -2,27 +2,24 @@
 bandwidth_scheduler.py
 ─────────────────────────────────────────────────────────────────────────────
 Background scheduler untuk Dynamic Bandwidth:
-  1. FUP Monitoring (setiap 10 detik)
-  2. Day/Night Sync + Booster Expiry Check (setiap 10 detik)
-  4. FUP Monthly Reset (setiap tanggal 1 tiap bulan)
+  1. FUP Monitoring (setiap 30 menit) — FIX #5: dari radius_sessions real-time
+  2. Day/Night Sync + Booster Expiry Check (setiap 5 menit)
+  3. FUP Monthly Reset (setiap tanggal 1 tiap bulan)
 
-PERBAIKAN UTAMA:
-- Tidak pernah kick user saat limit diubah (CoA tanpa disconnect)
-- Night Mode dan Booster saling eksklusif (hanya satu yang bisa aktif)
-- Setelah Night Mode berakhir atau Booster expired, rate dikembalikan ke normal
-- Perubahan limit hanya berlaku untuk user yang SEDANG AKTIF (online)
+PERBAIKAN:
+- FIX #5: FUP monitoring membaca dari radius_sessions (push dari MikroTik
+  via RADIUS Accounting Interim-Update) — real-time tanpa polling API
+- CoA tanpa kick user (no disconnect)
+- Night Mode dan Booster saling eksklusif
 - Booster expire resets current_rate_limit agar scheduler evaluasi ulang
 ─────────────────────────────────────────────────────────────────────────────
 """
 import asyncio
 import logging
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, timezone, date
 import calendar
 
 logger = logging.getLogger(__name__)
-
-# Lock untuk mencegah overlap run jika proses sebelumnya belum selesai
-_scheduler_lock = asyncio.Lock()
 
 def _db():
     from core.db import get_db
@@ -30,38 +27,32 @@ def _db():
 
 async def bandwidth_scheduler_loop():
     logger.info("[BandwidthScheduler] Memulai scheduler bandwidth (FUP, Day/Night, Booster)...")
-    
-    last_fup_run = datetime.now() - timedelta(seconds=30)  # Langsung jalankan FUP di siklus pertama
+
+    last_fup_run = datetime.now()
     last_monthly_reset = ""
-    
+
     while True:
-        await asyncio.sleep(10)  # Sleep 10 Detik — di awal agar tidak overlap
-        
-        # Jika siklus sebelumnya belum selesai, lewati (skip)
-        if _scheduler_lock.locked():
-            logger.warning("[BandwidthScheduler] Siklus sebelumnya masih berjalan, skip.")
-            continue
-        
-        async with _scheduler_lock:
-            try:
-                now = datetime.now()
-                
-                # ── 1. Day/Night & Booster (Tiap 10 detik) ──
-                await run_day_night_and_booster_sync()
-                
-                # ── 2. FUP Monitoring (Tiap 60 detik — menjaga akurasi tanpa overload) ──
-                if (now - last_fup_run).total_seconds() >= 60:
-                    await run_fup_monitoring()
-                    last_fup_run = now
-                    
-                # ── 3. FUP Monthly Reset (Tiap tgl 1) ──
-                today_str = date.today().isoformat()
-                if date.today().day == 1 and last_monthly_reset != today_str:
-                    await run_fup_monthly_reset()
-                    last_monthly_reset = today_str
-                    
-            except Exception as e:
-                logger.error(f"[BandwidthScheduler] Loop error: {e}", exc_info=True)
+        try:
+            now = datetime.now()
+
+            # ── 1. Day/Night & Booster (Tiap 5 menit) ──
+            await run_day_night_and_booster_sync()
+
+            # ── 2. FUP Monitoring (Tiap 30 menit) ──
+            if (now - last_fup_run).total_seconds() >= 1800:
+                await run_fup_monitoring()
+                last_fup_run = now
+
+            # ── 3. FUP Monthly Reset (Tiap tgl 1) ──
+            today_str = date.today().isoformat()
+            if date.today().day == 1 and last_monthly_reset != today_str:
+                await run_fup_monthly_reset()
+                last_monthly_reset = today_str
+
+        except Exception as e:
+            logger.error(f"[BandwidthScheduler] Loop error: {e}")
+
+        await asyncio.sleep(300)  # Sleep 5 Menit
 
 async def run_fup_monthly_reset():
     """Reset FUP bytes_used ke 0 setiap tanggal 1."""
@@ -76,120 +67,97 @@ async def run_fup_monthly_reset():
         logger.error(f"[BandwidthScheduler] FUP Monthly Reset error: {e}")
 
 async def run_fup_monitoring():
-    """Monitoring FUP: bandingkan tx/rx bytes dengan allowance bytes."""
+    """
+    FUP Monitoring: bandingkan total bytes dengan FUP allowance.
+
+    FIX #5: Prioritas dari radius_sessions (real-time via Accounting Interim-Update).
+    Fallback ke polling API MikroTik jika radius_sessions kosong.
+    """
     from services.bandwidth_manager import set_rate_limit
     try:
         db = _db()
-        # Ambil paket dengan FUP
         pkgs = await db.billing_packages.find({"fup_enabled": True}).to_list(1000)
         pkg_map = {p["id"]: p for p in pkgs}
-        if not pkgs: return
-        
-        # Ambil user aktif dengan FUP belum habis
+        if not pkgs:
+            return
+
         customers = await db.customers.find({
             "package_id": {"$in": list(pkg_map.keys())},
             "fup_active": {"$ne": True},
             "active": True
         }).to_list(10000)
-        
-        if not customers: return
-        
-        # Group berdasarkan device untuk 1x polling per router
-        by_device = {}
+
+        if not customers:
+            return
+
+        # ── Prioritas 1: radius_sessions (real-time dari Accounting) ──
+        active_sessions = await db.radius_sessions.find({"active": True}).to_list(10000)
+        session_map = {s["username"]: s for s in active_sessions if s.get("username")}
+        using_sessions = bool(session_map)
+
+        if using_sessions:
+            logger.info(f"[BW] FUP: {len(session_map)} radius_sessions (real-time)")
+        else:
+            logger.info("[BW] FUP: fallback ke polling API MikroTik")
+
+        by_device: dict = {}
         for c in customers:
             dev_id = c.get("device_id")
             if dev_id:
                 by_device.setdefault(dev_id, []).append(c)
-                
+
         from mikrotik_api import get_api_client
+
         for dev_id, cust_list in by_device.items():
             device = await db.devices.find_one({"id": dev_id})
-            if not device: continue
-            
-            try:
-                mt = get_api_client(device)
-                active_sessions = await mt.list_pppoe_active()
-                if not active_sessions: continue
-                
-                # Map active sessions
-                active_map = {s.get("name"): s for s in active_sessions if s.get("name")}
-                
-                # Fetch interface data directly to get rx/tx bytes (ppp/active does NOT contain bytes!)
-                ifaces = []
-                try:
-                    ifaces = await mt.list_interfaces()
-                except Exception as e:
-                    logger.warning(f"[FUP] Gagal fetch interfaces untuk {dev_id}: {e}")
-                    
-                iface_map = {}
-                for i in ifaces:
-                    if str(i.get("type", "")).lower() == "pppoe-in":
-                        name = i.get("name", "")
-                        if name:
-                            iface_map[name] = {
-                                "rx": int(i.get("rx-byte", 0) or 0),
-                                "tx": int(i.get("tx-byte", 0) or 0)
-                            }
+            if not device:
+                continue
 
-                for c in cust_list:
-                    username = c.get("username", "")
-                    session = active_map.get(username)
-                    if not session: continue
-                    
-                    pkg = pkg_map.get(c["package_id"])
-                    limit_gb = pkg.get("fup_limit_gb", 0)
-                    if limit_gb <= 0: continue
-                    limit_bytes = limit_gb * 1_000_000_000
-                    
-                    # PPPoE interface name format
-                    iface_name_1 = f"<pppoe-{username}>"
-                    iface_name_2 = username
-                    iface_data = iface_map.get(iface_name_1) or iface_map.get(iface_name_2)
-                    
-                    if iface_data:
-                        # tx di MikroTik PPPoE Interface = download pelanggan ke NOC (dari sudut pandang NOC)
-                        # rx di MikroTik PPPoE Interface = upload pelanggan ke NOC
-                        total_current = iface_data["tx"] + iface_data["rx"]
-                    else:
-                        # Fallback ke session hotspot jika tersedia
-                        current_rx = int(session.get("bytes-out", 0) or 0)
-                        current_tx = int(session.get("bytes-in", 0) or 0)
-                        total_current = current_rx + current_tx
-                        
-                    if total_current == 0:
-                        continue # Data 0 berarti stat interface gagal dbaca atau tidak tercatat, lewati.
-                    
+            api_session_map: dict = {}
+            if not using_sessions:
+                try:
+                    mt = get_api_client(device)
+                    active = await mt.list_pppoe_active()
+                    api_session_map = {s.get("name"): s for s in active if s.get("name")}
+                except Exception as e:
+                    logger.error(f"[BW] Gagal polling {device.get('name')}: {e}")
+
+            for c in cust_list:
+                username = c.get("username")
+                pkg = pkg_map.get(c["package_id"])
+                limit_gb = pkg.get("fup_limit_gb", 0)
+                if limit_gb <= 0:
+                    continue
+                limit_bytes = limit_gb * 1_000_000_000
+                total_current = 0
+
+                if using_sessions:
+                    sess = session_map.get(username)
+                    if not sess:
+                        continue
+                    total_current = sess.get("total_bytes", 0)
+                else:
+                    api_sess = api_session_map.get(username)
+                    if not api_sess:
+                        continue
+                    rx = int(api_sess.get("bytes-out", 0) or 0)
+                    tx = int(api_sess.get("bytes-in", 0) or 0)
+                    raw_total  = rx + tx
                     last_total = c.get("fup_last_total", 0)
                     saved_used = c.get("fup_bytes_used", 0)
-                    
-                    # Jika Mikrotik reset counters (misal relogin/reboot)
-                    if total_current < last_total:
-                        delta = total_current # Anggap ngitung dari 0 lagi
-                    else:
-                        delta = total_current - last_total
-                        
-                    new_used = saved_used + delta
-                    
-                    # Update usage di DB
-                    update_data = {"fup_last_total": total_current, "fup_bytes_used": new_used}
-                    
-                    if new_used >= limit_bytes:
-                        # Kena FUP — langsung set rate limit ke FUP rate (JANGAN None)
-                        fup_rate = pkg.get("fup_rate_limit", "")
-                        update_data["fup_active"] = True
-                        if fup_rate:
-                            # Set langsung ke FUP rate agar scheduler tidak terus-terusan mengevaluasi ulang
-                            update_data["current_rate_limit"] = fup_rate
-                        logger.info(
-                            f"[FUP] {username} kena FUP ({(new_used/1_000_000_000):.2f}GB / {limit_gb}GB) "
-                            f"→ speed diset ke {fup_rate or '(tidak dikonfigurasi)'}"
-                        )
-                        
-                    await db.customers.update_one({"id": c["id"]}, {"$set": update_data})
-                    
-            except Exception as e:
-                logger.error(f"[BandwidthScheduler] Gagal sync device {dev_id}: {e}")
-                
+                    delta = raw_total - last_total if raw_total >= last_total else raw_total
+                    total_current = saved_used + delta
+
+                update_data = {"fup_last_total": total_current, "fup_bytes_used": total_current}
+
+                if total_current >= limit_bytes:
+                    update_data["fup_active"] = True
+                    fup_rate = pkg.get("fup_rate_limit", "")
+                    logger.info(f"[BW] {username} FUP ({total_current}/{limit_bytes}B). Rate apply {fup_rate}")
+                    await set_rate_limit(c, device, fup_rate, db)
+
+                await db.customers.update_one({"id": c["id"]}, {"$set": update_data})
+
     except Exception as e:
         logger.error(f"[BandwidthScheduler] FUP Monitoring error: {e}")
 
@@ -198,24 +166,21 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
     Handle logic Day/Night Mode dan Speed Booster secara real-time.
     Dipanggil rutin tiap 5 menit, atau secara targeted untuk 1 pelanggan.
 
-    Perbaikan penting:
-    - Night Mode dan Booster SALING EKSKLUSIF — hanya satu yang bisa aktif
+    - Night Mode dan Booster SALING EKSKLUSIF
     - Booster yang expire → current_rate_limit di-reset agar evaluasi ulang ke Normal
     - CoA dikirim TANPA kick (user tidak diputus koneksinya)
-    - Hanya user yang SEDANG ONLINE yang di-CoA; offline → rate tersimpan di DB untuk reconnect
+    - Hanya user yang SEDANG ONLINE yang di-CoA
     - Jika customer_id diisi → hanya proses 1 pelanggan tersebut
     """
     from services.bandwidth_manager import _coa_change_rate
     try:
         db = _db()
 
-        # Evaluasi SEMUA paket (atau hanya 1 pelanggan jika customer_id diisi)
         pkgs = await db.billing_packages.find({}).to_list(1000)
         pkg_map = {p["id"]: p for p in pkgs}
         if not pkgs:
             return
 
-        # Filter query: jika targeted, hanya 1 pelanggan; jika global, semua aktif
         q = {"package_id": {"$in": list(pkg_map.keys())}, "active": True}
         if customer_id:
             q["id"] = customer_id
@@ -225,7 +190,6 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
         now_utc = datetime.now(timezone.utc)
         now_time_str = datetime.now().strftime("%H:%M")
 
-        # ── Kumpulkan semua yang perlu diupdate ──
         pending = []  # [{"customer": c, "target_rate": str}]
 
         for c in customers:
@@ -238,7 +202,6 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             if c.get("booster_active") and c.get("booster_expires_at"):
                 try:
                     exp_str = c["booster_expires_at"]
-                    # Handle both timezone-aware and naive datetimes
                     exp_at = datetime.fromisoformat(exp_str)
                     if exp_at.tzinfo is None:
                         exp_at = exp_at.replace(tzinfo=timezone.utc)
@@ -247,21 +210,15 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
                         booster_active = True
                     else:
                         # Booster expired — matikan dan reset current_rate_limit
-                        # agar scheduler mengevaluasi ulang ke kondisi normal
                         logger.info(f"[BW] Booster '{c.get('username')}' expired — reset ke normal")
                         await db.customers.update_one(
                             {"id": c["id"]},
-                            {"$set": {
-                                "booster_active": False,
-                                "current_rate_limit": None  # Force re-evaluate
-                            }}
+                            {"$set": {"booster_active": False, "current_rate_limit": None}}
                         )
-                        # Update local copy agar evaluasi target_rate benar
                         c["booster_active"] = False
                         c["current_rate_limit"] = None
                 except Exception as parse_err:
                     logger.warning(f"[BW] Gagal parse booster_expires_at untuk {c.get('username')}: {parse_err}")
-                    # Matikan booster jika tanggal tidak bisa dibaca
                     await db.customers.update_one(
                         {"id": c["id"]},
                         {"$set": {"booster_active": False, "current_rate_limit": None}}
@@ -275,33 +232,25 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
                 n_start = pkg.get("night_start", "22:00")
                 n_end   = pkg.get("night_end",   "06:00")
                 if n_start > n_end:
-                    # Overnight (misal 22:00 - 06:00)
                     is_night = now_time_str >= n_start or now_time_str < n_end
                 else:
                     is_night = n_start <= now_time_str < n_end
 
-            # ── MUTUAL EXCLUSIVITY: Booster vs Night Mode ──
-            # Jika Booster sedang aktif, Night Mode DIABAIKAN 
-            # Jika Night Mode sedang berlaku, Booster TIDAK bisa diaktifkan
-            # (validasi aktivasi Booster di endpoint, bukan di sini)
-            # Di scheduler: Booster priority > Night Mode
+            # ── MUTUAL EXCLUSIVITY: Booster priority > Night Mode ──
             if booster_active and is_night:
-                # Booster menang → Night Mode diabaikan
                 is_night = False
 
             # ── Tentukan target rate berdasarkan prioritas ──
-            # Prioritas: Booster > FUP > Night > Normal
             if booster_active and c.get("boost_rate_limit"):
                 target_rate = c["boost_rate_limit"]
-            elif c.get("fup_active") and pkg.get("fup_enabled") and pkg.get("fup_rate_limit"):
+            elif c.get("fup_active") and pkg.get("fup_rate_limit"):
                 target_rate = pkg["fup_rate_limit"]
             elif is_night and pkg.get("night_rate_limit"):
                 target_rate = pkg["night_rate_limit"]
             else:
-                # Normal rate dari paket
-                sp_up   = pkg.get("speed_up",   "—")
-                sp_down = pkg.get("speed_down", "—")
-                if sp_up == "—" or sp_down == "—":
+                sp_up   = pkg.get("speed_up",   "")
+                sp_down = pkg.get("speed_down", "")
+                if not sp_up or not sp_down:
                     continue
                 target_rate = f"{sp_up}/{sp_down}"
 
@@ -323,25 +272,19 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             if not device:
                 continue
 
-            # ── Fetch active sessions dari Session Cache (bukan langsung ke MikroTik) ──
-            # Session cache diupdate tiap 90 detik oleh session_cache_service
-            # Ini mencegah scheduler membebani router setiap 10 detik
+            # ── Fetch active sessions dari MikroTik ──
             active_usernames: set = set()
             try:
-                from services.session_cache_service import get_cached_pppoe
-                sessions = await get_cached_pppoe(device)
-                # Build map: username -> ada/tidak, username -> session-id (Acct-Session-Id)
+                from mikrotik_api import get_api_client
+                import asyncio as _asyncio
+                mt = get_api_client(device)
+                sessions = await _asyncio.to_thread(mt._list_resource, "/ppp/active")
                 active_usernames = {s.get("name", "") for s in sessions if s.get("name")}
-                # session-id dari MikroTik adalah field 'session-id' (hex format, e.g. '0x81700FD3')
-                session_id_map   = {s.get("name", ""): s.get("session-id", "") for s in sessions if s.get("name")}
-                session_ip_map   = {s.get("name", ""): s.get("address", "") for s in sessions if s.get("name")}
-                logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif (cache)")
+                logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif")
             except Exception as e:
-                logger.warning(f"[BW] Gagal baca session cache {device.get('name')}: {e}")
-                session_id_map = {}
-                session_ip_map = {}
+                logger.warning(f"[BW] Gagal baca active sessions {device.get('name')}: {e}")
 
-            radius_secret = device.get("radius_secret", "")
+            radius_secret = device.get("radius_secret") or device.get("hotspot_secret", "")
             nas_ip = device.get("ip_address", "")
 
             for item in items:
@@ -364,21 +307,16 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
                     continue
 
                 if not radius_secret:
-                    logger.warning(f"[BW] {username} ONLINE tapi no radius_secret di device → skip CoA")
+                    logger.warning(f"[BW] {username} ONLINE tapi radius_secret kosong → skip CoA")
                     continue
 
                 # CoA TANPA KICK — user tidak diputus koneksinya
-                # CoA TANPA KICK — sertakan Acct-Session-Id agar MikroTik
-                # tahu persis sesi mana (PPPoE atau Hotspot) yang perlu diubah
-                # tanpa meneruskan CoA ke modul lain yang tidak relevan
-                session_id = session_id_map.get(username, "")
-                framed_ip  = session_ip_map.get(username, "")
                 from services.bandwidth_manager import set_rate_limit
-                ret = await set_rate_limit(c, device, target_rate, db, session_id=session_id)
+                ret = await set_rate_limit(c, device, target_rate, db)
                 if ret.get("success"):
-                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} sid={session_id or '?'} (no disconnect)")
+                    logger.info(f"[BW] ✅ {username} → {target_rate} via {ret.get('method')} (no disconnect)")
                 else:
-                    logger.error(f"[BW] ❌ {username} GAGAL ubah ke {target_rate}: {ret.get('reason')}")
+                    logger.error(f"[BW] ❌ {username} GAGAL → {target_rate}: {ret.get('reason')}")
 
     except Exception as e:
         logger.error(f"[BandwidthScheduler] Day/Night Sync error: {e}")

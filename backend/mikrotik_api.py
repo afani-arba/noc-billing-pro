@@ -1215,97 +1215,138 @@ class MikroTikRestAPI(MikroTikBase):
             logger.warning(f"list_radius_clients failed: {e}")
             return []
 
-    async def add_radius_client(self, address: str, secret: str, service: str = "ppp", comment: str = "NOC-Billing RADIUS") -> dict:
-        """Tambah atau update RADIUS client entry di MikroTik (ROS 7 REST).
-        
-        Gunakan service='ppp' untuk PPPoE, service='hotspot' untuk Hotspot.
-        JANGAN gabungkan keduanya agar CoA tidak bocor lintas modul.
+    async def add_radius_client(
+        self, address: str, secret: str,
+        service = None, comment: str = "NOC-Billing-Pro"
+    ) -> dict:
         """
+        Tambah/update RADIUS client di MikroTik (ROS 7 REST).
+        FIX #1: timeout=3000 (3 detik) — cegah 'radius not responding'
+        FIX #3: 1 entri saja dengan service=[hotspot,ppp]
+        """
+        if service is None:
+            service = ["hotspot", "ppp"]
         try:
-            existing = await self.list_radius_clients()
-            # Cari berdasarkan address DAN comment (agar PPPoE dan Hotspot bisa beda entry)
-            match = next((r for r in existing if r.get("address") == address and r.get("comment") == comment), None)
-            
             payload = {
                 "address": address,
                 "secret": secret,
-                "service": [service] if isinstance(service, str) else service,
+                "service": service if isinstance(service, list) else [service],
                 "comment": comment,
                 "authentication-port": 1816,
-                "accounting-port": 1817
+                "accounting-port": 1817,
+                "timeout": "3000",   # FIX #1: 3 detik, bukan 300ms default
             }
-            
+            existing = await self.list_radius_clients()
+            match = next((r for r in existing if r.get("address") == address or r.get("comment") == comment), None)
             if match:
-                mt_id = match.get(".id", "")
-                return await self._async_req("PATCH", f"radius/{mt_id}", payload)
-            
+                return await self._async_req("PATCH", f"radius/{match.get('.id', '')}", payload)
             return await self._async_req("PUT", "radius", payload)
         except Exception as e:
             raise Exception(f"Gagal tambah RADIUS client: {e}")
 
-    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
+    async def purge_and_reset_radius(self, radius_ip: str, secret: str) -> dict:
         """
-        Setup lengkap RADIUS di MikroTik untuk Hotspot & PPPoE:
-        1. Tambah RADIUS client (IP NOC Sentinel + secret)
-        2. Aktifkan use-radius=yes di hotspot server profile
+        FIX #3: Hapus SEMUA entri RADIUS lama lalu pasang 1 entri bersih.
+        Mencegah duplikasi hotspot/ppp yang menyebabkan konflik.
         """
         steps = []
         try:
-            # Satu entry RADIUS melayani PPPoE + Hotspot sekaligus
-            # Pemisahan PPPoE vs Hotspot ditangani oleh Acct-Session-Id di CoA
-            await self.add_radius_client(
-                address=radius_ip, secret=secret,
-                service="ppp,hotspot",
-                comment="NOC-Billing RADIUS"
-            )
-            steps.append(f"✅ RADIUS client {radius_ip} (ppp+hotspot) ditambahkan/diperbarui")
+            existing = await self.list_radius_clients()
+            for r in existing:
+                mt_id = r.get(".id", "")
+                if mt_id:
+                    try:
+                        await self._async_req("DELETE", f"radius/{mt_id}")
+                        steps.append(f"🗑 Hapus RADIUS entry: address={r.get('address')} svc={r.get('service')}")
+                    except Exception as e:
+                        steps.append(f"⚠️ Gagal hapus entry {mt_id}: {e}")
+            # Pasang 1 entri bersih
+            await self.add_radius_client(radius_ip, secret, service=["hotspot", "ppp"])
+            steps.append(f"✅ 1 RADIUS client baru: {radius_ip} (hotspot+ppp, timeout=3s)")
+            return {"success": True, "steps": steps}
         except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS client: {e}")
+            steps.append(f"❌ Error: {e}")
             return {"success": False, "steps": steps}
 
+    async def enable_radius_incoming(self) -> dict:
+        """
+        FIX #2: Aktifkan /radius incoming CoA listener di MikroTik (port 3799).
+        Tanpa ini CoA tidak pernah diterima — perubahan limit harus kick user.
+        """
         try:
-            # ROS 7 path: ip/hotspot/profile
+            try:
+                await self._async_req("POST", "radius/incoming/set", {"accept": "true", "port": "3799"})
+            except Exception:
+                await self._async_req("PATCH", "radius/incoming", {"accept": "true", "port": "3799"})
+            logger.info(f"[RADIUS] CoA incoming diaktifkan di {self.host}:3799")
+            return {"success": True, "msg": "CoA incoming (port 3799) aktif"}
+        except Exception as e:
+            logger.warning(f"[RADIUS] Gagal aktifkan incoming di {self.host}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
+        """
+        Setup lengkap RADIUS di MikroTik untuk Hotspot & PPPoE (ROS 7):
+        1. Purge entri lama, pasang 1 entri bersih (FIX #3)
+        2. Aktifkan use-radius di hotspot server profile
+        3. Aktifkan CoA incoming port 3799 (FIX #2)
+        4. Aktifkan PPP AAA use-radius + interim-update
+        """
+        steps = []
+
+        # Langkah 1: Purge + reset 1 entri RADIUS bersih
+        purge = await self.purge_and_reset_radius(radius_ip, secret)
+        steps.extend(purge.get("steps", []))
+        if not purge.get("success"):
+            return {"success": False, "steps": steps}
+
+        # Langkah 2: Aktifkan use-radius di hotspot profile
+        try:
             profiles = await self._async_req("GET", "ip/hotspot/profile")
-            if isinstance(profiles, list):
-                # Cari yang namanya match (case-insensitive)
-                match = next((p for p in profiles if str(p.get("name", "")).lower() == server_profile.lower()), None)
-                
-                if not match and profiles:
-                    # Cari yang mengandung kata 'hsprof' atau 'default'
-                    match = next((p for p in profiles if "hsprof" in str(p.get("name", "")).lower()), profiles[0])
-                
+            if isinstance(profiles, list) and profiles:
+                match = next((p for p in profiles if str(p.get("name","")).lower() == server_profile.lower()), None)
+                if not match:
+                    match = next((p for p in profiles if "hsprof" in str(p.get("name","")).lower()), profiles[0])
                 if match:
                     mt_id = match.get(".id", "")
-                    prof_name = match.get("name", server_profile)
                     await self._async_req("PATCH", f"ip/hotspot/profile/{mt_id}", {"use-radius": "true"})
-                    steps.append(f"✅ Profile '{prof_name}' — use-radius=yes diaktifkan")
+                    steps.append(f"✅ Hotspot profile '{match.get('name')}' — use-radius=yes")
                 else:
                     steps.append("⚠️ Tidak ada hotspot server profile ditemukan")
             else:
                 steps.append("⚠️ Data profile hotspot kosong")
         except Exception as e:
-            steps.append(f"⚠️ Tidak dapat set use-radius di profile hotspot: {e}")
+            steps.append(f"⚠️ Gagal set use-radius hotspot: {e}")
 
+        # Langkah 3: Aktifkan CoA incoming (FIX #2)
+        coa = await self.enable_radius_incoming()
+        steps.append("✅ CoA incoming port 3799 aktif" if coa.get("success") else f"⚠️ CoA: {coa.get('error')}")
+
+        # Langkah 4: PPP AAA use-radius + interim-update (agar MikroTik kirim bytes tiap 5 menit)
         if pppoe_profile:
             try:
                 try:
-                    await self._async_req("POST", "ppp/aaa/set", {"use-radius": "yes"})
+                    await self._async_req("POST", "ppp/aaa/set", {"use-radius": "yes", "interim-update": "00:05:00"})
                 except Exception:
-                    await self._async_req("PATCH", "ppp/aaa", {"use-radius": "true"})
-                steps.append("✅ PPPoE AAA — use-radius=yes diaktifkan secara global (PPP Profile: target OK)")
+                    await self._async_req("PATCH", "ppp/aaa", {"use-radius": "true", "interim-update": "00:05:00"})
+                steps.append("✅ PPP AAA — use-radius=yes + interim-update=5menit aktif")
             except Exception as e:
-                steps.append(f"⚠️ Tidak dapat set use-radius untuk PPPoE (PPP AAA): {e}")
+                steps.append(f"⚠️ Gagal set PPP AAA: {e}")
 
         return {"success": True, "steps": steps}
 
     async def check_radius_enabled(self, server_profile: str = "hsprof1") -> dict:
-        """Cek apakah RADIUS sudah aktif di hotspot server profile MikroTik."""
+        """Cek status RADIUS: apakah aktif, berapa entri, CoA status."""
         try:
             profiles = await self._async_req("GET", "ip/hotspot/profile")
             radius_clients = await self.list_radius_clients()
+            incoming = {}
+            try:
+                incoming = await self._async_req("GET", "radius/incoming")
+            except Exception:
+                pass
             radius_enabled = False
             active_profile = None
-
             if isinstance(profiles, list):
                 for p in profiles:
                     use_rad = str(p.get("use-radius", "false")).lower()
@@ -1313,12 +1354,14 @@ class MikroTikRestAPI(MikroTikBase):
                         radius_enabled = True
                         active_profile = p.get("name")
                         break
-
             return {
                 "radius_enabled": radius_enabled,
                 "active_profile": active_profile,
+                "radius_clients_count": len(radius_clients),
+                "coa_incoming_active": str(incoming.get("accept", "false")).lower() in ("true", "yes") if isinstance(incoming, dict) else False,
                 "radius_clients": [
-                    {"address": r.get("address"), "service": r.get("service"), "comment": r.get("comment")}
+                    {"address": r.get("address"), "service": r.get("service"),
+                     "timeout": r.get("timeout"), "comment": r.get("comment")}
                     for r in radius_clients
                 ] if isinstance(radius_clients, list) else [],
             }
@@ -2361,77 +2404,103 @@ class MikroTikLegacyAPI(MikroTikBase):
         except Exception:
             return []
 
-    async def add_radius_client(self, address: str, secret: str, service: str = "ppp", comment: str = "NOC-Billing RADIUS") -> dict:
-        """Tambah atau update RADIUS client entry di MikroTik (ROS 6 API).
-        
-        Gunakan service='ppp' untuk PPPoE, service='hotspot' untuk Hotspot.
-        JANGAN gabungkan keduanya agar CoA tidak bocor lintas modul.
+    async def add_radius_client(
+        self, address: str, secret: str,
+        service = None, comment: str = "NOC-Billing-Pro"
+    ) -> dict:
         """
+        Tambah/update RADIUS client di MikroTik (ROS 6 Legacy API).
+        FIX #1: timeout=3000ms — cegah 'radius not responding'
+        FIX #3: service=hotspot,ppp — 1 entri untuk keduanya
+        """
+        if service is None:
+            service = "hotspot,ppp"
+        if isinstance(service, list):
+            service = ",".join(service)
         try:
             existing = await self.list_radius_clients()
-            # Cari berdasarkan address DAN comment (agar PPPoE dan Hotspot bisa beda entry)
-            match = next((r for r in existing if r.get("address") == address and r.get("comment") == comment), None)
-            
+            match = next((r for r in existing if r.get("address") == address or r.get("comment") == comment), None)
             data = {
                 "address": address,
                 "secret": secret,
                 "service": service,
                 "comment": comment,
                 "authentication-port": "1816",
-                "accounting-port": "1817"
+                "accounting-port": "1817",
+                "timeout": "3000",   # FIX #1: 3 detik timeout
             }
-            
             if match:
                 mt_id = match.get(".id") or match.get("id", "")
                 return await asyncio.to_thread(self._set_resource, "/radius", mt_id, data)
-            
             return await asyncio.to_thread(self._add_resource, "/radius", data)
         except Exception as e:
             raise Exception(f"Gagal tambah RADIUS client (ROS6): {e}")
 
-    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
+    async def purge_and_reset_radius(self, radius_ip: str, secret: str) -> dict:
+        """
+        FIX #3: Hapus SEMUA entri RADIUS lama, pasang 1 entri bersih (ROS 6).
+        """
         steps = []
         try:
-            # ── ENTRY 1: Khusus PPPoE (service=ppp) ──
-            # CoA untuk PPPoE HANYA diteruskan ke modul PPPoE, tidak ke Hotspot
-            await self.add_radius_client(
-                address=radius_ip, secret=secret,
-                service="ppp",
-                comment="NOC-Billing PPPoE RADIUS"
-            )
-            steps.append(f"✅ RADIUS PPPoE (service=ppp): {radius_ip} ditambahkan/diperbarui")
+            existing = await self.list_radius_clients()
+            for r in existing:
+                mt_id = r.get(".id") or r.get("id", "")
+                if mt_id:
+                    try:
+                        await asyncio.to_thread(self._remove_resource, "/radius", mt_id)
+                        steps.append(f"🗑 Hapus RADIUS: addr={r.get('address')} svc={r.get('service')}")
+                    except Exception as e:
+                        steps.append(f"⚠️ Gagal hapus {mt_id}: {e}")
+            await self.add_radius_client(radius_ip, secret, service="hotspot,ppp")
+            steps.append(f"✅ 1 RADIUS client baru: {radius_ip} (hotspot+ppp, timeout=3s)")
+            return {"success": True, "steps": steps}
         except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS PPPoE: {e}")
-
-        try:
-            # ── ENTRY 2: Khusus Hotspot (service=hotspot) ──
-            # CoA untuk Hotspot HANYA diteruskan ke modul Hotspot, tidak ke PPPoE
-            await self.add_radius_client(
-                address=radius_ip, secret=secret,
-                service="hotspot",
-                comment="NOC-Billing Hotspot RADIUS"
-            )
-            steps.append(f"✅ RADIUS Hotspot (service=hotspot): {radius_ip} ditambahkan/diperbarui")
-        except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS Hotspot: {e}")
+            steps.append(f"❌ Error: {e}")
             return {"success": False, "steps": steps}
 
+    async def enable_radius_incoming(self) -> dict:
+        """
+        FIX #2: Aktifkan /radius incoming CoA listener (port 3799) — ROS 6 Legacy.
+        """
         try:
-            # ROS 6: hotspot SERVER profiles ada di /ip/hotspot/profile (BUKAN /ip/hotspot/user-profile)
+            def cb(api):
+                res = api.get_resource("/radius/incoming")
+                res.set(**{"accept": "yes", "port": "3799"})
+            await asyncio.to_thread(self._execute, cb)
+            logger.info(f"[RADIUS] CoA incoming diaktifkan di {self.host}:3799 (ROS6)")
+            return {"success": True, "msg": "CoA incoming (port 3799) aktif"}
+        except Exception as e:
+            logger.warning(f"[RADIUS] Gagal aktifkan incoming di {self.host}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
+        """
+        Setup lengkap RADIUS di MikroTik untuk Hotspot & PPPoE (ROS 6):
+        1. Purge entri lama, pasang 1 entri bersih (FIX #3)
+        2. Aktifkan use-radius di hotspot server profile
+        3. Aktifkan CoA incoming port 3799 (FIX #2)
+        4. Aktifkan PPP AAA use-radius + interim-update
+        """
+        steps = []
+
+        # Langkah 1: Purge + reset 1 entri RADIUS bersih
+        purge = await self.purge_and_reset_radius(radius_ip, secret)
+        steps.extend(purge.get("steps", []))
+        if not purge.get("success"):
+            return {"success": False, "steps": steps}
+
+        # Langkah 2: Aktifkan use-radius di hotspot server profile
+        try:
             def get_server_profiles(api):
                 return api.get_resource("/ip/hotspot/profile").get()
-
             raw_profiles = await asyncio.to_thread(self._execute, get_server_profiles)
             profiles = self._normalize_items(raw_profiles)
 
             if profiles:
-                # Cari profile yang namanya persis match dulu
                 match = next((p for p in profiles if str(p.get("name", "")).lower() == server_profile.lower()), None)
                 if not match:
-                    # Fallback: cari yang mengandung 'hsprof'
                     match = next((p for p in profiles if "hsprof" in str(p.get("name", "")).lower()), None)
                 if not match:
-                    # Last resort: ambil yang pertama
                     match = profiles[0]
 
                 if match:
@@ -2442,19 +2511,24 @@ class MikroTikLegacyAPI(MikroTikBase):
                 else:
                     steps.append("⚠️ Tidak ada hotspot server profile ditemukan")
             else:
-                steps.append("⚠️ Hotspot server profile di router kosong — pastikan hotspot sudah dikonfigurasi di MikroTik")
+                steps.append("⚠️ Hotspot server profile kosong — pastikan hotspot sudah dikonfigurasi di MikroTik")
         except Exception as e:
             steps.append(f"⚠️ Gagal set use-radius di profile hotspot: {e}")
 
+        # Langkah 3: Aktifkan CoA incoming (FIX #2)
+        coa = await self.enable_radius_incoming()
+        steps.append("✅ CoA incoming port 3799 aktif" if coa.get("success") else f"⚠️ CoA: {coa.get('error')}")
+
+        # Langkah 4: PPP AAA use-radius + interim-update 5 menit
         if pppoe_profile:
             try:
                 def set_ppp_aaa(api):
                     res = api.get_resource("/ppp/aaa")
-                    res.set(**{"use-radius": "yes"})
+                    res.set(**{"use-radius": "yes", "interim-update": "00:05:00"})
                 await asyncio.to_thread(self._execute, set_ppp_aaa)
-                steps.append("✅ PPPoE AAA — use-radius=yes diaktifkan secara global (PPP Profile: target OK)")
+                steps.append("✅ PPP AAA — use-radius=yes + interim-update=5menit aktif")
             except Exception as e:
-                steps.append(f"⚠️ Tidak dapat set use-radius untuk PPPoE (PPP AAA): {e}")
+                steps.append(f"⚠️ Gagal set PPP AAA: {e}")
 
         return {"success": True, "steps": steps}
 
