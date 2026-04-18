@@ -2013,6 +2013,7 @@ async def moota_webhook(payload: list[dict], request: Request, background_tasks:
                             "price":      float(inv.get("amount", 0) or (pkg.get("price", 0) if pkg else 0)),
                             "created_at": _now(),
                             "device_ip":  ip_addr,
+                            "device_id":  first_dev_id,
                             "source": (
                                 "Captive Portal / Moota"
                                 if order_source == "captive_portal"
@@ -2788,6 +2789,7 @@ async def mark_voucher_paid(order_id: str, data: dict, background_tasks: Backgro
                     "price":      float(price),
                     "created_at": now,
                     "device_ip":  "manual-payment",
+                    "device_id":  inv.get("device_id", ""),
                     "source":     source,
                 })
         except Exception as e:

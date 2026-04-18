@@ -556,6 +556,7 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
                                 "price":        float(v.get("price", 0)),
                                 "created_at":   now_iso,
                                 "device_ip":    nas_ip,
+                                "device_id":    v.get("device_id", ""),
                                 "source":       "First Login / Auto"
                             })
                         logger.info(f"ACCT START: voucher {uname!r} login pertama — diaktifkan")
