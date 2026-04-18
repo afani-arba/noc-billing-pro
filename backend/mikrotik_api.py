@@ -1215,12 +1215,16 @@ class MikroTikRestAPI(MikroTikBase):
             logger.warning(f"list_radius_clients failed: {e}")
             return []
 
-    async def add_radius_client(self, address: str, secret: str, service: str = "hotspot", comment: str = "NOC-Sentinel RADIUS") -> dict:
-        """Tambah RADIUS client baru di MikroTik (ROS 7 REST)."""
+    async def add_radius_client(self, address: str, secret: str, service: str = "ppp", comment: str = "NOC-Billing RADIUS") -> dict:
+        """Tambah atau update RADIUS client entry di MikroTik (ROS 7 REST).
+        
+        Gunakan service='ppp' untuk PPPoE, service='hotspot' untuk Hotspot.
+        JANGAN gabungkan keduanya agar CoA tidak bocor lintas modul.
+        """
         try:
             existing = await self.list_radius_clients()
-            # Cari by address atau by comment khusus sentinel
-            match = next((r for r in existing if r.get("address") == address or r.get("comment") == comment), None)
+            # Cari berdasarkan address DAN comment (agar PPPoE dan Hotspot bisa beda entry)
+            match = next((r for r in existing if r.get("address") == address and r.get("comment") == comment), None)
             
             payload = {
                 "address": address,
@@ -1233,10 +1237,8 @@ class MikroTikRestAPI(MikroTikBase):
             
             if match:
                 mt_id = match.get(".id", "")
-                # Update eksisting (PATCH)
                 return await self._async_req("PATCH", f"radius/{mt_id}", payload)
             
-            # Tambah baru (PUT)
             return await self._async_req("PUT", "radius", payload)
         except Exception as e:
             raise Exception(f"Gagal tambah RADIUS client: {e}")
@@ -1249,10 +1251,28 @@ class MikroTikRestAPI(MikroTikBase):
         """
         steps = []
         try:
-            await self.add_radius_client(radius_ip, secret, service=["hotspot", "ppp"], comment="NOC-Sentinel RADIUS")
-            steps.append(f"✅ RADIUS client {radius_ip} ditambahkan/diperbarui")
+            # ── ENTRY 1: Khusus PPPoE (service=ppp) ──
+            # CoA untuk PPPoE HANYA diteruskan ke modul PPPoE, tidak ke Hotspot
+            await self.add_radius_client(
+                address=radius_ip, secret=secret,
+                service="ppp",
+                comment="NOC-Billing PPPoE RADIUS"
+            )
+            steps.append(f"✅ RADIUS PPPoE (service=ppp): {radius_ip} ditambahkan/diperbarui")
         except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS client: {e}")
+            steps.append(f"❌ Gagal tambah RADIUS PPPoE: {e}")
+
+        try:
+            # ── ENTRY 2: Khusus Hotspot (service=hotspot) ──
+            # CoA untuk Hotspot HANYA diteruskan ke modul Hotspot, tidak ke PPPoE
+            await self.add_radius_client(
+                address=radius_ip, secret=secret,
+                service="hotspot",
+                comment="NOC-Billing Hotspot RADIUS"
+            )
+            steps.append(f"✅ RADIUS Hotspot (service=hotspot): {radius_ip} ditambahkan/diperbarui")
+        except Exception as e:
+            steps.append(f"❌ Gagal tambah RADIUS Hotspot: {e}")
             return {"success": False, "steps": steps}
 
         try:
@@ -2353,10 +2373,16 @@ class MikroTikLegacyAPI(MikroTikBase):
         except Exception:
             return []
 
-    async def add_radius_client(self, address: str, secret: str, service: str = "hotspot", comment: str = "NOC-Sentinel RADIUS") -> dict:
+    async def add_radius_client(self, address: str, secret: str, service: str = "ppp", comment: str = "NOC-Billing RADIUS") -> dict:
+        """Tambah atau update RADIUS client entry di MikroTik (ROS 6 API).
+        
+        Gunakan service='ppp' untuk PPPoE, service='hotspot' untuk Hotspot.
+        JANGAN gabungkan keduanya agar CoA tidak bocor lintas modul.
+        """
         try:
             existing = await self.list_radius_clients()
-            match = next((r for r in existing if r.get("address") == address or r.get("comment") == comment), None)
+            # Cari berdasarkan address DAN comment (agar PPPoE dan Hotspot bisa beda entry)
+            match = next((r for r in existing if r.get("address") == address and r.get("comment") == comment), None)
             
             data = {
                 "address": address,
@@ -2378,10 +2404,28 @@ class MikroTikLegacyAPI(MikroTikBase):
     async def setup_hotspot_radius(self, radius_ip: str, secret: str, server_profile: str = "hsprof1", pppoe_profile: str = "") -> dict:
         steps = []
         try:
-            await self.add_radius_client(radius_ip, secret, service="hotspot,ppp", comment="NOC-Sentinel RADIUS")
-            steps.append(f"✅ RADIUS client {radius_ip} ditambahkan/diperbarui")
+            # ── ENTRY 1: Khusus PPPoE (service=ppp) ──
+            # CoA untuk PPPoE HANYA diteruskan ke modul PPPoE, tidak ke Hotspot
+            await self.add_radius_client(
+                address=radius_ip, secret=secret,
+                service="ppp",
+                comment="NOC-Billing PPPoE RADIUS"
+            )
+            steps.append(f"✅ RADIUS PPPoE (service=ppp): {radius_ip} ditambahkan/diperbarui")
         except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS client: {e}")
+            steps.append(f"❌ Gagal tambah RADIUS PPPoE: {e}")
+
+        try:
+            # ── ENTRY 2: Khusus Hotspot (service=hotspot) ──
+            # CoA untuk Hotspot HANYA diteruskan ke modul Hotspot, tidak ke PPPoE
+            await self.add_radius_client(
+                address=radius_ip, secret=secret,
+                service="hotspot",
+                comment="NOC-Billing Hotspot RADIUS"
+            )
+            steps.append(f"✅ RADIUS Hotspot (service=hotspot): {radius_ip} ditambahkan/diperbarui")
+        except Exception as e:
+            steps.append(f"❌ Gagal tambah RADIUS Hotspot: {e}")
             return {"success": False, "steps": steps}
 
         try:
