@@ -31,19 +31,17 @@ NOC_PROFILE_PREFIX = "NOC-BW-"
 
 async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None) -> dict:
     """
-    Ubah rate-limit user PPPoE secara live.
-    Metode: Update profile PPPoE + kick session aktif.
+    Ubah rate-limit user PPPoE.
+    Langkah 1: Update profile PPPoE (agar reconnect berikutnya dapat limit yang sama).
+    Langkah 2: Gunakan RADIUS CoA untuk mengubah rate-limit live TANPA kick.
     """
     username = customer.get("username", "")
 
-    # ── Metode 1: Profile-based update (utama) ──
-    result = await _profile_rate_change(device, username, rate_limit)
-    if result.get("success"):
-        return result
+    # ── Metode 1: Update Profile (tanpa kick) ──
+    # Ini memastikan kalaupun router direboot, profile sudah tersimpan
+    profile_result = await _profile_rate_change(device, username, rate_limit, kick=False)
 
-    logger.warning(f"[BW] Profile update gagal untuk '{username}' ({result.get('reason')}), mencoba CoA...")
-
-    # ── Metode 2: CoA RADIUS (fallback) ──
+    # ── Metode 2: CoA RADIUS (Live Update tanpa kick) ──
     if device.get("radius_secret") and device.get("ip_address"):
         coa_result = await _coa_change_rate(
             nas_ip     = device.get("ip_address"),
@@ -52,18 +50,21 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             rate_limit = rate_limit,
         )
         if coa_result.get("success"):
+            logger.info(f"[BW] CoA berhasil untuk '{username}', tidak perlu kick.")
             return coa_result
-        logger.warning(f"[BW] CoA juga gagal untuk '{username}': {coa_result.get('reason')}")
-        return coa_result
+            
+        logger.warning(f"[BW] CoA gagal untuk '{username}': {coa_result.get('reason')}")
 
-    return result
+    # Jika CoA tidak jalan (karena router belum set RADIUS incoming dll), 
+    # kembalikan hasil profile. User baru dapat efek saat reconnect.
+    return profile_result
 
 
-async def _profile_rate_change(device: dict, username: str, rate_limit: str) -> dict:
+async def _profile_rate_change(device: dict, username: str, rate_limit: str, kick: bool = False) -> dict:
     """
     1. Pastikan ada PPPoE profile dengan rate-limit ini, buat jika belum ada.
     2. Assign profile ke secret user.
-    3. Kick active session → reconnect dengan limit baru.
+    3. Kick active session (opsional) → jika True, reconnect dengan limit baru.
     """
     from mikrotik_api import get_api_client
     try:
@@ -110,12 +111,14 @@ async def _profile_rate_change(device: dict, username: str, rate_limit: str) -> 
             # User RADIUS-only: tidak ada secret di router, tapi bisa tetap kick
             logger.info(f"[BW] '{username}' tidak ada di /ppp/secret (RADIUS-managed), akan kick session saja")
 
-        # ── Kick session aktif ────────────────────────────────────────────────
-        removed = await mt.remove_pppoe_active_session(username)
-        if removed > 0:
-            logger.info(f"[BW] Session '{username}' di-kick → reconnect dengan profile '{profile_name}'")
-        else:
-            logger.info(f"[BW] '{username}' tidak ada session aktif (limit berlaku saat connect berikutnya)")
+        # ── Kick session aktif (opsional) ─────────────────────────────────────
+        removed = 0
+        if kick:
+            removed = await mt.remove_pppoe_active_session(username)
+            if removed > 0:
+                logger.info(f"[BW] Session '{username}' di-kick → reconnect dengan profile '{profile_name}'")
+            else:
+                logger.info(f"[BW] '{username}' tidak ada session aktif (limit berlaku saat connect berikutnya)")
 
         return {"success": True, "method": "profile", "rate": rate_limit,
                 "profile": profile_name, "sessions_dropped": removed}
@@ -164,9 +167,10 @@ async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_lim
         attr_data  = user_name_attr + vsa_attr
         length     = 20 + len(attr_data)
 
-        auth       = os.urandom(16)
-        header     = struct.pack("!BBH", COA_REQUEST, pkt_id, length) + auth
-        resp_auth  = hashlib.md5(header + attr_data + secret).digest()
+        # RFC 3576 / RFC 5176: Request Authenticator MUST be generated using 16 zero octets
+        # MD5(Code + Identifier + Length + 16 zero octets + Attributes + Secret)
+        header_zero = struct.pack("!BBH", COA_REQUEST, pkt_id, length) + (b'\x00' * 16)
+        resp_auth  = hashlib.md5(header_zero + attr_data + secret).digest()
         packet     = struct.pack("!BBH", COA_REQUEST, pkt_id, length) + resp_auth + attr_data
 
         loop = asyncio.get_event_loop()
