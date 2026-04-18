@@ -1,17 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="38" fill="#18181b"/>
-  <!-- Outer ring -->
-  <circle cx="96" cy="96" r="60" fill="none" stroke="#8b5cf6" stroke-width="10"/>
-  <!-- Inner dot -->
-  <circle cx="96" cy="96" r="12" fill="#8b5cf6"/>
-  <!-- ISP lines (cross) -->
-  <line x1="96" y1="36" x2="96" y2="68" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
-  <line x1="96" y1="124" x2="96" y2="156" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
-  <line x1="36" y1="96" x2="68" y2="96" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
-  <line x1="124" y1="96" x2="156" y2="96" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round"/>
-  <!-- Small accent dots at cardinal points -->
-  <circle cx="96" cy="30" r="5" fill="#a78bfa"/>
-  <circle cx="162" cy="96" r="5" fill="#a78bfa"/>
-  <circle cx="96" cy="162" r="5" fill="#a78bfa"/>
-  <circle cx="30" cy="96" r="5" fill="#a78bfa"/>
+  <!-- Arba Billing Pro Logo -->
+  <rect width="192" height="192" rx="38" fill="#09090b"/>
+  <!-- Glowing Hexagon Base -->
+  <polygon points="96,25 156,60 156,132 96,167 36,132 36,60" fill="none" stroke="#2563eb" stroke-width="6"/>
+  <polygon points="96,40 144,68 144,124 96,152 48,124 48,68" fill="none" stroke="#3b82f6" stroke-width="4"/>
+  
+  <!-- Central B/P Abstract Graphic -->
+  <path d="M76 60 V130" stroke="#60a5fa" stroke-width="12" stroke-linecap="round"/>
+  <path d="M76 65 H106 C120 65 120 90 106 90 H76" fill="none" stroke="#60a5fa" stroke-width="12" stroke-linecap="round"/>
+  <path d="M76 95 H106 C120 95 120 120 106 120 H76" fill="none" stroke="#60a5fa" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Connection Nodes -->
+  <circle cx="96" cy="25" r="5" fill="#93c5fd"/>
+  <circle cx="156" cy="60" r="5" fill="#93c5fd"/>
+  <circle cx="156" cy="132" r="5" fill="#93c5fd"/>
+  <circle cx="96" cy="167" r="5" fill="#93c5fd"/>
+  <circle cx="36" cy="132" r="5" fill="#93c5fd"/>
+  <circle cx="36" cy="60" r="5" fill="#93c5fd"/>
 </svg>

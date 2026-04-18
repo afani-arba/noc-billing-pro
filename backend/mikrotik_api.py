@@ -1227,6 +1227,8 @@ class MikroTikRestAPI(MikroTikBase):
                 "secret": secret,
                 "service": [service] if isinstance(service, str) else service,
                 "comment": comment,
+                "authentication-port": 1816,
+                "accounting-port": 1817
             }
             
             if match:
@@ -2360,7 +2362,9 @@ class MikroTikLegacyAPI(MikroTikBase):
                 "address": address,
                 "secret": secret,
                 "service": service,
-                "comment": comment
+                "comment": comment,
+                "authentication-port": "1816",
+                "accounting-port": "1817"
             }
             
             if match:

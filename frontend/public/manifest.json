@@ -1,7 +1,7 @@
 {
-  "name": "NOC Sentinel v3",
-  "short_name": "NOC Sentinel",
-  "description": "Real-time MikroTik Network Monitoring",
+  "name": "Arba Billing Pro",
+  "short_name": "Billing Pro",
+  "description": "Enterprise Hotspot & PPPoE Billing System",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

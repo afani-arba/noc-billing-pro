@@ -1,17 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="96" fill="#18181b"/>
-  <!-- Outer ring -->
-  <circle cx="256" cy="256" r="160" fill="none" stroke="#8b5cf6" stroke-width="26"/>
-  <!-- Inner dot -->
-  <circle cx="256" cy="256" r="32" fill="#8b5cf6"/>
-  <!-- ISP lines -->
-  <line x1="256" y1="96"  x2="256" y2="180" stroke="#8b5cf6" stroke-width="22" stroke-linecap="round"/>
-  <line x1="256" y1="332" x2="256" y2="416" stroke="#8b5cf6" stroke-width="22" stroke-linecap="round"/>
-  <line x1="96"  y1="256" x2="180" y2="256" stroke="#8b5cf6" stroke-width="22" stroke-linecap="round"/>
-  <line x1="332" y1="256" x2="416" y2="256" stroke="#8b5cf6" stroke-width="22" stroke-linecap="round"/>
-  <!-- Accent dots -->
-  <circle cx="256" cy="80"  r="14" fill="#a78bfa"/>
-  <circle cx="432" cy="256" r="14" fill="#a78bfa"/>
-  <circle cx="256" cy="432" r="14" fill="#a78bfa"/>
-  <circle cx="80"  cy="256" r="14" fill="#a78bfa"/>
+  <!-- Arba Billing Pro Logo -->
+  <rect width="512" height="512" rx="100" fill="#09090b"/>
+  <!-- Glowing Hexagon Base -->
+  <polygon points="256,66 416,160 416,352 256,446 96,352 96,160" fill="none" stroke="#2563eb" stroke-width="16"/>
+  <polygon points="256,106 384,181 384,330 256,405 128,330 128,181" fill="none" stroke="#3b82f6" stroke-width="10"/>
+  
+  <!-- Central B/P Abstract Graphic -->
+  <path d="M202 160 V346" stroke="#60a5fa" stroke-width="32" stroke-linecap="round"/>
+  <path d="M202 173 H282 C320 173 320 240 282 240 H202" fill="none" stroke="#60a5fa" stroke-width="32" stroke-linecap="round"/>
+  <path d="M202 253 H282 C320 253 320 320 282 320 H202" fill="none" stroke="#60a5fa" stroke-width="32" stroke-linecap="round"/>
+  
+  <!-- Connection Nodes -->
+  <circle cx="256" cy="66" r="14" fill="#93c5fd"/>
+  <circle cx="416" cy="160" r="14" fill="#93c5fd"/>
+  <circle cx="416" cy="352" r="14" fill="#93c5fd"/>
+  <circle cx="256" cy="446" r="14" fill="#93c5fd"/>
+  <circle cx="96" cy="352" r="14" fill="#93c5fd"/>
+  <circle cx="96" cy="160" r="14" fill="#93c5fd"/>
 </svg>
