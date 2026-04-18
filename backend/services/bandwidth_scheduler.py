@@ -16,10 +16,13 @@ PERBAIKAN UTAMA:
 """
 import asyncio
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 import calendar
 
 logger = logging.getLogger(__name__)
+
+# Lock untuk mencegah overlap run jika proses sebelumnya belum selesai
+_scheduler_lock = asyncio.Lock()
 
 def _db():
     from core.db import get_db
@@ -28,31 +31,37 @@ def _db():
 async def bandwidth_scheduler_loop():
     logger.info("[BandwidthScheduler] Memulai scheduler bandwidth (FUP, Day/Night, Booster)...")
     
-    last_fup_run = datetime.now()
+    last_fup_run = datetime.now() - timedelta(seconds=30)  # Langsung jalankan FUP di siklus pertama
     last_monthly_reset = ""
     
     while True:
-        try:
-            now = datetime.now()
-            
-            # ── 1. Day/Night & Booster (Tiap 10 detik) ──
-            await run_day_night_and_booster_sync()
-            
-            # ── 2. FUP Monitoring (Tiap 10 detik untuk minimalkan lost bytes) ──
-            if (now - last_fup_run).total_seconds() >= 10:
-                await run_fup_monitoring()
-                last_fup_run = now
+        await asyncio.sleep(10)  # Sleep 10 Detik — di awal agar tidak overlap
+        
+        # Jika siklus sebelumnya belum selesai, lewati (skip)
+        if _scheduler_lock.locked():
+            logger.warning("[BandwidthScheduler] Siklus sebelumnya masih berjalan, skip.")
+            continue
+        
+        async with _scheduler_lock:
+            try:
+                now = datetime.now()
                 
-            # ── 3. FUP Monthly Reset (Tiap tgl 1) ──
-            today_str = date.today().isoformat()
-            if date.today().day == 1 and last_monthly_reset != today_str:
-                await run_fup_monthly_reset()
-                last_monthly_reset = today_str
+                # ── 1. Day/Night & Booster (Tiap 10 detik) ──
+                await run_day_night_and_booster_sync()
                 
-        except Exception as e:
-            logger.error(f"[BandwidthScheduler] Loop error: {e}")
-            
-        await asyncio.sleep(10) # Sleep 10 Detik
+                # ── 2. FUP Monitoring (Tiap 60 detik — menjaga akurasi tanpa overload) ──
+                if (now - last_fup_run).total_seconds() >= 60:
+                    await run_fup_monitoring()
+                    last_fup_run = now
+                    
+                # ── 3. FUP Monthly Reset (Tiap tgl 1) ──
+                today_str = date.today().isoformat()
+                if date.today().day == 1 and last_monthly_reset != today_str:
+                    await run_fup_monthly_reset()
+                    last_monthly_reset = today_str
+                    
+            except Exception as e:
+                logger.error(f"[BandwidthScheduler] Loop error: {e}", exc_info=True)
 
 async def run_fup_monthly_reset():
     """Reset FUP bytes_used ke 0 setiap tanggal 1."""
@@ -165,14 +174,16 @@ async def run_fup_monitoring():
                     update_data = {"fup_last_total": total_current, "fup_bytes_used": new_used}
                     
                     if new_used >= limit_bytes:
-                        # Kena FUP
-                        update_data["fup_active"] = True
-                        update_data["current_rate_limit"] = None # Force scheduler re-evaluasi
+                        # Kena FUP — langsung set rate limit ke FUP rate (JANGAN None)
                         fup_rate = pkg.get("fup_rate_limit", "")
-                        
-                        logger.info(f"[BW] {username} FUP Limit Reached ({(new_used / 1_000_000_000):.2f} GB / {limit_gb} GB). Akan diset ke {fup_rate}")
-                        # TIDAK PERLU PANGGIL set_rate_limit DI SINI! 
-                        # Scheduler (run_day_night_and_booster_sync) akan menanganinya otomatis dan menggunakan CoA (no-kick).
+                        update_data["fup_active"] = True
+                        if fup_rate:
+                            # Set langsung ke FUP rate agar scheduler tidak terus-terusan mengevaluasi ulang
+                            update_data["current_rate_limit"] = fup_rate
+                        logger.info(
+                            f"[FUP] {username} kena FUP ({(new_used/1_000_000_000):.2f}GB / {limit_gb}GB) "
+                            f"→ speed diset ke {fup_rate or '(tidak dikonfigurasi)'}"
+                        )
                         
                     await db.customers.update_one({"id": c["id"]}, {"$set": update_data})
                     
@@ -312,17 +323,17 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             if not device:
                 continue
 
-            # ── Fetch active sessions dari MikroTik ──
+            # ── Fetch active sessions dari Session Cache (bukan langsung ke MikroTik) ──
+            # Session cache diupdate tiap 90 detik oleh session_cache_service
+            # Ini mencegah scheduler membebani router setiap 10 detik
             active_usernames: set = set()
             try:
-                from mikrotik_api import get_api_client
-                import asyncio as _asyncio
-                mt = get_api_client(device)
-                sessions = await _asyncio.to_thread(mt._list_resource, "/ppp/active")
+                from services.session_cache_service import get_cached_pppoe
+                sessions = await get_cached_pppoe(device)
                 active_usernames = {s.get("name", "") for s in sessions if s.get("name")}
-                logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif")
+                logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif (cache)")
             except Exception as e:
-                logger.warning(f"[BW] Gagal baca active sessions {device.get('name')}: {e}")
+                logger.warning(f"[BW] Gagal baca session cache {device.get('name')}: {e}")
 
             radius_secret = device.get("radius_secret", "")
             nas_ip = device.get("ip_address", "")
