@@ -38,8 +38,8 @@ async def bandwidth_scheduler_loop():
             # ── 1. Day/Night & Booster (Tiap 5 menit) ──
             await run_day_night_and_booster_sync()
             
-            # ── 2. FUP Monitoring (Tiap 30 menit) ──
-            if (now - last_fup_run).total_seconds() >= 1800:
+            # ── 2. FUP Monitoring (Tiap 5 menit untuk meminimalisasi lost bytes) ──
+            if (now - last_fup_run).total_seconds() >= 300:
                 await run_fup_monitoring()
                 last_fup_run = now
                 
