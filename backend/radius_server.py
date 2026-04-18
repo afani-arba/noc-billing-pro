@@ -237,8 +237,7 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
             _record_success(nas_ip)
             logger.info(f"RADIUS ACCEPT: {uname!r} ({len(attrs_list)} attrs, interim=300s)")
 
-        if method == "NONE":
-            return reject(b"No auth method")
+        # Jangan reject NONE di awal, MAC-Auth mungkin tidak mengirim password ATR
 
         # ── FIX #4: Routing langsung berdasarkan NAS-Port-Type ───────────────
         if is_pppoe_req:
@@ -315,6 +314,10 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
             challenge = chap_chal if chap_chal else req_auth
             e1 = hashlib.md5(chap_id + db_pwd.encode("utf-8") + challenge).digest()
             auth_ok = (e1 == chap_resp)
+        elif method == "NONE":
+            # Jika klien tidak kirim password, cocokkan jika password di DB kosong atau sama dengan username (MAC-Auth)
+            auth_ok = (db_pwd == "" or db_pwd == uname)
+            logger.debug(f"PPPoE NONE method (No Password) auth_ok={auth_ok} for {uname!r}")
         else:
             return reject(b"Unsupported auth method")
 
@@ -383,6 +386,10 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
             except Exception as e:
                 logger.warning(f"Hotspot PAP decrypt fail: {e}")
                 return reject(b"Auth error")
+        elif method == "NONE":
+            # MAC-Auth sering tidak mengirim atribut password sama sekali
+            auth_ok = (db_pwd == "" or db_pwd == uname)
+            logger.debug(f"Hotspot NONE method (MAC-Auth) auth_ok={auth_ok} for {uname!r}")
         else:
             # CHAP — implementasi multi-variasi untuk kompatibilitas MikroTik HTTP login
             if not chap_raw or len(chap_raw) < 17:
