@@ -709,6 +709,74 @@ async def activate_customer_ztp(
             })
             logger.warning(f"ZTP step4 failed for {body.customer_name}: {e}")
 
+    # ─── STEP 5: Notification (WhatsApp) ──────────────────────────────────────
+    if billing_ok and body.phone:
+        try:
+            from services.notification_service import send_whatsapp
+            bs = await db.billing_settings.find_one({}, {"_id": 0}) or {}
+            wa_token = bs.get("wa_token", "")
+            if wa_token:
+                pkg_name = pkg.get("name", "-") if pkg else "-"
+                
+                msg = (
+                    f"🎉 *Selamat Datang di Layanan Internet Kami!*\n\n"
+                    f"Halo *{body.customer_name}*,\n"
+                    f"Pemasangan layanan internet Anda telah berhasil diaktifkan.\n\n"
+                    f"📡 *Data Akun & WiFi*\n"
+                    f"• Paket: {pkg_name}\n"
+                    f"• Nama WiFi (SSID): {body.ssid}\n"
+                    f"• Password WiFi: {body.wifi_password}\n"
+                    f"• Username PPPoE: {body.pppoe_username}\n\n"
+                    f"💳 *Informasi Tagihan Awal*\n"
+                )
+                
+                pkg_price_val = pkg.get("price", 0) if pkg else 0
+                amount_val = pkg_price_val + body.installation_fee
+                is_paid_val = (body.payment_status == "sudah_bayar")
+                status_pembayaran = "LUNAS. Terima kasih atas pembayaran Anda." if is_paid_val else "BELUM LUNAS. Mohon segera lakukan pembayaran agar layanan tetap aktif."
+                
+                if invoice_ok and amount_val > 0:
+                    # Ambil total terakhir dari inv_doc yang tersimpan jika ada, jika tidak estimasi.
+                    # Tapi total dihitung dengan unique_code saat doc dibuat. Karena local scope terbatas, mending pakai manual lookup dari DB atau fallback
+                    last_inv = await db.invoices.find_one({"customer_id": customer_id}, sort=[("created_at", -1)])
+                    final_total = last_inv.get("total", amount_val) if last_inv else amount_val
+                    
+                    msg += (
+                        f"• Total Tagihan: *Rp {final_total}*\n"
+                        f"• Status: {status_pembayaran}\n"
+                    )
+                else:
+                    msg += "• Status: Bebas Biaya Pemasangan/Awal\n"
+                
+                msg += "\nTerima kasih telah mempercayakan koneksi Anda kepada kami!"
+                
+                ok = await send_whatsapp(body.phone, msg, wa_token)
+                if ok:
+                    steps.append({
+                        "step": "WhatsApp Notification",
+                        "ok": True,
+                        "message": "Pesan selamat datang (Welcome Message) berhasil dikirim via WhatsApp"
+                    })
+                    logger.info(f"ZTP: Welcome WA sent to {body.phone} for {customer_id}")
+                else:
+                    steps.append({
+                        "step": "WhatsApp Notification",
+                        "ok": False,
+                        "message": "Gagal mengirim WhatsApp (API merespon gagal)"
+                    })
+            else:
+                steps.append({
+                    "step": "WhatsApp Notification",
+                    "ok": False,
+                    "message": "Token Fonnte tidak tersedia di pengaturan"
+                })
+        except Exception as e:
+            steps.append({
+                "step": "WhatsApp Notification",
+                "ok": False,
+                "message": f"Kesalahan internal saat memproses WA: {e}"
+            })
+
     # ─── Audit Log ────────────────────────────────────────────────────────────
     try:
         from routers.audit import log_action
