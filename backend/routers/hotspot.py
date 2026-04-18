@@ -152,6 +152,7 @@ async def list_hotspot_vouchers(
         if limit_uptime > 0:
             total_used = used_uptime + current_sess_elapsed
             v["rem_uptime_secs"]        = max(0, limit_uptime - total_used)
+            v["used_uptime_secs"]       = total_used   # OVERWRITE agar Frontend pakai ini
             v["total_used_uptime_secs"] = total_used
             v["current_sess_elapsed"]   = current_sess_elapsed
         else:
@@ -161,6 +162,11 @@ async def list_hotspot_vouchers(
 
         # ── Sisa Validitas (berjalan TERUS sejak first_login) ───────────────
         first_login = v.get("first_login_time")
+        
+        # ALIAS untuk kompatibilitas dengan Frontend: 
+        # Jika UI butuh session_start_time, berikan first_login_time
+        v["session_start_time"] = first_login
+
         if validity_secs > 0 and first_login:
             try:
                 first_dt = datetime.fromisoformat(first_login.replace("Z", "+00:00"))
