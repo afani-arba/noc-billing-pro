@@ -110,7 +110,8 @@ async def _coa_change_rate(
         secret_b = nas_secret.encode("utf-8") if isinstance(nas_secret, str) else nas_secret
 
         pkt_id  = random.randint(0, 255)
-        req_auth = os.urandom(16)
+        # RFC 3576: Untuk Authenticator CoA-Request, hitung MD5 dengan authenticator bernilai 0
+        req_auth = b"\x00" * 16
 
         # Build attributes
         def pack_attr(attr_type: int, value: bytes) -> bytes:
