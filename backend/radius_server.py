@@ -248,58 +248,43 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
         # Jangan reject NONE di awal, MAC-Auth mungkin tidak mengirim password ATR
 
-        # ── FIX #4: Routing langsung berdasarkan NAS-Port-Type ───────────────
-        if is_pppoe_req:
-            # PPPoE request → langsung cari di customers, skip voucher
-            if self._db is not None:
-                try:
-                    customer = await self._db.customers.find_one({"username": uname, "active": True})
-                    if customer:
-                        return await self._auth_pppoe(customer, uname, pid, req_auth, secret,
-                                                      method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
-                    logger.info(f"RADIUS PPPoE REJECT: {uname!r} tidak ditemukan di customers")
-                    return reject(b"PPPoE user not found")
-                except Exception as e:
-                    logger.error(f"DB error (PPPoE lookup): {e}")
-                    return reject(b"Auth error")
+        # ── FIX #4: Routing Dinamis (Bypass cacat NAS-Port-Type MikroTik) ────────────
+        # MikroTik sering mengirim NAS-Port-Type=15 (Hotspot/Ethernet) untuk PPPoE!
+        # Deteksi paling akurat PPPoE adalah dari Framed-Protocol = 1 (PPP)
+        ATTR_FRAMED_PROTOCOL = 7
+        framed_protocol = _get_attr_int(attrs, ATTR_FRAMED_PROTOCOL, default=0)
+        is_ppp_framed = (framed_protocol == 1)
+
+        if self._db is None:
             return reject(b"DB unavailable")
 
-        if is_hotspot_req:
-            # Hotspot request → langsung cari di vouchers, skip customers
-            if self._db is not None:
-                try:
-                    voucher = await self._db.hotspot_vouchers.find_one({"username": uname})
-                    if voucher:
-                        return await self._auth_hotspot(voucher, uname, pid, req_auth, secret,
-                                                        method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
-                    logger.info(f"RADIUS Hotspot REJECT: {uname!r} tidak ditemukan di vouchers")
-                    return reject(b"Voucher not found")
-                except Exception as e:
-                    logger.error(f"DB error (Hotspot lookup): {e}")
-                    return reject(b"Auth error")
-            return reject(b"DB unavailable")
+        try:
+            # 1. Coba cari di customers (PPPoE/Broadband) lebih prioritas jika is_ppp_framed
+            customer = await self._db.customers.find_one({"username": uname, "active": True})
+            voucher = await self._db.hotspot_vouchers.find_one({"username": uname})
 
-        # NAS-Port-Type tidak dikenal → fallback backward-compatible (coba keduanya)
-        logger.debug(f"NAS-Port-Type {nas_port_type} tidak dikenal, fallback ke double-lookup")
-        if self._db is not None:
-            try:
-                voucher = await self._db.hotspot_vouchers.find_one({"username": uname})
-            except Exception:
-                voucher = None
-            try:
-                customer = await self._db.customers.find_one({"username": uname, "active": True}) if not voucher else None
-            except Exception:
-                customer = None
-
+            if is_ppp_framed and customer:
+                # 100% PPPoE
+                return await self._auth_pppoe(customer, uname, pid, req_auth, secret,
+                                              method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
+            
             if voucher:
+                # 100% Hotspot Voucher
                 return await self._auth_hotspot(voucher, uname, pid, req_auth, secret,
                                                 method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
+
+            # Jika tidak ada marker khusus, route berdasarkan temuan DB
             if customer:
                 return await self._auth_pppoe(customer, uname, pid, req_auth, secret,
                                               method, pap_raw, chap_raw, chap_chal, addr, reject, accept)
 
-        logger.info(f"RADIUS REJECT: {uname!r} tidak ditemukan di Hotspot maupun PPPoE")
-        return reject(b"User not found")
+            # Tidak ditemukan di mana-mana
+            logger.info(f"RADIUS REJECT: {uname!r} tidak ditemukan di customers maupun vouchers")
+            return reject(b"Voucher or User not found")
+        except Exception as e:
+            logger.error(f"DB error (Auth lookup): {e}")
+            return reject(b"Auth lookup error")
+
 
     # ── PPPoE Authentication ──────────────────────────────────────────────────
     async def _auth_pppoe(self, customer: dict, uname: str, pid: int, req_auth: bytes,
