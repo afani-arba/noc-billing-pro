@@ -182,19 +182,23 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         asyncio.ensure_future(self._handle(data, addr))
 
     async def _handle(self, data: bytes, addr: tuple):
-        nas_ip = addr[0]
-
-        # FIX #9: Cek brute-force block sebelum proses apapun
-        if _is_blocked(nas_ip):
-            logger.warning(f"[RADIUS] Request dari {nas_ip} DIABAIKAN (brute-force block)")
-            return
-
-        secret = _get_secret(nas_ip)
         pkt = _parse_packet(data)
         if not pkt:
             return
 
-        logger.info(f"RADIUS pkt from {nas_ip}: code={pkt['code']} id={pkt['id']}")
+        # Tentukan nas_ip berdasarkan isi atribut NAS-IP-Address (Type 4) untuk menembus NAT Server VPN
+        ATTR_NAS_IP_ADDRESS = 4
+        logical_ip = _get_attr_str(pkt["attrs"], ATTR_NAS_IP_ADDRESS)
+        nas_ip = logical_ip if logical_ip else addr[0]
+
+        # FIX #9: Cek brute-force block sebelum proses apapun
+        if _is_blocked(nas_ip):
+            logger.warning(f"[RADIUS] Request dari {nas_ip} (addr={addr[0]}) DIABAIKAN (brute-force block)")
+            return
+
+        secret = _get_secret(nas_ip)
+        
+        logger.info(f"RADIUS pkt from {nas_ip} (via {addr[0]}): code={pkt['code']} id={pkt['id']}")
 
         if pkt["code"] == ACCESS_REQUEST:
             await self._auth(pkt, addr, secret)
