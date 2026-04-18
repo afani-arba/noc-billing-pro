@@ -1,4 +1,4 @@
-﻿"""
+"""
 Hotspot router: voucher management, sales tracking, RADIUS status, dan settings.
 Endpoint prefix: /hotspot-*  (langsung di root /api)
 """
@@ -100,7 +100,7 @@ async def list_hotspot_vouchers(
     db = get_db()
     q = {}
 
-    # â”€â”€ RBAC: filter berdasarkan allowed_devices user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ——— RBAC: filter berdasarkan allowed_devices user —————————————————————————————————————————————
     scope = get_user_allowed_devices(user)  # None = admin (semua)
     if scope is None:
         if device_id:
@@ -135,22 +135,43 @@ async def list_hotspot_vouchers(
     for v in vouchers:
         v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "â€”"))
 
-        # Calculate uptime in seconds for live timer on frontend
-        if v.get("status") == "active" and v.get("session_start_time"):
-            try:
-                start = datetime.fromisoformat(v["session_start_time"].replace("Z", "+00:00"))
-                v["used_uptime_secs"] = int((now_utc - start).total_seconds())
-            except Exception:
-                v["used_uptime_secs"] = 0
+        limit_uptime  = int(v.get("limit_uptime_secs", 0))
+        used_uptime   = int(v.get("used_uptime_secs", 0))
+        validity_secs = int(v.get("validity_secs", 0))
 
-        # Remaining validity in seconds
-        if v.get("session_start_time") and v.get("validity_secs"):
+        # ── Sisa Uptime (hitung mundur, BERHENTI saat offline) ──────────────
+        current_sess_elapsed = 0
+        last_sess_start = v.get("last_session_start")
+        if last_sess_start and v.get("status") == "active":
             try:
-                start = datetime.fromisoformat(v["session_start_time"].replace("Z", "+00:00"))
-                elapsed = int((now_utc - start).total_seconds())
-                v["rem_validity_secs"] = max(0, v["validity_secs"] - elapsed)
+                start_dt = datetime.fromisoformat(last_sess_start.replace("Z", "+00:00"))
+                current_sess_elapsed = max(0, int((now_utc - start_dt).total_seconds()))
             except Exception:
                 pass
+
+        if limit_uptime > 0:
+            total_used = used_uptime + current_sess_elapsed
+            v["rem_uptime_secs"]        = max(0, limit_uptime - total_used)
+            v["total_used_uptime_secs"] = total_used
+            v["current_sess_elapsed"]   = current_sess_elapsed
+        else:
+            v["rem_uptime_secs"]        = 0
+            v["total_used_uptime_secs"] = used_uptime
+            v["current_sess_elapsed"]   = 0
+
+        # ── Sisa Validitas (berjalan TERUS sejak first_login) ───────────────
+        first_login = v.get("first_login_time")
+        if validity_secs > 0 and first_login:
+            try:
+                first_dt = datetime.fromisoformat(first_login.replace("Z", "+00:00"))
+                elapsed_since_first = max(0, int((now_utc - first_dt).total_seconds()))
+                v["rem_validity_secs"] = max(0, validity_secs - elapsed_since_first)
+            except Exception:
+                v["rem_validity_secs"] = validity_secs
+        elif validity_secs > 0:
+            v["rem_validity_secs"] = validity_secs  # Belum pernah login
+        else:
+            v["rem_validity_secs"] = 0
 
         result.append(v)
 

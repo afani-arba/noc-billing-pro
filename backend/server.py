@@ -212,6 +212,16 @@ async def lifespan(app: FastAPI):
         _background_tasks.append(t)
         logger.info("Dynamic bandwidth scheduler started")
 
+    # Voucher expiry monitor (setiap 30 detik — kick user jika uptime/validity habis)
+    try:
+        from services.voucher_expiry_scheduler import voucher_expiry_scheduler_loop
+        t = asyncio.create_task(voucher_expiry_scheduler_loop())
+        _background_tasks.append(t)
+        logger.info("Voucher expiry scheduler started (30s interval)")
+    except Exception as e:
+        logger.error(f"Voucher expiry scheduler error: {e}")
+
+
     # Hotspot cleanup
     if _svc("ENABLE_HOTSPOT_CLEANUP"):
         from services.hotspot_cleanup import hotspot_cleanup_loop

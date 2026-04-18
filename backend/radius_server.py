@@ -530,24 +530,38 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         )
         logger.info(f"ACCT START: sesi {session_id!r} untuk {uname!r} ({svc_type}) dibuat")
 
-        # Khusus Hotspot: aktivasi voucher jika statusnya 'new'
+        # Khusus Hotspot: aktivasi voucher + tracking waktu
         if svc_type == "hotspot":
             try:
                 v = await self._db.hotspot_vouchers.find_one({"username": uname})
-                if v and v.get("status") == "new":
-                    await self._db.hotspot_vouchers.update_one(
-                        {"_id": v["_id"]},
-                        {"$set": {"status": "active", "activated_at": now_iso}}
-                    )
-                    await self._db.hotspot_sales.insert_one({
-                        "id":           str(uuid.uuid4()),
-                        "voucher_id":   str(v["_id"]),
-                        "username":     uname,
-                        "price":        float(v.get("price", 0)),
-                        "created_at":   now_iso,
-                        "device_ip":    v.get("nas_ip", ""),
-                    })
-                    logger.info(f"ACCT: voucher {uname!r} diaktifkan, sale dicatat")
+                if v and v.get("status") not in ("expired", "disabled"):
+                    upd = {"last_session_start": now_iso}  # Catat waktu sesi ini dimulai
+
+                    if v.get("status") == "new":
+                        # Login pertama kali: aktifkan voucher
+                        upd["status"]           = "active"
+                        upd["activated_at"]     = now_iso
+                        upd["first_login_time"] = now_iso   # Tandai kapan pertama login (sekali seumur hidup)
+                        await self._db.hotspot_vouchers.update_one(
+                            {"_id": v["_id"]}, {"$set": upd}
+                        )
+                        await self._db.hotspot_sales.insert_one({
+                            "id":           str(uuid.uuid4()),
+                            "voucher_id":   str(v["_id"]),
+                            "username":     uname,
+                            "price":        float(v.get("price", 0)),
+                            "created_at":   now_iso,
+                            "device_ip":    nas_ip,
+                        })
+                        logger.info(f"ACCT START: voucher {uname!r} login pertama — diaktifkan")
+                    else:
+                        # Login ulang (setelah logout): hanya update session start
+                        if not v.get("first_login_time"):
+                            upd["first_login_time"] = now_iso  # Safety: isi jika missing
+                        await self._db.hotspot_vouchers.update_one(
+                            {"_id": v["_id"]}, {"$set": upd}
+                        )
+                        logger.info(f"ACCT START: voucher {uname!r} login ulang — sesi baru dimulai")
             except Exception as e:
                 logger.error(f"ACCT START hotspot voucher error: {e}")
 
@@ -612,6 +626,29 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         )
         logger.info(f"ACCT STOP: sesi {session_id!r} untuk {uname!r} ditutup. "
                     f"Total: {total_bytes}B dalam {sess_time}s")
+
+        # Khusus Hotspot: akumulasi used_uptime_secs saat user logout
+        if svc_type == "hotspot" and sess_time > 0:
+            try:
+                v = await self._db.hotspot_vouchers.find_one({"username": uname})
+                if v and v.get("status") not in ("expired", "disabled"):
+                    # Tambahkan durasi sesi ini ke total uptime yang sudah terpakai
+                    prev_used = int(v.get("used_uptime_secs", 0))
+                    new_used  = prev_used + sess_time
+                    await self._db.hotspot_vouchers.update_one(
+                        {"_id": v["_id"]},
+                        {"$set": {
+                            "used_uptime_secs":   new_used,
+                            "last_logout_time":   now_iso,
+                            "last_session_start": None,   # Hapus penanda sesi aktif
+                        }}
+                    )
+                    logger.info(
+                        f"ACCT STOP: voucher {uname!r} uptime akumulasi "
+                        f"{prev_used}s + {sess_time}s = {new_used}s"
+                    )
+            except Exception as e:
+                logger.error(f"ACCT STOP hotspot voucher uptime error: {e}")
 
     async def _check_fup_realtime(self, uname: str, total_bytes: int):
         """FIX #5: Cek FUP limit secara real-time dari data Accounting.
