@@ -1,13 +1,14 @@
-import sys
 import asyncio
-sys.path.insert(0, '/app')
-from core.db import get_db
-
-async def check():
-    db = get_db()
-    c1 = await db.peering_platforms.count_documents({})
-    c2 = await db.peering_eye_platforms.count_documents({})
-    print(f"peering_platforms count: {c1}")
-    print(f"peering_eye_platforms count: {c2}")
-
-asyncio.run(check())
+from motor.motor_asyncio import AsyncIOMotorClient
+async def main():
+    db = AsyncIOMotorClient('mongodb://mongodb:27017/nocbillingpro')['nocbillingpro']
+    c = await db.customers.find_one({'username': 'FEBRI'})
+    if c:
+        print('DB User:', c.get('username'), 'current_rate_limit:', c.get('current_rate_limit'), 'package:', c.get('package'))
+    else:
+        print('No FEBRI')
+    pkg = await db.packages.find_one({'name': 'NOC-BW-10M'})
+    if not pkg:
+        pkg = await db.packages.find_one()
+    print('Package:', pkg)
+asyncio.run(main())

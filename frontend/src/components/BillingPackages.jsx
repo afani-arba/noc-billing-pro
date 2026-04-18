@@ -24,7 +24,7 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
     validity:           initial?.validity || "",
     billing_cycle:      initial?.billing_cycle || 30,
     active:             initial?.active ?? true,
-    device_id:          initial?.source_device_id || "",
+    device_id:          initial?.source_device_id || initial?.device_id || "",
     fup_enabled:        initial?.fup_enabled ?? false,
     fup_limit_gb:       initial?.fup_limit_gb || "",
     fup_rate_limit:     initial?.fup_rate_limit || "",
@@ -672,7 +672,7 @@ export function PackagesTab({ packages, onRefresh, deviceId, defaultServiceType 
 
       {showForm && (
         <PackageForm
-          initial={editPkg}
+          initial={editPkg || (deviceId ? { source_device_id: deviceId } : null)}
           defaultServiceType={defaultServiceType}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); onRefresh(); }}

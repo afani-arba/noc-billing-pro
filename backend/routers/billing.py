@@ -389,8 +389,8 @@ async def list_packages(
     return pkgs
 
 
-async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: str, speed_down: str):
-    """Background task: push PPP profile ke MikroTik secara diam-diam setelah paket manual dibuat."""
+async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: str, speed_down: str, service_type: str = "pppoe"):
+    """Background task: push profile ke MikroTik secara diam-diam setelah paket manual dibuat."""
     from mikrotik_api import get_api_client
     try:
         mt = get_api_client(device)
@@ -406,9 +406,16 @@ async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: s
         elif su:
             rate_limit = su
 
+        # Tentukan path profile berdasarkan service_type
+        base_path = "/ip/hotspot/user-profile" if service_type == "hotspot" else "/ppp/profile"
+        rest_path = "ip/hotspot/user-profile" if service_type == "hotspot" else "ppp/profile"
+
         # Cek apakah profile sudah ada agar tidak duplikat
         try:
-            existing = await mt.list_pppoe_profiles()
+            if service_type == "hotspot":
+                existing = await mt.list_hotspot_profiles()
+            else:
+                existing = await mt.list_pppoe_profiles()
             if any(p.get("name") == profile_name for p in existing):
                 logger.info(f"[auto-profile] Profile '{profile_name}' sudah ada di {device.get('name', '')}, skip.")
                 return
@@ -417,17 +424,15 @@ async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: s
 
         api_mode = device.get("api_mode", "api")
         if api_mode == "rest":
-            # RouterOS 7+ REST API: PUT /rest/ppp/profile
             payload = {"name": profile_name}
             if rate_limit:
                 payload["rate-limit"] = rate_limit
-            await mt._async_req("PUT", "ppp/profile", payload)
+            await mt._async_req("PUT", rest_path, payload)
         else:
-            # RouterOS 6 Legacy API: gunakan _add_resource
             data = {"name": profile_name}
             if rate_limit:
                 data["rate-limit"] = rate_limit
-            await asyncio.to_thread(mt._add_resource, "/ppp/profile", data)
+            await asyncio.to_thread(mt._add_resource, base_path, data)
 
         logger.info(f"[auto-profile] ✅ PPP profile '{profile_name}' berhasil dibuat di {device.get('name', device.get('host', ''))}")
     except Exception as e:
@@ -469,11 +474,17 @@ async def create_package(data: PackageCreate, background_tasks: BackgroundTasks,
     doc.pop("_id", None)
 
     # Silently push profile to MikroTik in background (fire-and-forget)
-    if device and data.service_type in ("pppoe", "both"):
-        background_tasks.add_task(
-            _push_profile_to_mikrotik,
-            device, data.name, data.speed_up, data.speed_down
-        )
+    if device:
+        if data.service_type in ("pppoe", "both"):
+            background_tasks.add_task(
+                _push_profile_to_mikrotik,
+                device, data.name, data.speed_up, data.speed_down, "pppoe"
+            )
+        if data.service_type in ("hotspot", "both"):
+            background_tasks.add_task(
+                _push_profile_to_mikrotik,
+                device, data.name, data.speed_up, data.speed_down, "hotspot"
+            )
 
     return doc
 

@@ -1,34 +1,18 @@
-import asyncio
-import sys
-sys.path.insert(0, "/app")
-
-from core.db import get_db
-from mikrotik_api import get_api_client
-import motor.motor_asyncio
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
+import asyncio, sys
+sys.path.append('backend')
+from backend.mikrotik_api import get_api_client
 
 async def main():
-    # Setup motor
-    c = motor.motor_asyncio.AsyncIOMotorClient("mongodb://mongodb:27017")
-    db = c["nocbillingpro"]
-    
-    device = await db.devices.find_one({"id": "9df0a9d8-176a-4427-b54c-27ae66cc05a3"})
-    if not device:
-        print("Device not found")
-        return
-        
-    print(f"Device: {device.get('name')}")
-    print(f"Mode: {device.get('api_mode')}, Port: {device.get('api_port')}, HTTPS: {device.get('use_https')}")
-    
+    device = {
+        'api_mode': 'api',
+        'ip_address': '10.254.254.240',
+        'api_port': 8728,
+        'api_username': 'admin',
+        'api_password': '123123',
+        'api_ssl': False,
+    }
     mt = get_api_client(device)
-    print(f"Client: {type(mt).__name__}")
-    
-    try:
-        res = await asyncio.wait_for(mt.list_pppoe_active(), timeout=10.0)
-        print(f"Result count: {len(res) if isinstance(res, list) else 0}")
-    except Exception as e:
-        print(f"Exception: {e}")
+    clients = await mt.list_radius_clients()
+    print('RADIUS CLIENTS:', clients)
 
 asyncio.run(main())
