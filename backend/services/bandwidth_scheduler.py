@@ -83,7 +83,6 @@ async def run_fup_monitoring():
 
         customers = await db.customers.find({
             "package_id": {"$in": list(pkg_map.keys())},
-            "fup_active": {"$ne": True},
             "active": True
         }).to_list(10000)
 
@@ -127,6 +126,10 @@ async def run_fup_monitoring():
                 pkg = pkg_map.get(c["package_id"])
                 limit_gb = pkg.get("fup_limit_gb", 0)
                 if limit_gb <= 0:
+                    # FIX: Release FUP lock jika admin pindah ke paket tanpa FUP / Speed on Demand
+                    if c.get("fup_active"):
+                        await db.customers.update_one({"id": c["id"]}, {"$set": {"fup_active": False}})
+                        c["fup_active"] = False
                     continue
                 limit_bytes = limit_gb * 1_000_000_000
                 total_current = 0
@@ -243,7 +246,7 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             # ── Tentukan target rate berdasarkan prioritas ──
             if booster_active and c.get("boost_rate_limit"):
                 target_rate = c["boost_rate_limit"]
-            elif c.get("fup_active") and pkg.get("fup_rate_limit"):
+            elif c.get("fup_active") and pkg.get("fup_rate_limit") and pkg.get("fup_limit_gb", 0) > 0:
                 target_rate = pkg["fup_rate_limit"]
             elif is_night and pkg.get("night_rate_limit"):
                 target_rate = pkg["night_rate_limit"]
@@ -284,7 +287,15 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             except Exception as e:
                 logger.warning(f"[BW] Gagal baca active sessions {device.get('name')}: {e}")
 
+            # ── FIX #6: Perbaikan secret mismatch (fallback global_secret) ──
             radius_secret = device.get("radius_secret") or device.get("hotspot_secret", "")
+            if not radius_secret:
+                try:
+                    hs = await db.hotspot_settings.find_one({}, {"_id": 0}) or {}
+                    radius_secret = hs.get("radius_secret") or hs.get("secret", "")
+                except Exception:
+                    pass
+
             nas_ip = device.get("ip_address", "")
 
             for item in items:
