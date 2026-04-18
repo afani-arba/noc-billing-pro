@@ -211,16 +211,17 @@ async def run_day_night_and_booster_sync():
                 target_rate = f"{sp_up}/{sp_down}"
                 
             # Cek jika target rate berubah dari recorded rate
-            # (Untuk optimasi agar tidak kirim CoA/REST setiap 5 menit jika tidak ada perubahan)
             current_rate = c.get("current_rate_limit")
             if target_rate and target_rate != current_rate:
-                # Need to update!
                 logger.info(f"[BW] {c.get('username')} rate berubah {current_rate} -> {target_rate}")
                 device = await db.devices.find_one({"id": c.get("device_id")})
                 if device:
                     ret = await set_rate_limit(c, device, target_rate, db)
                     if ret.get("success"):
                         await db.customers.update_one({"id": c["id"]}, {"$set": {"current_rate_limit": target_rate}})
+                        logger.info(f"[BW] ✅ {c.get('username')} berhasil diubah ke {target_rate} via {ret.get('method')}")
+                    else:
+                        logger.error(f"[BW] ❌ {c.get('username')} GAGAL ubah ke {target_rate}: {ret.get('reason')}")
                     
     except Exception as e:
         logger.error(f"[BandwidthScheduler] Day/Night Sync error: {e}")
