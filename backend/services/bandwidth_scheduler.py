@@ -105,8 +105,25 @@ async def run_fup_monitoring():
                 # Map active sessions
                 active_map = {s.get("name"): s for s in active_sessions if s.get("name")}
                 
+                # Fetch interface data directly to get rx/tx bytes (ppp/active does NOT contain bytes!)
+                ifaces = []
+                try:
+                    ifaces = await mt.list_interfaces()
+                except Exception as e:
+                    logger.warning(f"[FUP] Gagal fetch interfaces untuk {dev_id}: {e}")
+                    
+                iface_map = {}
+                for i in ifaces:
+                    if str(i.get("type", "")).lower() == "pppoe-in":
+                        name = i.get("name", "")
+                        if name:
+                            iface_map[name] = {
+                                "rx": int(i.get("rx-byte", 0) or 0),
+                                "tx": int(i.get("tx-byte", 0) or 0)
+                            }
+
                 for c in cust_list:
-                    username = c.get("username")
+                    username = c.get("username", "")
                     session = active_map.get(username)
                     if not session: continue
                     
@@ -115,19 +132,30 @@ async def run_fup_monitoring():
                     if limit_gb <= 0: continue
                     limit_bytes = limit_gb * 1_000_000_000
                     
-                    # session["bytes-in"] adalah upload pelanggan -> download NOC
-                    # session["bytes-out"] adalah download pelanggan -> upload NOC
-                    # Total pemakaian = download + upload
-                    current_rx = int(session.get("bytes-out", 0) or 0)
-                    current_tx = int(session.get("bytes-in", 0) or 0)
-                    total_current = current_rx + current_tx
+                    # PPPoE interface name format
+                    iface_name_1 = f"<pppoe-{username}>"
+                    iface_name_2 = username
+                    iface_data = iface_map.get(iface_name_1) or iface_map.get(iface_name_2)
+                    
+                    if iface_data:
+                        # tx di MikroTik PPPoE Interface = download pelanggan ke NOC (dari sudut pandang NOC)
+                        # rx di MikroTik PPPoE Interface = upload pelanggan ke NOC
+                        total_current = iface_data["tx"] + iface_data["rx"]
+                    else:
+                        # Fallback ke session hotspot jika tersedia
+                        current_rx = int(session.get("bytes-out", 0) or 0)
+                        current_tx = int(session.get("bytes-in", 0) or 0)
+                        total_current = current_rx + current_tx
+                        
+                    if total_current == 0:
+                        continue # Data 0 berarti stat interface gagal dbaca atau tidak tercatat, lewati.
                     
                     last_total = c.get("fup_last_total", 0)
                     saved_used = c.get("fup_bytes_used", 0)
                     
                     # Jika Mikrotik reset counters (misal relogin/reboot)
                     if total_current < last_total:
-                        delta = total_current # Anggap dari 0
+                        delta = total_current # Anggap ngitung dari 0 lagi
                     else:
                         delta = total_current - last_total
                         
@@ -139,10 +167,12 @@ async def run_fup_monitoring():
                     if new_used >= limit_bytes:
                         # Kena FUP
                         update_data["fup_active"] = True
+                        update_data["current_rate_limit"] = None # Force scheduler re-evaluasi
                         fup_rate = pkg.get("fup_rate_limit", "")
                         
-                        logger.info(f"[BW] {username} FUP Limit Reached ({new_used} / {limit_bytes}). Setting rate to {fup_rate}")
-                        await set_rate_limit(c, device, fup_rate, db)
+                        logger.info(f"[BW] {username} FUP Limit Reached ({(new_used / 1_000_000_000):.2f} GB / {limit_gb} GB). Akan diset ke {fup_rate}")
+                        # TIDAK PERLU PANGGIL set_rate_limit DI SINI! 
+                        # Scheduler (run_day_night_and_booster_sync) akan menanganinya otomatis dan menggunakan CoA (no-kick).
                         
                     await db.customers.update_one({"id": c["id"]}, {"$set": update_data})
                     

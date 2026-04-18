@@ -18,7 +18,7 @@ import {
   PhoneCall, ArrowUpDown, WifiOff, Wifi, Printer, Send, TrendingUp,
   Settings, Save, BookOpen, FileDown, ChevronLeft, ChevronRight, History,
   BarChart3, Percent, UserX, CalendarClock, CalendarCheck,
-  Layout, MapPin, CreditCard, ShoppingCart, Smartphone, Eye, EyeOff, Activity
+  Layout, MapPin, CreditCard, ShoppingCart, Smartphone, Eye, EyeOff, Activity, Zap
 } from "lucide-react";
 
 const RpIcon = ({ className = "w-5 h-5" }) => (
@@ -1396,7 +1396,14 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                        {pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}
+                        {c.fup_active && (
+                          <span className="ml-1.5 text-[9px] bg-purple-500/10 text-purple-400 px-1 py-0.5 rounded border border-purple-500/30 whitespace-nowrap">
+                            FUP LIMIT
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-[10px] text-muted-foreground">Tgl {c.due_day}</td>
                       <td className="px-3 py-2.5">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-sm border ${c.active ? "border-green-500/30 text-green-400" : "border-red-500/30 text-red-400"}`}>
@@ -1465,9 +1472,14 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       <div><span className="text-muted-foreground text-[10px] block">Router</span> {dev?.name || "—"}</div>
                       <div><span className="text-muted-foreground text-[10px] block">Jatuh Tempo</span> Tgl {c.due_day}</div>
                    </div>
-                   <div className="text-xs pb-1">
-                      <span className="text-muted-foreground text-[10px] block">Paket</span> 
-                      {pkg?.name || <span className="text-amber-400">Belum ada paket</span>}
+                   <div className="text-xs pb-1 flex flex-wrap gap-1 items-center">
+                      <span className="text-muted-foreground text-[10px]">Paket:</span> 
+                      <span>{pkg?.name || <span className="text-amber-400">Belum ada paket</span>}</span>
+                      {c.fup_active && (
+                        <span className="text-[9px] bg-purple-500/10 text-purple-400 px-1 py-0.5 rounded border border-purple-500/30 ml-1">
+                          FUP LIMIT
+                        </span>
+                      )}
                    </div>
                    {isAdmin && (
                       <div className="flex gap-2 pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
@@ -1586,6 +1598,8 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
     payment_status: "belum_bayar",
     payment_method: "transfer",
     auth_method: initial?.auth_method || "radius",
+    boost_rate_limit: initial?.boost_rate_limit || "",
+    boost_duration_hours: initial?.booster_active ? "" : "24", // Default 24 if not active
   });
   const [devices, setDevices] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -1634,7 +1648,9 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
         const editPayload = { 
           name: form.name, phone: form.phone, address: form.address, 
           package_id: form.package_id, due_day: Number(form.due_day), active: form.active,
-          auth_method: form.auth_method
+          auth_method: form.auth_method,
+          boost_rate_limit: form.boost_rate_limit,
+          boost_duration_hours: Number(form.boost_duration_hours) || 24
         };
         if (form.pppoe_password) editPayload.password = form.pppoe_password;
         await api.put(`/customers/${initial.id}`, editPayload); 
@@ -1921,13 +1937,66 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
             </div>
 
             {isEdit && (
-              <label className="flex items-center gap-2 cursor-pointer p-3 bg-primary/5 border border-primary/10 rounded-sm group">
-                <div className={`p-1 rounded-full flex items-center justify-center transition-colors ${form.active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
-                   <CheckCircle2 className="w-3 h-3" />
+              <>
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 pb-1 border-b border-border/50">
+                    <div className="p-1 rounded-sm bg-purple-500/10">
+                      <Zap className="w-3.5 h-3.5 text-purple-400" />
+                    </div>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-purple-400/80">Opsi Bandwidth Spesial</h3>
+                  </div>
+                  
+                  <div className="p-3 bg-secondary/20 border border-border rounded-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-xs font-bold text-foreground">Aktivasi Speed Booster</Label>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Berlaku secara real-time via RADIUS CoA tanpa disconnect</p>
+                      </div>
+                      {initial?.booster_active && (
+                         <span className="text-[9px] bg-purple-500 text-white rounded px-1.5 py-0.5 animate-pulse shrink-0">BOOSTER AKTIF</span>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold">Speed Target</Label>
+                        <Input
+                          value={form.boost_rate_limit}
+                          onChange={e => set("boost_rate_limit", e.target.value)}
+                          placeholder="Kosongkan untuk matikan Booster"
+                          className="h-8 rounded-sm text-xs font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-muted-foreground uppercase font-bold">Durasi (Jam)</Label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={form.boost_duration_hours}
+                            onChange={e => set("boost_duration_hours", e.target.value)}
+                            type="number" min="1"
+                            placeholder="24"
+                            className="h-8 rounded-sm text-xs"
+                          />
+                          <span className="text-[10px] text-muted-foreground font-mono">JAM</span>
+                        </div>
+                      </div>
+                    </div>
+                    {initial?.booster_active && initial?.booster_expires_at && (
+                      <p className="text-[10px] text-purple-400/80 font-mono italic">
+                        Berakhir pada: {new Date(initial.booster_expires_at).toLocaleString("id-ID")}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <input type="checkbox" checked={form.active} onChange={e => set("active", e.target.checked)} className="hidden" />
-                <span className="text-xs font-bold text-primary uppercase tracking-tight">Akun Berstatus Aktif</span>
-              </label>
+
+                <label className="flex items-center gap-2 cursor-pointer p-3 bg-primary/5 border border-primary/10 rounded-sm group mt-4">
+                  <div className={`p-1 rounded-full flex items-center justify-center transition-colors ${form.active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                     <CheckCircle2 className="w-3 h-3" />
+                  </div>
+                  <input type="checkbox" checked={form.active} onChange={e => set("active", e.target.checked)} className="hidden" />
+                  <span className="text-xs font-bold text-primary uppercase tracking-tight">Akun Berstatus Aktif</span>
+                </label>
+              </>
             )}
 
           </div>
