@@ -330,12 +330,15 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             try:
                 from services.session_cache_service import get_cached_pppoe
                 sessions = await get_cached_pppoe(device)
-                # Build dua map: username->ada/tidak, username->IP address
+                # Build map: username -> ada/tidak, username -> session-id (Acct-Session-Id)
                 active_usernames = {s.get("name", "") for s in sessions if s.get("name")}
+                # session-id dari MikroTik adalah field 'session-id' (hex format, e.g. '0x81700FD3')
+                session_id_map   = {s.get("name", ""): s.get("session-id", "") for s in sessions if s.get("name")}
                 session_ip_map   = {s.get("name", ""): s.get("address", "") for s in sessions if s.get("name")}
                 logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif (cache)")
             except Exception as e:
                 logger.warning(f"[BW] Gagal baca session cache {device.get('name')}: {e}")
+                session_id_map = {}
                 session_ip_map = {}
 
             radius_secret = device.get("radius_secret", "")
@@ -365,12 +368,15 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
                     continue
 
                 # CoA TANPA KICK — user tidak diputus koneksinya
-                # Sertakan Framed-IP-Address agar MikroTik tidak error 'no ip provided'
-                framed_ip = session_ip_map.get(username, "")
+                # CoA TANPA KICK — sertakan Acct-Session-Id agar MikroTik
+                # tahu persis sesi mana (PPPoE atau Hotspot) yang perlu diubah
+                # tanpa meneruskan CoA ke modul lain yang tidak relevan
+                session_id = session_id_map.get(username, "")
+                framed_ip  = session_ip_map.get(username, "")
                 from services.bandwidth_manager import set_rate_limit
-                ret = await set_rate_limit(c, device, target_rate, db, framed_ip=framed_ip)
+                ret = await set_rate_limit(c, device, target_rate, db, session_id=session_id)
                 if ret.get("success"):
-                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} ip={framed_ip or '?'} (no disconnect)")
+                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} sid={session_id or '?'} (no disconnect)")
                 else:
                     logger.error(f"[BW] ❌ {username} GAGAL ubah ke {target_rate}: {ret.get('reason')}")
 

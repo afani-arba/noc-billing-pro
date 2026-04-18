@@ -1251,28 +1251,16 @@ class MikroTikRestAPI(MikroTikBase):
         """
         steps = []
         try:
-            # ── ENTRY 1: Khusus PPPoE (service=ppp) ──
-            # CoA untuk PPPoE HANYA diteruskan ke modul PPPoE, tidak ke Hotspot
+            # Satu entry RADIUS melayani PPPoE + Hotspot sekaligus
+            # Pemisahan PPPoE vs Hotspot ditangani oleh Acct-Session-Id di CoA
             await self.add_radius_client(
                 address=radius_ip, secret=secret,
-                service="ppp",
-                comment="NOC-Billing PPPoE RADIUS"
+                service="ppp,hotspot",
+                comment="NOC-Billing RADIUS"
             )
-            steps.append(f"✅ RADIUS PPPoE (service=ppp): {radius_ip} ditambahkan/diperbarui")
+            steps.append(f"✅ RADIUS client {radius_ip} (ppp+hotspot) ditambahkan/diperbarui")
         except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS PPPoE: {e}")
-
-        try:
-            # ── ENTRY 2: Khusus Hotspot (service=hotspot) ──
-            # CoA untuk Hotspot HANYA diteruskan ke modul Hotspot, tidak ke PPPoE
-            await self.add_radius_client(
-                address=radius_ip, secret=secret,
-                service="hotspot",
-                comment="NOC-Billing Hotspot RADIUS"
-            )
-            steps.append(f"✅ RADIUS Hotspot (service=hotspot): {radius_ip} ditambahkan/diperbarui")
-        except Exception as e:
-            steps.append(f"❌ Gagal tambah RADIUS Hotspot: {e}")
+            steps.append(f"❌ Gagal tambah RADIUS client: {e}")
             return {"success": False, "steps": steps}
 
         try:

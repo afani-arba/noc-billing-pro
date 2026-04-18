@@ -32,13 +32,12 @@ COA_NAK     = 45
 NOC_PROFILE_PREFIX = "NOC-BW-"
 
 
-async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None, framed_ip: str = "") -> dict:
+async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None, framed_ip: str = "", session_id: str = "") -> dict:
     """
-    Ubah rate-limit user PPPoE TANPA memutuskan koneksi (no kick).
+    Ubah rate-limit user PPPoE/Hotspot TANPA memutuskan koneksi (no kick).
     
-    Prioritas:
-    1. RADIUS CoA — berlaku instan tanpa putus koneksi
-    2. Profile update — berlaku saat reconnect berikutnya (fallback)
+    session_id (Acct-Session-Id): jika disertakan, CoA akan diarahkan ke sesi
+    yang TEPAT tanpa bocor ke modul hotspot/pppoe yang lain.
     """
     username = customer.get("username", "")
 
@@ -49,7 +48,7 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None,
             nas_secret = device.get("radius_secret", ""),
             username   = username,
             rate_limit = rate_limit,
-            framed_ip  = framed_ip,
+            session_id = session_id,
         )
         if coa_result.get("success"):
             logger.info(f"[BW] CoA berhasil untuk '{username}' → {rate_limit} (no kick)")
@@ -58,7 +57,6 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None,
         logger.warning(f"[BW] CoA gagal untuk '{username}': {coa_result.get('reason')} — fallback ke profile")
 
     # ── Metode 2: Update Profile (tanpa kick) — sebagai fallback ──
-    # Ini memastikan kalaupun router direboot/reconnect, profile sudah tersimpan
     profile_result = await _profile_rate_change(device, username, rate_limit, kick=False)
     return profile_result
 
@@ -154,14 +152,17 @@ async def _create_pppoe_profile(mt, profile_name: str, rate_limit: str, existing
         await mt._async_req("PUT", "ppp/profile", data)
 
 
-async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_limit: str, framed_ip: str = "") -> dict:
-    """RADIUS CoA: RFC 3576 Change of Authorization — port 3799.
+async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_limit: str,
+                            session_id: str = "", framed_ip: str = "") -> dict:
+    """
+    RADIUS CoA: RFC 3576 Change of Authorization — port 3799.
     
-    Identifikasi sesi hanya via User-Name (tanpa Framed-IP-Address).
-    Alasan: Jika Framed-IP-Address disertakan, modul HOTSPOT MikroTik ikut
-    memproses CoA dan mengeluarkan error 'Radius request for unknown ip'
-    meskipun CoA untuk PPPoE sudah berhasil (CoA-ACK tetap dikirim).
-    PPPoE module sudah cukup identifikasi sesi lewat User-Name saja.
+    Strategi pemilahan PPPoE vs Hotspot yang PINTAR:
+    - Sertakan Acct-Session-Id (ID sesi unik dari MikroTik) agar CoA dirouting
+      ke sesi yang TEPAT (PPPoE atau Hotspot) tanpa bocor ke modul yang lain.
+    - MikroTik mencocokkan Acct-Session-Id dengan sesi aktif dan langsung tahu
+      modul mana (ppp/hotspot) yang memiliki sesi tersebut.
+    - Jika Acct-Session-Id tidak tersedia, fallback ke User-Name saja.
     """
     if not nas_ip or not nas_secret:
         return {"success": False, "method": "coa", "reason": "Missing NAS IP or secret"}
@@ -176,6 +177,7 @@ async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_lim
 ATTRIBUTE User-Name 1 string
 ATTRIBUTE NAS-IP-Address 4 ipaddr
 ATTRIBUTE Framed-IP-Address 8 ipaddr
+ATTRIBUTE Acct-Session-Id 44 string
 ATTRIBUTE Message-Authenticator 80 octets
 VENDOR MikroTik 14988
 BEGIN-VENDOR MikroTik
@@ -186,20 +188,29 @@ END-VENDOR MikroTik
         client = Client(server=nas_ip, secret=nas_secret.encode('utf-8'), dict=d)
         client.coaport = 3799
 
-        # Identifikasi sesi via User-Name saja — JANGAN tambahkan Framed-IP-Address
-        # agar hotspot module tidak ikut memproses CoA yang ditujukan untuk PPPoE
         req = client.CreateCoAPacket(User_Name=username)
         req.AddAttribute("MikroTik-Rate-Limit", rate_limit)
 
-        loop = asyncio.get_event_loop()
+        # Kunci pemilahan cerdas: sertakan Acct-Session-Id jika tersedia
+        # MikroTik akan mencari sesi berdasarkan ID ini (unik per koneksi)
+        # sehingga CoA hanya diterima oleh modul yang memiliki sesi tersebut
+        if session_id:
+            # Bersihkan format hex (0x...) jika ada
+            clean_id = session_id.lstrip('0x').lstrip('0X') if session_id.startswith('0x') or session_id.startswith('0X') else session_id
+            try:
+                req.AddAttribute("Acct-Session-Id", clean_id)
+                logger.debug(f"[BW] CoA {username}: Acct-Session-Id={clean_id}")
+            except Exception as sid_err:
+                logger.warning(f"[BW] Gagal tambah Acct-Session-Id '{clean_id}': {sid_err}")
 
+        loop = asyncio.get_event_loop()
         reply = await asyncio.wait_for(
             loop.run_in_executor(None, client.SendPacket, req),
             timeout=5.0
         )
 
         if reply.code == CoAACK:
-            logger.info(f"[BW] CoA-ACK untuk '{username}' rate={rate_limit}")
+            logger.info(f"[BW] CoA-ACK untuk '{username}' rate={rate_limit} session={session_id or 'N/A'}")
             return {"success": True, "method": "coa", "rate": rate_limit}
         else:
             logger.warning(f"[BW] CoA-NAK untuk '{username}': code={reply.code}")
