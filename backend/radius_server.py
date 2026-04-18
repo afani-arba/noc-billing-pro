@@ -188,7 +188,12 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
         # Tentukan nas_ip berdasarkan isi atribut NAS-IP-Address (Type 4) untuk menembus NAT Server VPN
         ATTR_NAS_IP_ADDRESS = 4
-        logical_ip = _get_attr_str(pkt["attrs"], ATTR_NAS_IP_ADDRESS)
+        logical_ip = None
+        if ATTR_NAS_IP_ADDRESS in pkt["attrs"]:
+            ip_raw = pkt["attrs"][ATTR_NAS_IP_ADDRESS][0]
+            if ip_raw and len(ip_raw) == 4:
+                logical_ip = ".".join(str(b) for b in ip_raw)
+        
         nas_ip = logical_ip if logical_ip else addr[0]
 
         # FIX #9: Cek brute-force block sebelum proses apapun
