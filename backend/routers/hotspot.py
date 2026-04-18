@@ -138,6 +138,11 @@ async def list_hotspot_vouchers(
         limit_uptime  = int(v.get("limit_uptime_secs", 0))
         used_uptime   = int(v.get("used_uptime_secs", 0))
         validity_secs = int(v.get("validity_secs", 0))
+        
+        # ── FIX: Fallback untuk voucher yang tidak tergenerate validity_secs-nya 
+        if validity_secs <= 0 and v.get("validity"):
+            validity_secs = _parse_uptime_to_secs(v.get("validity"))
+
 
         # ── Sisa Uptime (hitung mundur, BERHENTI saat offline) ──────────────
         current_sess_elapsed = 0
@@ -510,6 +515,7 @@ async def batch_create_hotspot_users(
                 "session_start_time": None,
                 "used_uptime_secs": 0,
                 "limit_uptime_secs": _parse_uptime_to_secs(uptime_limit),
+                "validity_secs":     _parse_uptime_to_secs(validity),
                 "created_at":       _now(),
                 "updated_at":       _now(),
             }
