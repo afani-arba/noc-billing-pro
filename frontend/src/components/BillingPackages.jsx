@@ -38,7 +38,7 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
   const [saving, setSaving] = useState(false);
   const [devices, setDevices] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const isEdit = !!initial;
+  const isEdit = !!initial?.id;
 
   useEffect(() => {
     api.get("/devices").then(r => setDevices(r.data || [])).catch(() => {});
@@ -147,12 +147,16 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Upload Speed (Siang)</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {defaultServiceType === "hotspot" ? "Upload Speed" : "Upload Speed (Siang)"}
+                  </Label>
                   <Input value={form.speed_up} onChange={e => set("speed_up", e.target.value)}
                     className="h-8 rounded-sm text-xs font-mono" placeholder="20M" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Download Speed (Siang)</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {defaultServiceType === "hotspot" ? "Download Speed" : "Download Speed (Siang)"}
+                  </Label>
                   <Input value={form.speed_down} onChange={e => set("speed_down", e.target.value)}
                     className="h-8 rounded-sm text-xs font-mono" placeholder="20M" />
                 </div>
