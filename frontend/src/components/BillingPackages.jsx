@@ -79,7 +79,6 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
     { id: "basic",   label: "Dasar"       },
     { id: "fup",     label: "FUP",        badge: form.fup_enabled       },
     { id: "night",   label: "Night Mode", badge: form.day_night_enabled },
-    { id: "booster", label: "Booster",    badge: form.booster_enabled },
     { id: "promo",   label: "Promo",      badge: form.enable_early_promo },
   ].filter(tab => {
     if (defaultServiceType === "hotspot" && tab.id !== "basic") return false;
@@ -333,60 +332,6 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
                   <p className="text-3xl">🕐</p>
                   <p className="text-xs font-medium">Night Mode Nonaktif</p>
                   <p className="text-[10px]">Kecepatan sama selama 24 jam penuh</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── TAB BOOSTER ───────────────────────────── */}
-          {formTab === "booster" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-sm border border-border">
-                <div>
-                  <p className="text-xs font-semibold">Speed Booster</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Izinkan pelanggan menaikkan speed secara sementara.
-                  </p>
-                </div>
-                <button onClick={() => set("booster_enabled", !form.booster_enabled)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ml-3 ${
-                    form.booster_enabled ? "bg-primary" : "bg-muted"
-                  }`}>
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                    form.booster_enabled ? "translate-x-4" : "translate-x-0.5"
-                  }`} />
-                </button>
-              </div>
-              {form.booster_enabled ? (
-                <div className="space-y-3 animate-in fade-in duration-200">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Speed Booster (Limit Sementara)</Label>
-                    <Input value={form.boost_rate_limit}
-                      onChange={e => set("boost_rate_limit", e.target.value)}
-                      className="h-8 rounded-sm text-xs font-mono"
-                      placeholder="Contoh: 100M/100M" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Otomatis Berakhir Setelah (Jam)</Label>
-                    <Input value={form.boost_duration_hours}
-                      onChange={e => set("boost_duration_hours", e.target.value)}
-                      type="number" min="1"
-                      className="h-8 rounded-sm text-xs" />
-                  </div>
-                  <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-sm space-y-1">
-                    <p className="text-[10px] text-indigo-300">
-                      Pelanggan ini dapat di-boost ke <span className="font-mono font-bold">{form.boost_rate_limit}</span> selama <span className="font-bold">{form.boost_duration_hours} jam</span>.
-                    </p>
-                    <p className="text-[9px] text-muted-foreground/80 mt-1 italic">
-                      ⚠ Booster dan Night Mode tidak dapat berjalan bersamaan (saling menimpa).
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground space-y-1">
-                  <p className="text-3xl">🚀</p>
-                  <p className="text-xs font-medium">Booster Nonaktif</p>
-                  <p className="text-[10px]">Fitur penambah kecepatan sementara dimatikan untuk paket ini.</p>
                 </div>
               )}
             </div>
