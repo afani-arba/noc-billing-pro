@@ -330,10 +330,13 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             try:
                 from services.session_cache_service import get_cached_pppoe
                 sessions = await get_cached_pppoe(device)
+                # Build dua map: username->ada/tidak, username->IP address
                 active_usernames = {s.get("name", "") for s in sessions if s.get("name")}
+                session_ip_map   = {s.get("name", ""): s.get("address", "") for s in sessions if s.get("name")}
                 logger.info(f"[BW] {device.get('name')}: {len(active_usernames)} user aktif (cache)")
             except Exception as e:
                 logger.warning(f"[BW] Gagal baca session cache {device.get('name')}: {e}")
+                session_ip_map = {}
 
             radius_secret = device.get("radius_secret", "")
             nas_ip = device.get("ip_address", "")
@@ -362,10 +365,12 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
                     continue
 
                 # CoA TANPA KICK — user tidak diputus koneksinya
+                # Sertakan Framed-IP-Address agar MikroTik tidak error 'no ip provided'
+                framed_ip = session_ip_map.get(username, "")
                 from services.bandwidth_manager import set_rate_limit
-                ret = await set_rate_limit(c, device, target_rate, db)
+                ret = await set_rate_limit(c, device, target_rate, db, framed_ip=framed_ip)
                 if ret.get("success"):
-                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} (no disconnect)")
+                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} ip={framed_ip or '?'} (no disconnect)")
                 else:
                     logger.error(f"[BW] ❌ {username} GAGAL ubah ke {target_rate}: {ret.get('reason')}")
 

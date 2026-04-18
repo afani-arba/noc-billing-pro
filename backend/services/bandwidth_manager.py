@@ -32,7 +32,7 @@ COA_NAK     = 45
 NOC_PROFILE_PREFIX = "NOC-BW-"
 
 
-async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None) -> dict:
+async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None, framed_ip: str = "") -> dict:
     """
     Ubah rate-limit user PPPoE TANPA memutuskan koneksi (no kick).
     
@@ -49,6 +49,7 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             nas_secret = device.get("radius_secret", ""),
             username   = username,
             rate_limit = rate_limit,
+            framed_ip  = framed_ip,
         )
         if coa_result.get("success"):
             logger.info(f"[BW] CoA berhasil untuk '{username}' → {rate_limit} (no kick)")
@@ -153,8 +154,12 @@ async def _create_pppoe_profile(mt, profile_name: str, rate_limit: str, existing
         await mt._async_req("PUT", "ppp/profile", data)
 
 
-async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_limit: str) -> dict:
-    """RADIUS CoA: RFC 3576 Change of Authorization — port 3799."""
+async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_limit: str, framed_ip: str = "") -> dict:
+    """RADIUS CoA: RFC 3576 Change of Authorization — port 3799.
+    
+    Menyertakan Framed-IP-Address jika tersedia agar MikroTik dapat
+    mengidentifikasi sesi dengan tepat tanpa error 'Radius with no ip provided'.
+    """
     if not nas_ip or not nas_secret:
         return {"success": False, "method": "coa", "reason": "Missing NAS IP or secret"}
     try:
@@ -181,6 +186,14 @@ END-VENDOR MikroTik
 
         req = client.CreateCoAPacket(User_Name=username)
         req.AddAttribute("MikroTik-Rate-Limit", rate_limit)
+        
+        # Sertakan Framed-IP-Address jika tersedia — mencegah 'Radius with no ip provided'
+        if framed_ip:
+            try:
+                req.AddAttribute("Framed-IP-Address", framed_ip)
+                logger.debug(f"[BW] CoA {username}: Framed-IP-Address={framed_ip}")
+            except Exception as ip_err:
+                logger.warning(f"[BW] Gagal tambah Framed-IP-Address '{framed_ip}': {ip_err}")
 
         loop = asyncio.get_event_loop()
 
