@@ -472,6 +472,10 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         sess_time  = _get_attr_int(attrs, ATTR_ACCT_SESSION_TIME)
         nas_port_type = _get_attr_int(attrs, ATTR_NAS_PORT_TYPE, default=NAS_PORT_VIRTUAL)
 
+        ATTR_FRAMED_IP_ADDRESS = 8
+        fi_raw = attrs.get(ATTR_FRAMED_IP_ADDRESS, [b""])[0]
+        framed_ip = ".".join(str(b) for b in fi_raw) if fi_raw and len(fi_raw) == 4 else ""
+
         stype_name = {1: "Start", 2: "Stop", 3: "Interim-Update"}.get(stype, f"Unknown({stype})")
         svc_type   = "pppoe" if nas_port_type == NAS_PORT_VIRTUAL else "hotspot"
 
@@ -485,39 +489,43 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
         try:
             if stype == ACCT_STATUS_START:
-                await self._acct_start(uname, session_id, nas_ip, nas_port_type, svc_type, now_iso)
+                await self._acct_start(uname, session_id, nas_ip, nas_port_type, svc_type, framed_ip, now_iso)
 
             elif stype == ACCT_STATUS_STOP:
-                await self._acct_stop(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, now_iso)
+                await self._acct_stop(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, framed_ip, now_iso)
 
             elif stype == ACCT_STATUS_INTERIM:
-                await self._acct_interim(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, now_iso)
+                await self._acct_interim(uname, session_id, bytes_in, bytes_out, sess_time, svc_type, framed_ip, now_iso)
 
         except Exception as e:
             logger.error(f"ACCT DB error: {e}")
 
     async def _acct_start(self, uname: str, session_id: str, nas_ip: str,
-                          nas_port_type: int, svc_type: str, now_iso: str):
+                          nas_port_type: int, svc_type: str, framed_ip: str, now_iso: str):
         """FIX #7 #8: Buat/update sesi di radius_sessions saat Acct-Start."""
         if self._db is None:
             return
 
         # Simpan ke radius_sessions
+        update_data = {
+            "username":       uname,
+            "nas_ip":         nas_ip,
+            "acct_session_id": session_id,
+            "service_type":   svc_type,
+            "bytes_in":       0,
+            "bytes_out":      0,
+            "total_bytes":    0,
+            "session_time":   0,
+            "started_at":     now_iso,
+            "updated_at":     now_iso,
+            "active":         True,
+        }
+        if framed_ip:
+            update_data["framed_ip"] = framed_ip
+
         await self._db.radius_sessions.update_one(
             {"acct_session_id": session_id} if session_id else {"username": uname, "active": True},
-            {"$set": {
-                "username":       uname,
-                "nas_ip":         nas_ip,
-                "acct_session_id": session_id,
-                "service_type":   svc_type,
-                "bytes_in":       0,
-                "bytes_out":      0,
-                "total_bytes":    0,
-                "session_time":   0,
-                "started_at":     now_iso,
-                "updated_at":     now_iso,
-                "active":         True,
-            }},
+            {"$set": update_data},
             upsert=True
         )
         logger.info(f"ACCT START: sesi {session_id!r} untuk {uname!r} ({svc_type}) dibuat")
@@ -545,7 +553,7 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
     async def _acct_interim(self, uname: str, session_id: str,
                             bytes_in: int, bytes_out: int, sess_time: int,
-                            svc_type: str, now_iso: str):
+                            svc_type: str, framed_ip: str, now_iso: str):
         """FIX #5 #7 #8: Update bytes di radius_sessions saat Interim-Update.
         Data ini digunakan oleh scheduler FUP secara real-time."""
         if self._db is None:
@@ -553,17 +561,21 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
         total_bytes = bytes_in + bytes_out
 
+        update_data = {
+            "bytes_in":    bytes_in,
+            "bytes_out":   bytes_out,
+            "total_bytes": total_bytes,
+            "session_time": sess_time,
+            "updated_at":  now_iso,
+            "active":      True,
+        }
+        if framed_ip:
+            update_data["framed_ip"] = framed_ip
+
         q = {"acct_session_id": session_id} if session_id else {"username": uname, "active": True}
         await self._db.radius_sessions.update_one(
             q,
-            {"$set": {
-                "bytes_in":    bytes_in,
-                "bytes_out":   bytes_out,
-                "total_bytes": total_bytes,
-                "session_time": sess_time,
-                "updated_at":  now_iso,
-                "active":      True,
-            }},
+            {"$set": update_data},
             upsert=True
         )
         logger.debug(f"ACCT INTERIM: {uname!r} in={bytes_in}B out={bytes_out}B total={total_bytes}B")
@@ -574,7 +586,7 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
 
     async def _acct_stop(self, uname: str, session_id: str,
                          bytes_in: int, bytes_out: int, sess_time: int,
-                         svc_type: str, now_iso: str):
+                         svc_type: str, framed_ip: str, now_iso: str):
         """FIX #8: Tandai sesi sebagai tidak aktif saat Acct-Stop."""
         if self._db is None:
             return
@@ -582,17 +594,21 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         total_bytes = bytes_in + bytes_out
         q = {"acct_session_id": session_id} if session_id else {"username": uname, "active": True}
 
+        update_data = {
+            "bytes_in":    bytes_in,
+            "bytes_out":   bytes_out,
+            "total_bytes": total_bytes,
+            "session_time": sess_time,
+            "stopped_at":  now_iso,
+            "updated_at":  now_iso,
+            "active":      False,
+        }
+        if framed_ip:
+            update_data["framed_ip"] = framed_ip
+
         await self._db.radius_sessions.update_one(
             q,
-            {"$set": {
-                "bytes_in":    bytes_in,
-                "bytes_out":   bytes_out,
-                "total_bytes": total_bytes,
-                "session_time": sess_time,
-                "stopped_at":  now_iso,
-                "updated_at":  now_iso,
-                "active":      False,
-            }}
+            {"$set": update_data}
         )
         logger.info(f"ACCT STOP: sesi {session_id!r} untuk {uname!r} ditutup. "
                     f"Total: {total_bytes}B dalam {sess_time}s")
