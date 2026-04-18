@@ -722,11 +722,13 @@ async def activate_customer_ztp(
                     f"🎉 *Selamat Datang di Layanan Internet Kami!*\n\n"
                     f"Halo *{body.customer_name}*,\n"
                     f"Pemasangan layanan internet Anda telah berhasil diaktifkan.\n\n"
+                    f"👤 *Akses Portal Pelanggan*\n"
+                    f"• ID Pelanggan: {client_id}\n"
+                    f"• No HP: {body.phone}\n\n"
                     f"📡 *Data Akun & WiFi*\n"
                     f"• Paket: {pkg_name}\n"
                     f"• Nama WiFi (SSID): {body.ssid}\n"
-                    f"• Password WiFi: {body.wifi_password}\n"
-                    f"• Username PPPoE: {body.pppoe_username}\n\n"
+                    f"• Password WiFi: {body.wifi_password}\n\n"
                     f"💳 *Informasi Tagihan Awal*\n"
                 )
                 
