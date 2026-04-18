@@ -2913,10 +2913,25 @@ async def activate_speed_booster(customer_id: str, req: SpeedBoosterRequest, bac
     )
     
     logger.info(f"[Booster] User '{c.get('username')}' mengaktifkan speed booster {pkg.get('boost_rate_limit')} selama {dur} jam")
-    # Scheduler yg akan mendeteksi (dalam 5 menit) dan set_rate_limit secara live
-    
+
+    # ── Trigger immediate BW sync agar Booster berlaku SEKARANG via CoA ──
+    async def _trigger_booster_sync(cust_id: str):
+        try:
+            # Reset current_rate_limit agar scheduler tahu harus re-evaluasi
+            await db.customers.update_one(
+                {"id": cust_id},
+                {"$set": {"current_rate_limit": None}}
+            )
+            from services.bandwidth_scheduler import run_day_night_and_booster_sync
+            await run_day_night_and_booster_sync()
+            logger.info(f"[Booster] BW sync triggered untuk pelanggan {cust_id}")
+        except Exception as e:
+            logger.error(f"[Booster] Gagal trigger BW sync: {e}")
+
+    background_tasks.add_task(_trigger_booster_sync, customer_id)
+
     return {
-        "message": f"Speed Booster diaktifkan selama {dur} jam. Kecepatan akan naik ke {pkg['boost_rate_limit']} dalam waktu maksimal 5 menit.",
+        "message": f"Speed Booster diaktifkan selama {dur} jam. Kecepatan akan naik ke {pkg['boost_rate_limit']} dalam hitungan detik.",
         "expires_at": exp_at
     }
 
