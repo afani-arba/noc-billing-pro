@@ -421,7 +421,11 @@ async def push_hotspot_radius_config(req: PushRadiusRequest, user=Depends(requir
         if result.get("success"):
             await db.devices.update_one(
                 {"id": req.device_id},
-                {"$set": {"hotspot_radius_enabled": True}}
+                {"$set": {
+                    "hotspot_radius_enabled": True,
+                    "radius_secret": req.secret,
+                    "radius_host": req.radius_ip
+                }}
             )
 
         return result
