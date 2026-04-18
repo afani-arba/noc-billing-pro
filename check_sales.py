@@ -2,7 +2,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 
 async def run():
-    db = AsyncIOMotorClient('mongodb://mongo:27017')['noc_billing_pro']
+    db = AsyncIOMotorClient('mongodb://mongodb:27017')['nocbillingpro']
     
     # Let's get the 2 most recent sales records
     sales = await db.hotspot_sales.find().sort("created_at", -1).to_list(5)
