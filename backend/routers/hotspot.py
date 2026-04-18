@@ -1,4 +1,4 @@
-"""
+﻿"""
 Hotspot router: voucher management, sales tracking, RADIUS status, dan settings.
 Endpoint prefix: /hotspot-*  (langsung di root /api)
 """
@@ -23,9 +23,9 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT SETTINGS
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class HotspotSettingsUpdate(BaseModel):
     wa_number: Optional[str] = None
@@ -74,9 +74,9 @@ async def save_hotspot_settings(data: HotspotSettingsUpdate, user=Depends(requir
     return settings or {}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT VOUCHERS
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class VoucherUpdate(BaseModel):
     password: Optional[str] = None
@@ -100,7 +100,7 @@ async def list_hotspot_vouchers(
     db = get_db()
     q = {}
 
-    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    # â”€â”€ RBAC: filter berdasarkan allowed_devices user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     scope = get_user_allowed_devices(user)  # None = admin (semua)
     if scope is None:
         if device_id:
@@ -133,7 +133,7 @@ async def list_hotspot_vouchers(
     now_utc = datetime.now(timezone.utc)
     result = []
     for v in vouchers:
-        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "—"))
+        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "â€”"))
 
         # Calculate uptime in seconds for live timer on frontend
         if v.get("status") == "active" and v.get("session_start_time"):
@@ -168,19 +168,19 @@ async def update_hotspot_voucher(
     if not voucher:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # ── RBAC ────────────────────────────────────────────────────
+    # â”€â”€ RBAC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not check_device_access(user, voucher.get("device_id", "")):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah voucher pada router ini")
 
     update = {k: v for k, v in data.dict().items() if v is not None}
     if not update:
         raise HTTPException(400, "Tidak ada perubahan")
-    update[\"updated_at\"] = _now()
+    update["updated_at"] = _now()
     result = await db.hotspot_vouchers.update_one({"id": voucher_id}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # FULL RADIUS MODE: Tidak sync ke MikroTik — password/profile dikelola murni via RADIUS DB.
+    # FULL RADIUS MODE: Tidak sync ke MikroTik â€” password/profile dikelola murni via RADIUS DB.
     # MikroTik akan membaca credential dari RADIUS NOC Billing secara otomatis.
     logger.info(f"[hotspot][RADIUS] Voucher '{voucher_id}' diperbarui di DB, tidak sync ke MikroTik.")
 
@@ -194,7 +194,7 @@ async def toggle_hotspot_voucher_status(voucher_id: str, user=Depends(require_wr
     if not voucher:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # ── RBAC ────────────────────────────────────────────────────
+    # â”€â”€ RBAC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not check_device_access(user, voucher.get("device_id", "")):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk mengubah status voucher pada router ini")
 
@@ -207,7 +207,7 @@ async def toggle_hotspot_voucher_status(voucher_id: str, user=Depends(require_wr
 
     # FULL RADIUS MODE: Tidak perlu disable/enable di MikroTik secara langsung.
     # RADIUS NOC Billing otomatis menolak login jika status='disabled'.
-    logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' status → {new_status} (DB only, tidak sync ke MikroTik).")
+    logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' status â†’ {new_status} (DB only, tidak sync ke MikroTik).")
 
     return {"status": new_status, "message": f"Voucher {'dinonaktifkan' if new_status == 'disabled' else 'diaktifkan'}"}
 
@@ -250,20 +250,20 @@ async def delete_hotspot_voucher(voucher_id: str, user=Depends(require_write)):
     if not voucher:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # ── RBAC ────────────────────────────────────────────────────
+    # â”€â”€ RBAC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not check_device_access(user, voucher.get("device_id", "")):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus voucher pada router ini")
 
-    # FULL RADIUS MODE: Hapus HANYA dari DB — tidak perlu hapus dari MikroTik.
+    # FULL RADIUS MODE: Hapus HANYA dari DB â€” tidak perlu hapus dari MikroTik.
     # MikroTik otomatis menolak login karena user tidak lagi ada di RADIUS DB.
     await db.hotspot_vouchers.delete_one({"id": voucher_id})
     logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' dihapus dari DB (tidak sync ke MikroTik).")
     return {"message": "Voucher dihapus"}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT SALES
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @router.get("/hotspot-sales", dependencies=[Depends(require_enterprise)])
 async def list_hotspot_sales(
@@ -274,7 +274,7 @@ async def list_hotspot_sales(
     db = get_db()
     q = {}
 
-    # ── RBAC: filter berdasarkan allowed_devices user ──────────────────────
+    # â”€â”€ RBAC: filter berdasarkan allowed_devices user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     scope = get_user_allowed_devices(user)
     if scope is None:
         if device_id:
@@ -291,9 +291,9 @@ async def list_hotspot_sales(
     return sales
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT PROFILES (from MikroTik)
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @router.get("/hotspot-profiles", dependencies=[Depends(require_enterprise)])
 async def list_hotspot_profiles(
@@ -389,9 +389,9 @@ async def push_hotspot_radius_config(req: PushRadiusRequest, user=Depends(requir
     except Exception as e:
         raise HTTPException(500, f"Gagal push RADIUS: {e}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT RADIUS STATUS
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @router.get("/hotspot-radius-status", dependencies=[Depends(require_enterprise)])
 async def hotspot_radius_status(
@@ -424,9 +424,9 @@ async def hotspot_radius_status(
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # HOTSPOT USERS (batch create / generator)
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class HotspotUserBatch(BaseModel):
     users: List[dict]
@@ -441,11 +441,11 @@ async def batch_create_hotspot_users(
     """
     Buat voucher Hotspot secara massal.
     FULL RADIUS MODE: Voucher HANYA disimpan ke database NOC Billing.
-    MikroTik mengautentikasi user melalui RADIUS — tidak ada user yang dikirim ke router.
+    MikroTik mengautentikasi user melalui RADIUS â€” tidak ada user yang dikirim ke router.
     """
     db = get_db()
 
-    # ── RBAC ────────────────────────────────────────────────────
+    # â”€â”€ RBAC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not check_device_access(user, device_id):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk membuat voucher pada router ini")
 
@@ -467,7 +467,7 @@ async def batch_create_hotspot_users(
         validity     = u.get("validity", "")
 
         try:
-            # ── FULL RADIUS: Simpan HANYA ke database, tidak kirim ke MikroTik ──
+            # â”€â”€ FULL RADIUS: Simpan HANYA ke database, tidak kirim ke MikroTik â”€â”€
             voucher_doc = {
                 "id":               str(uuid.uuid4()),
                 "username":         username,
@@ -489,7 +489,7 @@ async def batch_create_hotspot_users(
             await db.hotspot_vouchers.insert_one(voucher_doc)
             voucher_doc.pop("_id", None)
             created.append(username)
-            logger.info(f"[hotspot-batch][RADIUS] Voucher '{username}' dicatat di DB — tidak dikirim ke MikroTik.")
+            logger.info(f"[hotspot-batch][RADIUS] Voucher '{username}' dicatat di DB â€” tidak dikirim ke MikroTik.")
         except Exception as e:
             logger.error(f"[hotspot-batch] Gagal simpan {username}: {e}")
             failed.append({"username": username, "error": str(e)})
@@ -503,7 +503,7 @@ async def batch_create_hotspot_users(
 
 
 def _parse_uptime_to_secs(uptime_str: str) -> int:
-    """Parse '1h', '2h30m', '1d', '30m' → seconds."""
+    """Parse '1h', '2h30m', '1d', '30m' â†’ seconds."""
     if not uptime_str:
         return 0
     import re
