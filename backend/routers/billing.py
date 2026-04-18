@@ -500,21 +500,23 @@ async def update_package(pkg_id: str, data: PackageUpdate, background_tasks: Bac
     if result.matched_count == 0:
         raise HTTPException(404, "Paket tidak ditemukan")
 
-    # ── Segera reset current_rate_limit & sync BW ke semua pelanggan paket ini ──
-    # Ini memastikan jika Night Mode / Booster / FUP dinonaktifkan, limit
-    # langsung kembali ke normal tanpa menunggu 5 menit scheduler.
+    # ── Segera reset current_rate_limit & sync BW ke semua pelanggan AKTIF paket ini ──
+    # Ini memastikan jika Night Mode / Booster / FUP dinonaktifkan atau speed diubah,
+    # limit langsung kembali ke benar tanpa menunggu 5 menit scheduler.
+    # PENTING: Tidak ada kick — perubahan dikirim via CoA (tanpa putus koneksi) atau
+    # tersimpan di DB untuk berlaku saat reconnect berikutnya.
     async def _trigger_bw_sync_for_package(p_id: str):
         try:
-            # Reset current_rate_limit agar scheduler tahu harus re-evaluasi
-            await db.customers.update_many(
+            # Reset current_rate_limit HANYA untuk user aktif agar scheduler re-evaluasi
+            res = await db.customers.update_many(
                 {"package_id": p_id, "active": True},
                 {"$set": {"current_rate_limit": None}}
             )
-            logger.info(f"[PkgUpdate] Reset current_rate_limit untuk semua pelanggan paket {p_id}")
-            # Jalankan sync sekarang
+            logger.info(f"[PkgUpdate] Reset current_rate_limit untuk {res.modified_count} pelanggan aktif paket {p_id}")
+            # Jalankan sync sekarang (global untuk paket ini, no kick)
             from services.bandwidth_scheduler import run_day_night_and_booster_sync
             await run_day_night_and_booster_sync()
-            logger.info(f"[PkgUpdate] BW sync triggered setelah update paket {p_id}")
+            logger.info(f"[PkgUpdate] BW sync selesai untuk paket {p_id} (tanpa putus koneksi)")
         except Exception as e:
             logger.error(f"[PkgUpdate] Gagal trigger BW sync paket {p_id}: {e}")
 
@@ -2888,51 +2890,81 @@ class SpeedBoosterRequest(BaseModel):
 
 @router.post("/customers/{customer_id}/speed-booster")
 async def activate_speed_booster(customer_id: str, req: SpeedBoosterRequest, background_tasks: BackgroundTasks, user=Depends(require_write)):
-    """Aktifkan speed booster on-demand untuk pelanggan via Admin atau bot WhatsApp."""
+    """
+    Aktifkan speed booster on-demand untuk pelanggan via Admin atau bot WhatsApp.
+    
+    Aturan:
+    - Booster dan Night Mode SALING EKSKLUSIF — tidak bisa jalan bersamaan
+    - Jika Night Mode sedang berlaku, Booster ditolak
+    - Perubahan bandwidth dikirim via CoA TANPA memutuskan koneksi user
+    - Sync hanya untuk pelanggan ini saja (targeted), tidak mempengaruhi pelanggan lain
+    - Setelah durasi habis, rate otomatis kembali ke normal (scheduler menangani)
+    """
     db = get_db()
     c = await db.customers.find_one({"id": customer_id})
     if not c:
         raise HTTPException(404, "Pelanggan tidak ditemukan")
     if not c.get("active"):
         raise HTTPException(400, "Pelanggan sedang tidak aktif/terisolir")
-        
+
     pkg = await db.billing_packages.find_one({"id": c.get("package_id")})
     if not pkg or not pkg.get("boost_rate_limit"):
         raise HTTPException(400, "Paket pelanggan ini tidak mendukung Speed Booster")
-        
+
+    # ── Cek Mutual Exclusivity: Night Mode vs Booster ──
+    # Jika Night Mode sedang berlaku, Booster TIDAK bisa diaktifkan
+    if pkg.get("day_night_enabled"):
+        from datetime import datetime as _dt
+        now_time_str = _dt.now().strftime("%H:%M")
+        n_start = pkg.get("night_start", "22:00")
+        n_end   = pkg.get("night_end",   "06:00")
+        is_night = False
+        if n_start > n_end:
+            # Overnight (misal 22:00 - 06:00)
+            is_night = now_time_str >= n_start or now_time_str < n_end
+        else:
+            is_night = n_start <= now_time_str < n_end
+        if is_night:
+            raise HTTPException(400,
+                f"Night Mode sedang aktif ({n_start}\u2013{n_end}). "
+                "Booster tidak dapat dijalankan bersamaan dengan Night Mode. "
+                "Aktifkan Booster di luar jam Night Mode."
+            )
+
     dur = req.duration_hours if req.duration_hours > 0 else int(pkg.get("boost_duration_hours", 24))
     from datetime import timedelta
     exp_at = (datetime.now(timezone.utc) + timedelta(hours=dur)).isoformat()
-    
+    boost_rate = pkg.get("boost_rate_limit", "")
+
+    # Simpan status booster + reset current_rate_limit agar scheduler re-evaluasi
     await db.customers.update_one(
         {"id": customer_id},
         {"$set": {
             "booster_active": True,
-            "booster_expires_at": exp_at
+            "booster_expires_at": exp_at,
+            "boost_rate_limit": boost_rate,  # Cache di customer untuk scheduler
+            "current_rate_limit": None,       # Force re-evaluasi
         }}
     )
-    
-    logger.info(f"[Booster] User '{c.get('username')}' mengaktifkan speed booster {pkg.get('boost_rate_limit')} selama {dur} jam")
 
-    # ── Trigger immediate BW sync agar Booster berlaku SEKARANG via CoA ──
+    logger.info(f"[Booster] User '{c.get('username')}' mengaktifkan speed booster {boost_rate} selama {dur} jam")
+
+    # ── Trigger immediate BW sync HANYA untuk pelanggan ini (targeted, no global sync) ──
+    # CoA dikirim tanpa putus koneksi. Tidak mempengaruhi pelanggan lain.
     async def _trigger_booster_sync(cust_id: str):
         try:
-            # Reset current_rate_limit agar scheduler tahu harus re-evaluasi
-            await db.customers.update_one(
-                {"id": cust_id},
-                {"$set": {"current_rate_limit": None}}
-            )
             from services.bandwidth_scheduler import run_day_night_and_booster_sync
-            await run_day_night_and_booster_sync()
-            logger.info(f"[Booster] BW sync triggered untuk pelanggan {cust_id}")
+            await run_day_night_and_booster_sync(customer_id=cust_id)
+            logger.info(f"[Booster] BW sync targeted selesai untuk pelanggan {cust_id}")
         except Exception as e:
             logger.error(f"[Booster] Gagal trigger BW sync: {e}")
 
     background_tasks.add_task(_trigger_booster_sync, customer_id)
 
     return {
-        "message": f"Speed Booster diaktifkan selama {dur} jam. Kecepatan akan naik ke {pkg['boost_rate_limit']} dalam hitungan detik.",
-        "expires_at": exp_at
+        "message": f"Speed Booster diaktifkan selama {dur} jam. Kecepatan akan naik ke {boost_rate} dalam hitungan detik (tanpa putus koneksi).",
+        "expires_at": exp_at,
+        "boost_rate": boost_rate,
     }
 
 

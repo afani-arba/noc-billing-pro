@@ -62,6 +62,8 @@ class CustomerUpdate(BaseModel):
     active: Optional[bool] = None
     auth_method: Optional[str] = None
     password: Optional[str] = None   # Update password (RADIUS: simpan di DB; Local: update MikroTik)
+    boost_rate_limit: Optional[str] = None
+    boost_duration_hours: Optional[int] = None
 
 class CustomerBulkUpdate(BaseModel):
     customer_ids: list[str]
@@ -408,7 +410,7 @@ async def unsubscribe_customer(customer_id: str, user=Depends(require_write)):
 
 
 @router.put("/{customer_id}")
-async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(require_write)):
+async def update_customer(customer_id: str, data: CustomerUpdate, background_tasks: BackgroundTasks, user=Depends(require_write)):
     db = get_db()
     customer = await db.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer:
@@ -421,6 +423,53 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(r
     update = {k: v for k, v in data.dict().items() if v is not None}
     if not update:
         raise HTTPException(400, "Tidak ada data yang diupdate")
+
+    # ── Booster Handling ──
+    boost_rate = update.pop("boost_rate_limit", None)
+    boost_hours = update.pop("boost_duration_hours", None)
+    trigger_sync = False
+
+    if boost_rate is not None:
+        if boost_rate.strip() == "":
+            # Matikan booster — kembali ke rate normal
+            update["booster_active"] = False
+            update["current_rate_limit"] = None   # Force re-evaluasi ke normal
+            update["boost_rate_limit"] = ""
+            trigger_sync = True
+            logger.info(f"[Booster] Admin mematikan booster untuk {customer.get('username')}")
+        else:
+            # Aktifkan booster — cek mutual exclusivity dengan Night Mode
+            pkg_id = update.get("package_id") or customer.get("package_id", "")
+            if pkg_id:
+                pkg_check = await db.billing_packages.find_one({"id": pkg_id}, {"_id": 0})
+            else:
+                pkg_check = None
+
+            if pkg_check and pkg_check.get("day_night_enabled"):
+                from datetime import datetime as _dt
+                now_time_str = _dt.now().strftime("%H:%M")
+                n_start = pkg_check.get("night_start", "22:00")
+                n_end   = pkg_check.get("night_end",   "06:00")
+                is_night = False
+                if n_start > n_end:
+                    is_night = now_time_str >= n_start or now_time_str < n_end
+                else:
+                    is_night = n_start <= now_time_str < n_end
+                if is_night:
+                    raise HTTPException(400,
+                        f"Night Mode sedang aktif ({n_start}\u2013{n_end}). "
+                        "Booster tidak dapat dijalankan bersamaan dengan Night Mode."
+                    )
+
+            update["booster_active"] = True
+            update["boost_rate_limit"] = boost_rate   # Simpan di customer untuk scheduler
+            dur = boost_hours if boost_hours and boost_hours > 0 else 1
+            from datetime import timedelta
+            exp_at = (datetime.now(timezone.utc) + timedelta(hours=dur)).isoformat()
+            update["booster_expires_at"] = exp_at
+            update["current_rate_limit"] = None        # Force re-evaluasi
+            trigger_sync = True
+            logger.info(f"[Booster] Admin mengaktifkan booster {boost_rate} ({dur}j) untuk {customer.get('username')}")
 
     # Ambil field khusus yang perlu intervensi MikroTik
     new_password = update.pop("password", None)
@@ -462,6 +511,17 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(r
     result = await db.customers.update_one({"id": customer_id}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(404, "Customer tidak ditemukan")
+
+    if trigger_sync:
+        async def _trigger_coa(cust_id: str):
+            try:
+                from services.bandwidth_scheduler import run_day_night_and_booster_sync
+                # Targeted: hanya sync pelanggan ini, tidak mempengaruhi lain
+                await run_day_night_and_booster_sync(customer_id=cust_id)
+            except Exception as e:
+                logger.error(f"[Booster] Gagal sync CoA: {e}")
+        background_tasks.add_task(_trigger_coa, customer_id)
+
     return {"message": "Customer berhasil diupdate"}
 
 

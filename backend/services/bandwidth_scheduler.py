@@ -3,9 +3,15 @@ bandwidth_scheduler.py
 ─────────────────────────────────────────────────────────────────────────────
 Background scheduler untuk Dynamic Bandwidth:
   1. FUP Monitoring (setiap 30 menit)
-  2. Day/Night Sync (setiap 5 menit)
-  3. Booster Expiry Check (setiap 5 menit)
+  2. Day/Night Sync + Booster Expiry Check (setiap 5 menit)
   4. FUP Monthly Reset (setiap tanggal 1 tiap bulan)
+
+PERBAIKAN UTAMA:
+- Tidak pernah kick user saat limit diubah (CoA tanpa disconnect)
+- Night Mode dan Booster saling eksklusif (hanya satu yang bisa aktif)
+- Setelah Night Mode berakhir atau Booster expired, rate dikembalikan ke normal
+- Perubahan limit hanya berlaku untuk user yang SEDANG AKTIF (online)
+- Booster expire resets current_rate_limit agar scheduler evaluasi ulang
 ─────────────────────────────────────────────────────────────────────────────
 """
 import asyncio
@@ -146,33 +152,36 @@ async def run_fup_monitoring():
     except Exception as e:
         logger.error(f"[BandwidthScheduler] FUP Monitoring error: {e}")
 
-async def run_day_night_and_booster_sync():
+async def run_day_night_and_booster_sync(customer_id: str = None):
     """
     Handle logic Day/Night Mode dan Speed Booster secara real-time.
-    Dipanggil rutin tiap 5 menit.
+    Dipanggil rutin tiap 5 menit, atau secara targeted untuk 1 pelanggan.
 
-    Logika pintar:
-    - Hitung target_rate untuk setiap pelanggan (Booster > FUP > Night > Normal).
-    - Simpan ke DB terlebih dulu (agar RADIUS pakai rate ini saat reconnect).
-    - Query active sessions dari MikroTik per device.
-    - CoA HANYA dikirim ke user yang sedang ONLINE.
-    - User OFFLINE di-skip — mereka dapat rate benar saat reconnect via RADIUS.
+    Perbaikan penting:
+    - Night Mode dan Booster SALING EKSKLUSIF — hanya satu yang bisa aktif
+    - Booster yang expire → current_rate_limit di-reset agar evaluasi ulang ke Normal
+    - CoA dikirim TANPA kick (user tidak diputus koneksinya)
+    - Hanya user yang SEDANG ONLINE yang di-CoA; offline → rate tersimpan di DB untuk reconnect
+    - Jika customer_id diisi → hanya proses 1 pelanggan tersebut
     """
     from services.bandwidth_manager import _coa_change_rate
     try:
         db = _db()
-        # Evaluasi SEMUA paket. Jika fitur FUP/Night dinonaktifkan, target_rate otomatis
-        # turun ke normal, sehingga jika current_rate masih nyangkut, akan otomatis ter-sync.
+
+        # Evaluasi SEMUA paket (atau hanya 1 pelanggan jika customer_id diisi)
         pkgs = await db.billing_packages.find({}).to_list(1000)
         pkg_map = {p["id"]: p for p in pkgs}
         if not pkgs:
             return
 
-        customers = await db.customers.find({
-            "package_id": {"$in": list(pkg_map.keys())},
-            "active": True
-        }).to_list(10000)
+        # Filter query: jika targeted, hanya 1 pelanggan; jika global, semua aktif
+        q = {"package_id": {"$in": list(pkg_map.keys())}, "active": True}
+        if customer_id:
+            q["id"] = customer_id
 
+        customers = await db.customers.find(q).to_list(10000)
+
+        now_utc = datetime.now(timezone.utc)
         now_time_str = datetime.now().strftime("%H:%M")
 
         # ── Kumpulkan semua yang perlu diupdate ──
@@ -183,33 +192,72 @@ async def run_day_night_and_booster_sync():
             if not pkg:
                 continue
 
-            # Booster check
+            # ── Cek Booster expiry ──
             booster_active = False
             if c.get("booster_active") and c.get("booster_expires_at"):
-                exp_at = datetime.fromisoformat(c["booster_expires_at"])
-                if datetime.now(timezone.utc) < exp_at:
-                    booster_active = True
-                else:
-                    await db.customers.update_one({"id": c["id"]}, {"$set": {"booster_active": False}})
+                try:
+                    exp_str = c["booster_expires_at"]
+                    # Handle both timezone-aware and naive datetimes
+                    exp_at = datetime.fromisoformat(exp_str)
+                    if exp_at.tzinfo is None:
+                        exp_at = exp_at.replace(tzinfo=timezone.utc)
 
-            # Night Mode check
+                    if now_utc < exp_at:
+                        booster_active = True
+                    else:
+                        # Booster expired — matikan dan reset current_rate_limit
+                        # agar scheduler mengevaluasi ulang ke kondisi normal
+                        logger.info(f"[BW] Booster '{c.get('username')}' expired — reset ke normal")
+                        await db.customers.update_one(
+                            {"id": c["id"]},
+                            {"$set": {
+                                "booster_active": False,
+                                "current_rate_limit": None  # Force re-evaluate
+                            }}
+                        )
+                        # Update local copy agar evaluasi target_rate benar
+                        c["booster_active"] = False
+                        c["current_rate_limit"] = None
+                except Exception as parse_err:
+                    logger.warning(f"[BW] Gagal parse booster_expires_at untuk {c.get('username')}: {parse_err}")
+                    # Matikan booster jika tanggal tidak bisa dibaca
+                    await db.customers.update_one(
+                        {"id": c["id"]},
+                        {"$set": {"booster_active": False, "current_rate_limit": None}}
+                    )
+                    c["booster_active"] = False
+                    c["current_rate_limit"] = None
+
+            # ── Night Mode check ──
             is_night = False
             if pkg.get("day_night_enabled"):
                 n_start = pkg.get("night_start", "22:00")
                 n_end   = pkg.get("night_end",   "06:00")
                 if n_start > n_end:
+                    # Overnight (misal 22:00 - 06:00)
                     is_night = now_time_str >= n_start or now_time_str < n_end
                 else:
                     is_night = n_start <= now_time_str < n_end
 
-            # Tentukan target rate
-            if booster_active and pkg.get("boost_rate_limit"):
-                target_rate = pkg["boost_rate_limit"]
+            # ── MUTUAL EXCLUSIVITY: Booster vs Night Mode ──
+            # Jika Booster sedang aktif, Night Mode DIABAIKAN 
+            # Jika Night Mode sedang berlaku, Booster TIDAK bisa diaktifkan
+            # (validasi aktivasi Booster di endpoint, bukan di sini)
+            # Di scheduler: Booster priority > Night Mode
+            if booster_active and is_night:
+                # Booster menang → Night Mode diabaikan
+                is_night = False
+
+            # ── Tentukan target rate berdasarkan prioritas ──
+            # Prioritas: Booster > FUP > Night > Normal
+            if booster_active and c.get("boost_rate_limit"):
+                target_rate = c["boost_rate_limit"]
             elif c.get("fup_active") and pkg.get("fup_rate_limit"):
                 target_rate = pkg["fup_rate_limit"]
             elif is_night and pkg.get("night_rate_limit"):
                 target_rate = pkg["night_rate_limit"]
             else:
+                # Normal rate dari paket
                 sp_up   = pkg.get("speed_up",   "—")
                 sp_down = pkg.get("speed_down", "—")
                 if sp_up == "—" or sp_down == "—":
@@ -272,16 +320,13 @@ async def run_day_night_and_booster_sync():
                     logger.warning(f"[BW] {username} ONLINE tapi no radius_secret di device → skip CoA")
                     continue
 
-                coa_result = await _coa_change_rate(
-                    nas_ip=nas_ip,
-                    nas_secret=radius_secret,
-                    username=username,
-                    rate_limit=target_rate,
-                )
-                if coa_result.get("success"):
-                    logger.info(f"[BW] ✅ {username} CoA OK → {target_rate} (LIVE, tanpa kick)")
+                # CoA TANPA KICK — user tidak diputus koneksinya
+                from services.bandwidth_manager import set_rate_limit
+                ret = await set_rate_limit(c, device, target_rate, db)
+                if ret.get("success"):
+                    logger.info(f"[BW] ✅ {username} berhasil diubah ke {target_rate} via {ret.get('method')} (no disconnect)")
                 else:
-                    logger.warning(f"[BW] ⚠️  {username} CoA gagal: {coa_result.get('reason')} (rate tersimpan di DB)")
+                    logger.error(f"[BW] ❌ {username} GAGAL ubah ke {target_rate}: {ret.get('reason')}")
 
     except Exception as e:
         logger.error(f"[BandwidthScheduler] Day/Night Sync error: {e}")

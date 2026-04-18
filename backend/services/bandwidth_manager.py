@@ -1,14 +1,17 @@
 """
 bandwidth_manager.py — Dynamic Bandwidth Management
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Strategi perubahan rate-limit:
+Strategi perubahan rate-limit (TANPA memutuskan koneksi user):
 
-1. UTAMA: Create/reuse PPPoE profile dinamis → assign ke secret user → kick session
-   - Buat profile "NOC-BW-<rate>" jika belum ada (e.g. "NOC-BW-25M/25M")
+1. UTAMA: RADIUS CoA (RFC 3576) — ubah rate-limit LIVE tanpa kick
+   - Kirim CoA ke NAS MikroTik port 3799
+   - User tidak merasakan putus koneksi sama sekali
+
+2. FALLBACK: Update PPPoE profile dinamis → assign ke secret user (TANPA kick)
+   - Buat profile "NOC-BW-<rate>" jika belum ada
    - Update field `profile` di /ppp/secret
-   - Kick active session → user reconnect dalam 1-3 detik dengan limit baru
-
-2. FALLBACK: RADIUS CoA (RFC 3576) — hanya jika port 3799 dapat dijangkau dari server
+   - User akan mendapatkan limit baru saat reconnect (tidak langsung)
+   - TIDAK pernah kick session kecuali diminta secara eksplisit
 
 Note: Dynamic Simple Queue TIDAK bisa diubah langsung (RouterOS melarang).
 """
@@ -31,17 +34,15 @@ NOC_PROFILE_PREFIX = "NOC-BW-"
 
 async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None) -> dict:
     """
-    Ubah rate-limit user PPPoE.
-    Langkah 1: Update profile PPPoE (agar reconnect berikutnya dapat limit yang sama).
-    Langkah 2: Gunakan RADIUS CoA untuk mengubah rate-limit live TANPA kick.
+    Ubah rate-limit user PPPoE TANPA memutuskan koneksi (no kick).
+    
+    Prioritas:
+    1. RADIUS CoA — berlaku instan tanpa putus koneksi
+    2. Profile update — berlaku saat reconnect berikutnya (fallback)
     """
     username = customer.get("username", "")
 
-    # ── Metode 1: Update Profile (tanpa kick) ──
-    # Ini memastikan kalaupun router direboot, profile sudah tersimpan
-    profile_result = await _profile_rate_change(device, username, rate_limit, kick=False)
-
-    # ── Metode 2: CoA RADIUS (Live Update tanpa kick) ──
+    # ── Metode 1: CoA RADIUS (Live Update tanpa kick) ──
     if device.get("radius_secret") and device.get("ip_address"):
         coa_result = await _coa_change_rate(
             nas_ip     = device.get("ip_address"),
@@ -50,13 +51,14 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             rate_limit = rate_limit,
         )
         if coa_result.get("success"):
-            logger.info(f"[BW] CoA berhasil untuk '{username}', tidak perlu kick.")
+            logger.info(f"[BW] CoA berhasil untuk '{username}' → {rate_limit} (no kick)")
             return coa_result
-            
-        logger.warning(f"[BW] CoA gagal untuk '{username}': {coa_result.get('reason')}")
 
-    # Jika CoA tidak jalan (karena router belum set RADIUS incoming dll), 
-    # kembalikan hasil profile. User baru dapat efek saat reconnect.
+        logger.warning(f"[BW] CoA gagal untuk '{username}': {coa_result.get('reason')} — fallback ke profile")
+
+    # ── Metode 2: Update Profile (tanpa kick) — sebagai fallback ──
+    # Ini memastikan kalaupun router direboot/reconnect, profile sudah tersimpan
+    profile_result = await _profile_rate_change(device, username, rate_limit, kick=False)
     return profile_result
 
 
@@ -64,7 +66,7 @@ async def _profile_rate_change(device: dict, username: str, rate_limit: str, kic
     """
     1. Pastikan ada PPPoE profile dengan rate-limit ini, buat jika belum ada.
     2. Assign profile ke secret user.
-    3. Kick active session (opsional) → jika True, reconnect dengan limit baru.
+    3. Kick active session HANYA jika kick=True (default: False = tidak disconnect).
     """
     from mikrotik_api import get_api_client
     try:
@@ -108,17 +110,17 @@ async def _profile_rate_change(device: dict, username: str, rate_limit: str, kic
                 await mt.update_pppoe_secret(mt_id, {"profile": profile_name})
                 logger.info(f"[BW] Secret '{username}' profile diubah ke '{profile_name}'")
         else:
-            # User RADIUS-only: tidak ada secret di router, tapi bisa tetap kick
-            logger.info(f"[BW] '{username}' tidak ada di /ppp/secret (RADIUS-managed), akan kick session saja")
+            # User RADIUS-only: tidak ada secret di router
+            logger.info(f"[BW] '{username}' tidak ada di /ppp/secret (RADIUS-managed)")
 
-        # ── Kick session aktif (opsional) ─────────────────────────────────────
+        # ── Kick session aktif HANYA jika diminta secara eksplisit ─────────
         removed = 0
         if kick:
             removed = await mt.remove_pppoe_active_session(username)
             if removed > 0:
                 logger.info(f"[BW] Session '{username}' di-kick → reconnect dengan profile '{profile_name}'")
             else:
-                logger.info(f"[BW] '{username}' tidak ada session aktif (limit berlaku saat connect berikutnya)")
+                logger.info(f"[BW] '{username}' tidak ada session aktif")
 
         return {"success": True, "method": "profile", "rate": rate_limit,
                 "profile": profile_name, "sessions_dropped": removed}
@@ -156,36 +158,44 @@ async def _coa_change_rate(nas_ip: str, nas_secret: str, username: str, rate_lim
     if not nas_ip or not nas_secret:
         return {"success": False, "method": "coa", "reason": "Missing NAS IP or secret"}
     try:
-        secret = nas_secret.encode("utf-8")
-        pkt_id = 1
+        from pyrad.client import Client
+        from pyrad.dictionary import Dictionary
+        from pyrad.packet import CoAACK
+        import io
+        import asyncio
 
-        user_name_attr = bytes([1, len(username) + 2]) + username.encode()
-        rate_bytes = rate_limit.encode("utf-8")
-        vsa_inner  = struct.pack("!I", 14988) + bytes([8, len(rate_bytes) + 2]) + rate_bytes
-        vsa_attr   = bytes([26, len(vsa_inner) + 2]) + vsa_inner
+        # Inline dictionary specifically for MikroTik Rate Limit VSA
+        dict_str = """
+ATTRIBUTE User-Name 1 string
+ATTRIBUTE NAS-IP-Address 4 ipaddr
+ATTRIBUTE Framed-IP-Address 8 ipaddr
+ATTRIBUTE Message-Authenticator 80 octets
+VENDOR MikroTik 14988
+BEGIN-VENDOR MikroTik
+ATTRIBUTE MikroTik-Rate-Limit 8 string
+END-VENDOR MikroTik
+        """
+        d = Dictionary(io.StringIO(dict_str))
+        client = Client(server=nas_ip, secret=nas_secret.encode('utf-8'), dict=d)
+        client.coaport = 3799
 
-        attr_data  = user_name_attr + vsa_attr
-        length     = 20 + len(attr_data)
-
-        # RFC 3576 / RFC 5176: Request Authenticator MUST be generated using 16 zero octets
-        # MD5(Code + Identifier + Length + 16 zero octets + Attributes + Secret)
-        header_zero = struct.pack("!BBH", COA_REQUEST, pkt_id, length) + (b'\x00' * 16)
-        resp_auth  = hashlib.md5(header_zero + attr_data + secret).digest()
-        packet     = struct.pack("!BBH", COA_REQUEST, pkt_id, length) + resp_auth + attr_data
+        req = client.CreateCoAPacket(User_Name=username)
+        req.AddAttribute("MikroTik-Rate-Limit", rate_limit)
 
         loop = asyncio.get_event_loop()
-        response = await asyncio.wait_for(
-            loop.run_in_executor(None, _udp_send_recv, nas_ip, 3799, packet),
+
+        # client.SendPacket is blocking, run in executor
+        reply = await asyncio.wait_for(
+            loop.run_in_executor(None, client.SendPacket, req),
             timeout=5.0
         )
 
-        if response and response[0] == COA_ACK:
+        if reply.code == CoAACK:
             logger.info(f"[BW] CoA-ACK untuk '{username}' rate={rate_limit}")
             return {"success": True, "method": "coa", "rate": rate_limit}
         else:
-            code = response[0] if response else None
-            logger.warning(f"[BW] CoA-NAK untuk '{username}': code={code}")
-            return {"success": False, "method": "coa", "reason": f"CoA-NAK code={code}"}
+            logger.warning(f"[BW] CoA-NAK untuk '{username}': code={reply.code}")
+            return {"success": False, "method": "coa", "reason": f"CoA-NAK code={reply.code}"}
 
     except asyncio.TimeoutError:
         logger.warning(f"[BW] CoA timeout untuk '{username}' @ {nas_ip}:3799")
