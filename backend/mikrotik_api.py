@@ -1234,7 +1234,7 @@ class MikroTikRestAPI(MikroTikBase):
                 "comment": comment,
                 "authentication-port": 1816,
                 "accounting-port": 1817,
-                "timeout": "3000",   # FIX #1: 3 detik, bukan 300ms default
+                "timeout": "3s",   # FIX #1: 3 detik (format MikroTik: '3s')
             }
             existing = await self.list_radius_clients()
             match = next((r for r in existing if r.get("address") == address or r.get("comment") == comment), None)
@@ -2427,7 +2427,7 @@ class MikroTikLegacyAPI(MikroTikBase):
                 "comment": comment,
                 "authentication-port": "1816",
                 "accounting-port": "1817",
-                "timeout": "3000",   # FIX #1: 3 detik timeout
+                "timeout": "3s",   # FIX #1: 3 detik timeout
             }
             if match:
                 mt_id = match.get(".id") or match.get("id", "")
