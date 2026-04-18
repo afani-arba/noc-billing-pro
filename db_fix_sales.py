@@ -1,28 +1,36 @@
 import asyncio
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 
 async def run():
     db = AsyncIOMotorClient('mongodb://mongodb:27017')['nocbillingpro']
     
-    # Update sales missing device_id by fetching from their vouchers
-    sales = await db.hotspot_sales.find({'device_id': {'$exists': False}}).to_list(1000)
-    print(f'Found {len(sales)} sales records missing device_id.')
-    updated = 0
+    # Ambil semua sales yang device_id masih kosong atau bermasalah
+    sales = await db.hotspot_sales.find({"$or": [{"device_id": ""}, {"device_id": {"$exists": False}}]}).to_list(2000)
+    print(f'Found {len(sales)} sales records missing real device_id.')
     
+    updated = 0
     for s in sales:
-        if 'voucher_id' in s:
-            v = await db.hotspot_vouchers.find_one({'id': s['voucher_id']})
-            if v and 'device_id' in v:
-                await db.hotspot_sales.update_one(
-                    {'_id': s['_id']},
-                    {'$set': {'device_id': v['device_id']}}
-                )
-                updated += 1
-            else:
-                await db.hotspot_sales.update_one({'_id': s['_id']}, {'$set': {'device_id': ''}})
+        vid = s.get('voucher_id')
+        if not vid: continue
+        
+        v = None
+        if len(vid) == 24:
+            # ObjectId string
+            v = await db.hotspot_vouchers.find_one({'_id': ObjectId(vid)})
         else:
-            await db.hotspot_sales.update_one({'_id': s['_id']}, {'$set': {'device_id': ''}})
+            # UUID string
+            v = await db.hotspot_vouchers.find_one({'id': vid})
             
-    print(f'Successfully updated {updated} sales records.')
+        if v and 'device_id' in v:
+            await db.hotspot_sales.update_one(
+                {'_id': s['_id']},
+                {'$set': {'device_id': v['device_id']}}
+            )
+            updated += 1
+            print(f"Fixed {s['username']} -> {v['device_id']}")
+    
+    print(f"Update done. {updated} fixed.")
 
-asyncio.run(run())
+if __name__ == '__main__':
+    asyncio.run(run())
