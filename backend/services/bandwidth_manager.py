@@ -42,7 +42,8 @@ async def _queue_change_rate(device: dict, username: str, rate_limit: str) -> di
     try:
         mt = get_api_client(device)
         queues = await mt.list_simple_queues()
-        q = next((q for q in queues if q.get("name") == f"<{username}>"), None) # PPPoE creates simple queues named `<username>`
+        possible_names = [f"<{username}>", f"<pppoe-{username}>", f"<hotspot-{username}>"]
+        q = next((q for q in queues if q.get("name") in possible_names), None)
         if q:
             await mt.update_simple_queue(q['.id'], {"max-limit": rate_limit})
             logger.info(f"[BW] Queue '{username}' updated to {rate_limit}")
