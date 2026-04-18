@@ -2,8 +2,8 @@
 bandwidth_scheduler.py
 ─────────────────────────────────────────────────────────────────────────────
 Background scheduler untuk Dynamic Bandwidth:
-  1. FUP Monitoring (setiap 30 menit)
-  2. Day/Night Sync + Booster Expiry Check (setiap 5 menit)
+  1. FUP Monitoring (setiap 10 detik)
+  2. Day/Night Sync + Booster Expiry Check (setiap 10 detik)
   4. FUP Monthly Reset (setiap tanggal 1 tiap bulan)
 
 PERBAIKAN UTAMA:
@@ -35,11 +35,11 @@ async def bandwidth_scheduler_loop():
         try:
             now = datetime.now()
             
-            # ── 1. Day/Night & Booster (Tiap 5 menit) ──
+            # ── 1. Day/Night & Booster (Tiap 10 detik) ──
             await run_day_night_and_booster_sync()
             
-            # ── 2. FUP Monitoring (Tiap 5 menit untuk meminimalisasi lost bytes) ──
-            if (now - last_fup_run).total_seconds() >= 300:
+            # ── 2. FUP Monitoring (Tiap 10 detik untuk minimalkan lost bytes) ──
+            if (now - last_fup_run).total_seconds() >= 10:
                 await run_fup_monitoring()
                 last_fup_run = now
                 
@@ -52,7 +52,7 @@ async def bandwidth_scheduler_loop():
         except Exception as e:
             logger.error(f"[BandwidthScheduler] Loop error: {e}")
             
-        await asyncio.sleep(300) # Sleep 5 Menit
+        await asyncio.sleep(10) # Sleep 10 Detik
 
 async def run_fup_monthly_reset():
     """Reset FUP bytes_used ke 0 setiap tanggal 1."""
