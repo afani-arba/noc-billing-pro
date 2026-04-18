@@ -1398,7 +1398,7 @@ function CustomersTab({ packages, devices, onRefresh, deviceId, isLocked }) {
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{dev?.name || "—"}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">
                         {pkg?.name || <span className="text-amber-400/80 text-[10px]">Belum ada paket</span>}
-                        {c.fup_active && (
+                        {c.fup_active && pkg?.fup_enabled && (
                           <span className="ml-1.5 text-[9px] bg-purple-500/10 text-purple-400 px-1 py-0.5 rounded border border-purple-500/30 whitespace-nowrap">
                             FUP LIMIT
                           </span>

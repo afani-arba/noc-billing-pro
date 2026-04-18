@@ -282,7 +282,7 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
             # Prioritas: Booster > FUP > Night > Normal
             if booster_active and c.get("boost_rate_limit"):
                 target_rate = c["boost_rate_limit"]
-            elif c.get("fup_active") and pkg.get("fup_rate_limit"):
+            elif c.get("fup_active") and pkg.get("fup_enabled") and pkg.get("fup_rate_limit"):
                 target_rate = pkg["fup_rate_limit"]
             elif is_night and pkg.get("night_rate_limit"):
                 target_rate = pkg["night_rate_limit"]
