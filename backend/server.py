@@ -221,6 +221,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Voucher expiry scheduler error: {e}")
 
+    # Hotspot session sync — poll MikroTik setiap 10 detik untuk sinkronisasi status voucher
+    # Menyelesaikan masalah voucher 'active' padahal user sudah disconnect dari MikroTik
+    try:
+        from services.voucher_expiry_scheduler import hotspot_session_sync_loop
+        t = asyncio.create_task(hotspot_session_sync_loop())
+        _background_tasks.append(t)
+        logger.info("Hotspot session sync scheduler started (10s interval)")
+    except Exception as e:
+        logger.error(f"Hotspot session sync scheduler error: {e}")
+
+
 
     # Hotspot cleanup
     if _svc("ENABLE_HOTSPOT_CLEANUP"):
