@@ -64,6 +64,7 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             if sess:
                 session_id = sess.get("acct_session_id")
                 framed_ip  = sess.get("framed_ip")
+                service_type = sess.get("service_type")
         except Exception as e:
             logger.debug(f"[BW] Gagal cari session_id untuk {username}: {e}")
 
@@ -74,8 +75,9 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             nas_secret = secret,
             username   = username,
             rate_limit = rate_limit,
-            session_id = session_id,   # FIX #6
-            framed_ip  = framed_ip,    # FIX #6
+            session_id = session_id,
+            framed_ip  = framed_ip,
+            service_type = locals().get("service_type", "")
         )
         if coa_result.get("success"):
             logger.info(f"[BW] ✅ CoA berhasil untuk '{username}' → {rate_limit} (no kick, method=CoA)")
@@ -94,6 +96,7 @@ async def _coa_change_rate(
     rate_limit: str,
     session_id: str = None,
     framed_ip: str = None,
+    service_type: str = "",
     coa_port: int = 3799,
     timeout: float = 5.0,
 ) -> dict:
@@ -141,6 +144,13 @@ async def _coa_change_rate(
                 attrs += pack_attr(8, ip_bytes)     # Framed-IP-Address
             except Exception:
                 pass
+
+        # Atribut routing spesifik MikroTik untuk mencegah bajak sesi Hotspot
+        if service_type == "pppoe":
+            attrs += pack_int(7, 1)   # Framed-Protocol = PPP
+            attrs += pack_int(61, 5)  # NAS-Port-Type = Virtual
+        elif service_type == "hotspot":
+            attrs += pack_int(61, 19) # NAS-Port-Type = Wireless-802.11
 
         # Mikrotik-Rate-Limit VSA (Vendor 14988, Attribute 8)
         attrs += pack_vsa(14988, 8, rate_limit.encode("utf-8"))
