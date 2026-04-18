@@ -309,16 +309,28 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
         try:
             if self._db is not None:
                 pkg = await self._db.billing_packages.find_one({"id": customer.get("package_id", "")})
-                if pkg:
+                
+                # Prioritaskan current_rate_limit (override oleh Night Mode / Booster / FUP)
+                # Jika tidak ada override, gunakan speed dari package
+                override_rate = customer.get("current_rate_limit", "")
+                rate_str = None
+
+                if override_rate:
+                    # Override aktif (Night Mode / Booster / FUP sudah di-set oleh scheduler)
+                    rate_str = override_rate
+                    logger.info(f"RADIUS PPPoE: rate-limit OVERRIDE '{rate_str}' untuk {uname!r} (Night/Booster/FUP)")
+                elif pkg:
                     down = str(pkg.get("speed_down", "")).strip()
                     up   = str(pkg.get("speed_up",   "")).strip()
                     if down and up:
                         rate_str = f"{up}/{down}"
-                        rate_val = rate_str.encode("utf-8")
-                        # Mikrotik-Rate-Limit Vendor-Specific Attribute (VSA)
-                        vsa_rate = struct.pack("!I", 14988) + bytes([8, len(rate_val) + 2]) + rate_val
-                        reply_attrs.append((26, vsa_rate))
                         logger.info(f"RADIUS PPPoE: rate-limit '{rate_str}' untuk {uname!r}")
+
+                if rate_str:
+                    rate_val = rate_str.encode("utf-8")
+                    # Mikrotik-Rate-Limit Vendor-Specific Attribute (VSA)
+                    vsa_rate = struct.pack("!I", 14988) + bytes([8, len(rate_val) + 2]) + rate_val
+                    reply_attrs.append((26, vsa_rate))
                 
                 # Fetch PPPoE Pool Config to send Framed-Pool
                 pool_cfg = await self._db.system_settings.find_one({"_id": "pppoe_pool_config"})
@@ -327,7 +339,6 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
                     reply_attrs.append((88, pool_name.encode("utf-8"))) # Framed-Pool
                     logger.info(f"RADIUS PPPoE: assigned Framed-Pool '{pool_name}' untuk {uname!r}")
                 else:
-                    # Provide default pool name as fallback to ensure IP assignment
                     reply_attrs.append((88, b"pppoe-pool"))
         except Exception as e:
             logger.error(f"PPPoE VSA rate-limit error: {e}")

@@ -479,7 +479,7 @@ async def create_package(data: PackageCreate, background_tasks: BackgroundTasks,
 
 
 @router.put("/packages/{pkg_id}")
-async def update_package(pkg_id: str, data: PackageUpdate, user=Depends(require_write)):
+async def update_package(pkg_id: str, data: PackageUpdate, background_tasks: BackgroundTasks, user=Depends(require_write)):
     db = get_db()
 
     # ── RBAC: cek kepemilikan device dari paket ini ──────────────────────────
@@ -499,6 +499,27 @@ async def update_package(pkg_id: str, data: PackageUpdate, user=Depends(require_
     result = await db.billing_packages.update_one({"id": pkg_id}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(404, "Paket tidak ditemukan")
+
+    # ── Segera reset current_rate_limit & sync BW ke semua pelanggan paket ini ──
+    # Ini memastikan jika Night Mode / Booster / FUP dinonaktifkan, limit
+    # langsung kembali ke normal tanpa menunggu 5 menit scheduler.
+    async def _trigger_bw_sync_for_package(p_id: str):
+        try:
+            # Reset current_rate_limit agar scheduler tahu harus re-evaluasi
+            await db.customers.update_many(
+                {"package_id": p_id, "active": True},
+                {"$set": {"current_rate_limit": None}}
+            )
+            logger.info(f"[PkgUpdate] Reset current_rate_limit untuk semua pelanggan paket {p_id}")
+            # Jalankan sync sekarang
+            from services.bandwidth_scheduler import run_day_night_and_booster_sync
+            await run_day_night_and_booster_sync()
+            logger.info(f"[PkgUpdate] BW sync triggered setelah update paket {p_id}")
+        except Exception as e:
+            logger.error(f"[PkgUpdate] Gagal trigger BW sync paket {p_id}: {e}")
+
+    background_tasks.add_task(_trigger_bw_sync_for_package, pkg_id)
+
     return {"message": "Paket diupdate"}
 
 
