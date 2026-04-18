@@ -288,12 +288,9 @@ export default function HotspotBillingPage() {
   }, [devices, loadPackages]);
 
   useEffect(() => {
-    if (!selectedDevice) { setProfiles([]); setRadiusStatus(null); return; }
-    setProfilesLoading(true);
-    api.get("/hotspot-profiles", { params: { device_id: selectedDevice } })
-      .then(r => setProfiles(r.data || []))
-      .catch(() => {})
-      .finally(() => setProfilesLoading(false));
+    if (!selectedDevice) { setRadiusStatus(null); return; }
+    // FULL RADIUS MODE: Tidak perlu fetch profil dari MikroTik.
+    // Profil/paket diambil murni dari database NOC Billing (/api/billing/packages).
     fetchRadiusStatus(selectedDevice);
   }, [selectedDevice]);
 
@@ -981,9 +978,12 @@ export default function HotspotBillingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Paket Layanan</Label>
+                <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                  Paket Layanan
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">RADIUS DB</span>
+                </Label>
                 <Select value={form.profile} onValueChange={v => {
-                  const pkg = packages.find(p => p.name === v);
+                  const pkg = packages.find(p => p.service_type === "hotspot" && p.name === v);
                   if (pkg) {
                     setForm({ 
                       ...form, 
@@ -996,12 +996,17 @@ export default function HotspotBillingPage() {
                     setForm({ ...form, profile: v });
                   }
                 }}>
-                  <SelectTrigger className="rounded-sm bg-background h-9 text-sm"><SelectValue placeholder="Pilih Paket" /></SelectTrigger>
+                  <SelectTrigger className="rounded-sm bg-background h-9 text-sm"><SelectValue placeholder="Pilih Paket Hotspot..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">default</SelectItem>
-                    {packages.filter(p => p.service_type === "hotspot").map(p => (
-                      <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-                    ))}
+                    {packages.filter(p => p.service_type === "hotspot").length === 0 ? (
+                      <SelectItem value="__empty__" disabled>Belum ada paket — tambah di tab "Paket Layanan"</SelectItem>
+                    ) : (
+                      packages.filter(p => p.service_type === "hotspot").map(p => (
+                        <SelectItem key={p.id} value={p.name}>
+                          {p.name} — Rp{parseInt(p.price || 0).toLocaleString("id-ID")}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

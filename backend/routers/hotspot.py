@@ -175,21 +175,14 @@ async def update_hotspot_voucher(
     update = {k: v for k, v in data.dict().items() if v is not None}
     if not update:
         raise HTTPException(400, "Tidak ada perubahan")
-    update["updated_at"] = _now()
+    update[\"updated_at\"] = _now()
     result = await db.hotspot_vouchers.update_one({"id": voucher_id}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # Sync ke MikroTik jika password berubah
-    if data.password:
-        try:
-            device = await db.devices.find_one({"id": voucher.get("device_id")})
-            if device:
-                from mikrotik_api import get_api_client
-                mt = get_api_client(device)
-                await mt.set_user_password_hotspot(voucher["username"], data.password)
-        except Exception as e:
-            logger.warning(f"[hotspot] Gagal sync password ke MikroTik: {e}")
+    # FULL RADIUS MODE: Tidak sync ke MikroTik — password/profile dikelola murni via RADIUS DB.
+    # MikroTik akan membaca credential dari RADIUS NOC Billing secara otomatis.
+    logger.info(f"[hotspot][RADIUS] Voucher '{voucher_id}' diperbarui di DB, tidak sync ke MikroTik.")
 
     return {"message": "Voucher diperbarui"}
 
@@ -212,18 +205,9 @@ async def toggle_hotspot_voucher_status(voucher_id: str, user=Depends(require_wr
         {"$set": {"status": new_status, "updated_at": _now()}}
     )
 
-    # Sync ke MikroTik
-    try:
-        device = await db.devices.find_one({"id": voucher.get("device_id")})
-        if device:
-            from mikrotik_api import get_api_client
-            mt = get_api_client(device)
-            if new_status == "disabled":
-                await mt.disable_hotspot_user(voucher["username"])
-            else:
-                await mt.enable_hotspot_user(voucher["username"])
-    except Exception as e:
-        logger.warning(f"[hotspot] Gagal sync status ke MikroTik: {e}")
+    # FULL RADIUS MODE: Tidak perlu disable/enable di MikroTik secara langsung.
+    # RADIUS NOC Billing otomatis menolak login jika status='disabled'.
+    logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' status → {new_status} (DB only, tidak sync ke MikroTik).")
 
     return {"status": new_status, "message": f"Voucher {'dinonaktifkan' if new_status == 'disabled' else 'diaktifkan'}"}
 
@@ -243,39 +227,19 @@ async def transfer_hotspot_voucher(
     if not target_device:
         raise HTTPException(404, "Router tujuan tidak ditemukan")
 
-    # Create on new MikroTik
-    try:
-        from mikrotik_api import get_api_client
-        mt_new = get_api_client(target_device)
-        await mt_new.add_hotspot_user(
-            username=voucher["username"],
-            password=voucher.get("password", voucher["username"]),
-            profile=voucher.get("profile", "default"),
-        )
-    except Exception as e:
-        raise HTTPException(503, f"Gagal buat user di router tujuan: {e}")
-
-    # Delete from old MikroTik
-    try:
-        old_device = await db.devices.find_one({"id": voucher.get("device_id")})
-        if old_device:
-            from mikrotik_api import get_api_client
-            mt_old = get_api_client(old_device)
-            await mt_old.delete_hotspot_user(voucher["username"])
-    except Exception as e:
-        logger.warning(f"[hotspot] Gagal hapus dari router lama: {e}")
-
-    # Update DB
+    # FULL RADIUS MODE: Transfer hanya mengupdate device_id di DB.
+    # Tidak perlu create/delete user di MikroTik karena autentikasi via RADIUS NOC Billing.
     new_router_name = target_device.get("name", data.new_device_id)
     await db.hotspot_vouchers.update_one(
         {"id": voucher_id},
         {"$set": {
-            "device_id": data.new_device_id,
+            "device_id":   data.new_device_id,
             "router_name": new_router_name,
-            "updated_at": _now()
+            "updated_at":  _now()
         }}
     )
 
+    logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' dipindah ke router '{new_router_name}' (DB only).")
     return {"message": f"Voucher berhasil dipindah ke {new_router_name}"}
 
 
@@ -290,17 +254,10 @@ async def delete_hotspot_voucher(voucher_id: str, user=Depends(require_write)):
     if not check_device_access(user, voucher.get("device_id", "")):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus voucher pada router ini")
 
-    # Delete from MikroTik
-    try:
-        device = await db.devices.find_one({"id": voucher.get("device_id")})
-        if device:
-            from mikrotik_api import get_api_client
-            mt = get_api_client(device)
-            await mt.delete_hotspot_user(voucher["username"])
-    except Exception as e:
-        logger.warning(f"[hotspot] Gagal hapus dari MikroTik: {e}")
-
+    # FULL RADIUS MODE: Hapus HANYA dari DB — tidak perlu hapus dari MikroTik.
+    # MikroTik otomatis menolak login karena user tidak lagi ada di RADIUS DB.
     await db.hotspot_vouchers.delete_one({"id": voucher_id})
+    logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' dihapus dari DB (tidak sync ke MikroTik).")
     return {"message": "Voucher dihapus"}
 
 
@@ -481,6 +438,11 @@ async def batch_create_hotspot_users(
     device_id: str = Query(..., description="ID device MikroTik"),
     user=Depends(require_write),
 ):
+    """
+    Buat voucher Hotspot secara massal.
+    FULL RADIUS MODE: Voucher HANYA disimpan ke database NOC Billing.
+    MikroTik mengautentikasi user melalui RADIUS — tidak ada user yang dikirim ke router.
+    """
     db = get_db()
 
     # ── RBAC ────────────────────────────────────────────────────
@@ -491,68 +453,52 @@ async def batch_create_hotspot_users(
     if not device:
         raise HTTPException(404, "Device tidak ditemukan")
 
-    try:
-        from mikrotik_api import get_api_client
-        mt = get_api_client(device)
-    except Exception as e:
-        raise HTTPException(503, f"Gagal koneksi ke MikroTik: {e}")
-
+    device_name = device.get("name", device_id)
     created = []
     failed = []
-    device_name = device.get("name", device_id)
 
     for u in data.users:
         username = u.get("name") or u.get("username", "")
         password = u.get("password", username)
-        profile = u.get("profile", "default")
-        server = u.get("server", "all")
-        comment = u.get("comment", "")
-        price = float(u.get("price", 0))
+        profile  = u.get("profile", "default")
+        comment  = u.get("comment", "")
+        price    = float(u.get("price", 0))
         uptime_limit = u.get("uptime_limit", "")
-        validity = u.get("validity", "")
+        validity     = u.get("validity", "")
 
         try:
-            # Create on MikroTik
-            await mt.add_hotspot_user(
-                username=username,
-                password=password,
-                profile=profile,
-                server=server,
-                comment=comment,
-                uptime_limit=uptime_limit,
-            )
-
-            # Save to DB
+            # ── FULL RADIUS: Simpan HANYA ke database, tidak kirim ke MikroTik ──
             voucher_doc = {
-                "id": str(uuid.uuid4()),
-                "username": username,
-                "password": password,
-                "profile": profile,
-                "device_id": device_id,
-                "router_name": device_name,
-                "status": "new",
-                "price": price,
-                "uptime_limit": uptime_limit,
-                "validity": validity,
-                "comment": comment,
+                "id":               str(uuid.uuid4()),
+                "username":         username,
+                "password":         password,
+                "profile":          profile,
+                "device_id":        device_id,
+                "router_name":      device_name,
+                "status":           "new",
+                "price":            price,
+                "uptime_limit":     uptime_limit,
+                "validity":         validity,
+                "comment":          comment,
                 "session_start_time": None,
                 "used_uptime_secs": 0,
                 "limit_uptime_secs": _parse_uptime_to_secs(uptime_limit),
-                "created_at": _now(),
-                "updated_at": _now(),
+                "created_at":       _now(),
+                "updated_at":       _now(),
             }
             await db.hotspot_vouchers.insert_one(voucher_doc)
             voucher_doc.pop("_id", None)
             created.append(username)
+            logger.info(f"[hotspot-batch][RADIUS] Voucher '{username}' dicatat di DB — tidak dikirim ke MikroTik.")
         except Exception as e:
-            logger.error(f"[hotspot-batch] Gagal buat {username}: {e}")
+            logger.error(f"[hotspot-batch] Gagal simpan {username}: {e}")
             failed.append({"username": username, "error": str(e)})
 
     return {
         "message": f"{len(created)} voucher berhasil, {len(failed)} gagal",
         "created": created,
-        "failed": failed,
-        "total": len(data.users),
+        "failed":  failed,
+        "total":   len(data.users),
     }
 
 

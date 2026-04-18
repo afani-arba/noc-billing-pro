@@ -473,18 +473,13 @@ async def create_package(data: PackageCreate, background_tasks: BackgroundTasks,
     await db.billing_packages.insert_one(doc)
     doc.pop("_id", None)
 
-    # Silently push profile to MikroTik in background (fire-and-forget)
-    if device:
-        if data.service_type in ("pppoe", "both"):
-            background_tasks.add_task(
-                _push_profile_to_mikrotik,
-                device, data.name, data.speed_up, data.speed_down, "pppoe"
-            )
-        if data.service_type in ("hotspot", "both"):
-            background_tasks.add_task(
-                _push_profile_to_mikrotik,
-                device, data.name, data.speed_up, data.speed_down, "hotspot"
-            )
+    # Silently push PPP profile to MikroTik in background (fire-and-forget) — HANYA untuk PPPoE.
+    # Hotspot menggunakan RADIUS penuh; profil MikroTik lokal tidak diperlukan.
+    if device and data.service_type in ("pppoe", "both"):
+        background_tasks.add_task(
+            _push_profile_to_mikrotik,
+            device, data.name, data.speed_up, data.speed_down, "pppoe"
+        )
 
     return doc
 
