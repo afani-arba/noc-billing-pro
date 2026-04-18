@@ -506,27 +506,39 @@ async def update_package(pkg_id: str, data: PackageUpdate, background_tasks: Bac
     if result.matched_count == 0:
         raise HTTPException(404, "Paket tidak ditemukan")
 
-    # ── Segera reset current_rate_limit & sync BW ke semua pelanggan AKTIF paket ini ──
-    # Ini memastikan jika Night Mode / Booster / FUP dinonaktifkan atau speed diubah,
-    # limit langsung kembali ke benar tanpa menunggu 5 menit scheduler.
-    # PENTING: Tidak ada kick — perubahan dikirim via CoA (tanpa putus koneksi) atau
-    # tersimpan di DB untuk berlaku saat reconnect berikutnya.
+    # ── Segera sync BW ke semua pelanggan AKTIF paket ini ──────────────────────
+    # PPPoE  : reset current_rate_limit → scheduler re-evaluasi → CoA tanpa kick
+    # Hotspot: kirim CoA langsung ke sesi aktif via run_hotspot_package_coa
     async def _trigger_bw_sync_for_package(p_id: str):
         try:
-            # Reset current_rate_limit HANYA untuk user aktif agar scheduler re-evaluasi
-            res = await db.customers.update_many(
-                {"package_id": p_id, "active": True},
-                {"$set": {"current_rate_limit": None}}
-            )
-            logger.info(f"[PkgUpdate] Reset current_rate_limit untuk {res.modified_count} pelanggan aktif paket {p_id}")
-            # Jalankan sync sekarang (global untuk paket ini, no kick)
-            from services.bandwidth_scheduler import run_day_night_and_booster_sync
-            await run_day_night_and_booster_sync()
-            logger.info(f"[PkgUpdate] BW sync selesai untuk paket {p_id} (tanpa putus koneksi)")
+            pkg_fresh = await db.billing_packages.find_one({"id": p_id})
+            if not pkg_fresh:
+                return
+
+            svc_type = pkg_fresh.get("service_type", "pppoe")
+
+            # ── PPPoE / Both: reset rate-limit flag → scheduler re-evaluasi ──
+            if svc_type in ("pppoe", "both"):
+                res = await db.customers.update_many(
+                    {"package_id": p_id, "active": True},
+                    {"$set": {"current_rate_limit": None}}
+                )
+                logger.info(f"[PkgUpdate] Reset current_rate_limit untuk {res.modified_count} pelanggan PPPoE aktif paket {p_id}")
+                from services.bandwidth_scheduler import run_day_night_and_booster_sync
+                await run_day_night_and_booster_sync()
+                logger.info(f"[PkgUpdate] BW sync PPPoE selesai untuk paket {p_id}")
+
+            # ── Hotspot / Both: kirim CoA instan ke sesi aktif ──────────────
+            if svc_type in ("hotspot", "both"):
+                from services.bandwidth_scheduler import run_hotspot_package_coa
+                await run_hotspot_package_coa(pkg_fresh)
+                logger.info(f"[PkgUpdate] Hotspot CoA selesai untuk paket {p_id}")
+
         except Exception as e:
             logger.error(f"[PkgUpdate] Gagal trigger BW sync paket {p_id}: {e}")
 
     background_tasks.add_task(_trigger_bw_sync_for_package, pkg_id)
+
 
     return {"message": "Paket diupdate"}
 

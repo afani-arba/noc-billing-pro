@@ -5,6 +5,7 @@ Background scheduler untuk Dynamic Bandwidth:
   1. FUP Monitoring (setiap 30 menit) — FIX #5: dari radius_sessions real-time
   2. Day/Night Sync + Booster Expiry Check (setiap 5 menit)
   3. FUP Monthly Reset (setiap tanggal 1 tiap bulan)
+  4. Hotspot Package CoA — kirim CoA instan saat admin ubah bandwidth paket
 
 PERBAIKAN:
 - FIX #5: FUP monitoring membaca dari radius_sessions (push dari MikroTik
@@ -12,6 +13,7 @@ PERBAIKAN:
 - CoA tanpa kick user (no disconnect)
 - Night Mode dan Booster saling eksklusif
 - Booster expire resets current_rate_limit agar scheduler evaluasi ulang
+- Hotspot CoA: mendukung RFC 3576 CoA-Request ke semua sesi aktif
 ─────────────────────────────────────────────────────────────────────────────
 """
 import asyncio
@@ -331,3 +333,124 @@ async def run_day_night_and_booster_sync(customer_id: str = None):
 
     except Exception as e:
         logger.error(f"[BandwidthScheduler] Day/Night Sync error: {e}")
+
+
+async def run_hotspot_package_coa(pkg: dict):
+    """
+    Kirim RADIUS CoA (RFC 3576) ke semua sesi hotspot aktif yang menggunakan profil/paket ini.
+
+    Dipanggil saat admin mengubah bandwidth (speed_up/speed_down) di halaman
+    Paket Layanan Hotspot — agar perubahan berlaku INSTAN tanpa putus koneksi user.
+
+    Flow:
+      1. Cari semua hotspot_vouchers aktif dengan profile == pkg.name
+      2. Temukan radius_sessions aktif mereka
+      3. Kirim CoA-Request ke NAS (MikroTik port 3799) dengan Mikrotik-Rate-Limit VSA
+      4. Jika user offline → catat di log, berlaku saat login berikutnya via Access-Accept
+    """
+    from services.bandwidth_manager import _coa_change_rate
+    try:
+        db = _db()
+
+        profile_name = pkg.get("name", "")
+        speed_up     = str(pkg.get("speed_up",   "") or "").strip()
+        speed_down   = str(pkg.get("speed_down", "") or "").strip()
+
+        if not profile_name:
+            logger.warning("[HotspotCoA] pkg.name kosong — skip")
+            return
+
+        if not speed_up or not speed_down:
+            logger.warning(f"[HotspotCoA] Paket {profile_name!r} tidak punya speed_up/speed_down — CoA skip")
+            return
+
+        # Format rate MikroTik: "upload/download"  (misal "10M/20M")
+        rate_limit = f"{speed_up}/{speed_down}"
+
+        # ── 1. Cari semua voucher aktif dengan profil ini ──────────────────
+        vouchers = await db.hotspot_vouchers.find(
+            {"profile": profile_name, "status": "active"},
+            {"_id": 0, "username": 1, "device_id": 1}
+        ).to_list(10000)
+
+        if not vouchers:
+            logger.info(f"[HotspotCoA] Tidak ada voucher aktif untuk profil {profile_name!r} — skip")
+            return
+
+        logger.info(f"[HotspotCoA] Paket {profile_name!r} diupdate → {rate_limit} | {len(vouchers)} voucher aktif")
+
+        # ── 2. Group by device ─────────────────────────────────────────────
+        by_device: dict = {}
+        for v in vouchers:
+            dev_id = v.get("device_id", "")
+            if dev_id:
+                by_device.setdefault(dev_id, []).append(v.get("username", ""))
+
+        # ── 3. Pre-load semua sesi aktif sekali per device dari radius_sessions ──
+        # Lebih efisien daripada query per-user
+        all_active_sessions = await db.radius_sessions.find(
+            {"active": True, "service_type": "hotspot"},
+            {"_id": 0, "username": 1, "acct_session_id": 1, "framed_ip": 1}
+        ).to_list(50000)
+        session_map = {s["username"]: s for s in all_active_sessions if s.get("username")}
+
+        # ── 4. Kirim CoA per device ────────────────────────────────────────
+        for dev_id, usernames in by_device.items():
+            device = await db.devices.find_one({"id": dev_id})
+            if not device:
+                logger.warning(f"[HotspotCoA] Device {dev_id} tidak ditemukan di DB — skip")
+                continue
+
+            nas_ip = device.get("ip_address", "")
+            secret = (
+                device.get("radius_secret")
+                or device.get("hotspot_secret")
+                or ""
+            )
+
+            if not nas_ip or not secret:
+                logger.warning(f"[HotspotCoA] Device {device.get('name', dev_id)}: ip/secret kosong — skip CoA, berlaku saat reconnect")
+                continue
+
+            ok_count   = 0
+            fail_count = 0
+            skip_count = 0
+
+            for username in usernames:
+                if not username:
+                    continue
+
+                sess = session_map.get(username)
+                if not sess:
+                    # User terdaftar aktif di DB tapi belum/tidak ada sesi di RADIUS → skip CoA
+                    skip_count += 1
+                    logger.debug(f"[HotspotCoA] {username}: tidak ada sesi RADIUS aktif — berlaku saat login berikutnya")
+                    continue
+
+                session_id = sess.get("acct_session_id")
+                framed_ip  = sess.get("framed_ip")
+
+                result = await _coa_change_rate(
+                    nas_ip       = nas_ip,
+                    nas_secret   = secret,
+                    username     = username,
+                    rate_limit   = rate_limit,
+                    session_id   = session_id,
+                    framed_ip    = framed_ip,
+                    service_type = "hotspot",
+                )
+
+                if result.get("success"):
+                    ok_count += 1
+                    logger.info(f"[HotspotCoA] ✅ {username} → {rate_limit}")
+                else:
+                    fail_count += 1
+                    logger.warning(f"[HotspotCoA] ❌ {username}: {result.get('reason')}")
+
+            logger.info(
+                f"[HotspotCoA] Device {device.get('name', dev_id)}: "
+                f"{ok_count} ok, {fail_count} gagal, {skip_count} offline"
+            )
+
+    except Exception as e:
+        logger.error(f"[HotspotCoA] run_hotspot_package_coa error: {e}")

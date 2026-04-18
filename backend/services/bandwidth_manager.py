@@ -55,6 +55,7 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
     # ── Cari Session-Id dari radius_sessions (FIX #6) ──────────────────────
     session_id = None
     framed_ip  = None
+    service_type = customer.get("service_type", "pppoe") # Default PPPoE jika tidak ada
     if db is not None and username:
         try:
             sess = await db.radius_sessions.find_one(
@@ -64,7 +65,7 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             if sess:
                 session_id = sess.get("acct_session_id")
                 framed_ip  = sess.get("framed_ip")
-                service_type = sess.get("service_type")
+                service_type = sess.get("service_type", service_type)
         except Exception as e:
             logger.debug(f"[BW] Gagal cari session_id untuk {username}: {e}")
 
@@ -84,6 +85,10 @@ async def set_rate_limit(customer: dict, device: dict, rate_limit: str, db=None)
             return coa_result
 
         logger.warning(f"[BW] CoA gagal untuk '{username}': {coa_result.get('reason')} — fallback ke profile")
+
+    # ── Hotspot tidak support update PPP Profile rahasia ──
+    if service_type == "hotspot":
+        return {"success": False, "reason": "Hotspot voucher. CoA failed and fallback is disabled."}
 
     # ── Metode 2: Update Profile (tanpa kick) — sebagai fallback ──
     return await _update_pppoe_profile(username, rate_limit, device, db)
