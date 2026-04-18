@@ -545,14 +545,19 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
                         await self._db.hotspot_vouchers.update_one(
                             {"_id": v["_id"]}, {"$set": upd}
                         )
-                        await self._db.hotspot_sales.insert_one({
-                            "id":           str(uuid.uuid4()),
-                            "voucher_id":   str(v["_id"]),
-                            "username":     uname,
-                            "price":        float(v.get("price", 0)),
-                            "created_at":   now_iso,
-                            "device_ip":    nas_ip,
-                        })
+                        
+                        # Cek apakah penjualan sudah dicatat (oleh Moota/Online Order)
+                        existing_sale = await self._db.hotspot_sales.find_one({"voucher_id": str(v["_id"])})
+                        if not existing_sale:
+                            await self._db.hotspot_sales.insert_one({
+                                "id":           str(uuid.uuid4()),
+                                "voucher_id":   str(v["_id"]),
+                                "username":     uname,
+                                "price":        float(v.get("price", 0)),
+                                "created_at":   now_iso,
+                                "device_ip":    nas_ip,
+                                "source":       "First Login / Auto"
+                            })
                         logger.info(f"ACCT START: voucher {uname!r} login pertama — diaktifkan")
                     else:
                         # Login ulang (setelah logout): hanya update session start

@@ -2717,21 +2717,20 @@ async def list_voucher_orders(
 
 @router.patch("/voucher-orders/{order_id}/pay")
 async def mark_voucher_paid(order_id: str, data: dict, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
-    """Tandai voucher order sebagai lunas secara manual (hanya jika masih unpaid)."""
+    """Tandai voucher order sebagai lunas secara manual, buat voucher, dan kirim WA."""
+    import uuid
     db = get_db()
     now = _now()
     method = data.get("payment_method", "cash")
 
-    # Cek apakah invoice masih valid (unpaid) — tolak jika sudah expired/overdue
-    inv = await db.hotspot_invoices.find_one({"id": order_id}, {"_id": 0, "status": 1, "due_date": 1})
+    inv = await db.hotspot_invoices.find_one({"id": order_id})
     if not inv:
         raise HTTPException(404, "Voucher order tidak ditemukan")
     if inv.get("status") == "paid":
         raise HTTPException(400, "Invoice ini sudah lunas")
     if inv.get("status") == "overdue" or inv.get("due_date", "") < now:
-        # Invoice kedaluwarsa — hapus saja daripada dilunasi
         await db.hotspot_invoices.delete_one({"id": order_id})
-        raise HTTPException(400, "Invoice ini sudah kedaluwarsa dan telah dihapus")
+        raise HTTPException(400, "Invoice sudah kedaluwarsa dan dihapus")
 
     res = await db.hotspot_invoices.update_one(
         {"id": order_id},
@@ -2739,13 +2738,97 @@ async def mark_voucher_paid(order_id: str, data: dict, background_tasks: Backgro
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Voucher order tidak ditemukan")
-        
-    # Kirim WA notifikasi voucher lunas
-    background_tasks.add_task(_bg_send_whatsapp_paid, order_id)
-        
-    return {"message": "Voucher order ditandai lunas, memproses Notifikasi & Voucher."}
 
+    # Ambil/generate kredensial
+    vc_user = inv.get("voucher_username")
+    vc_pass = inv.get("voucher_password")
+    if not vc_user:
+        import random
+        chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        vc_user = 'VC' + ''.join(random.choices(chars, k=6))
+        vc_pass = vc_user
 
+    pkg_name = inv.get("package_name", "Unknown Package")
+    profile = inv.get("profile_name", "default")
+    limit_uptime = inv.get("uptime_limit", "")
+    validity = inv.get("validity", "")
+    price = inv.get("amount", 0)
+    source = "Manual Admin / " + inv.get("source", "online")
+
+    new_vid = str(uuid.uuid4())
+
+    # Cek apakah voucher username sudah ada di hotspot_vouchers
+    existing = await db.hotspot_vouchers.find_one({"username": vc_user})
+    if not existing:
+        # Insert ke Hotspot Vouchers
+        try:
+            await db.hotspot_vouchers.insert_one({
+                "id":           new_vid,
+                "username":     vc_user,
+                "password":     vc_pass,
+                "profile":      profile,
+                "server":       "all",
+                "price":        float(price),
+                "validity":     validity,
+                "uptime_limit": limit_uptime,
+                "package_name": pkg_name,
+                "status":       "new",
+                "device_id":    inv.get("device_id", ""),
+                "source":       source,
+                "created_at":   now,
+            })
+            
+            # Cek jika belum ada record di hotspot_sales untuk voucher order ini
+            sale_exists = await db.hotspot_sales.find_one({"voucher_id": new_vid})
+            if not sale_exists:
+                await db.hotspot_sales.insert_one({
+                    "id":         str(uuid.uuid4()),
+                    "voucher_id": new_vid,
+                    "username":   vc_user,
+                    "price":      float(price),
+                    "created_at": now,
+                    "device_ip":  "manual-payment",
+                    "source":     source,
+                })
+        except Exception as e:
+            logger.error(f"[VoucherPay] Insert voucher gagal: {e}")
+
+    # Fungsi background WA khusus Hotspot
+    async def _send_voucher_wa(invoice: dict, v_user: str, v_pass: str):
+        phone = invoice.get("customer_phone")
+        cust_name = invoice.get("customer_name", "Pelanggan")
+        if not phone: return
+        settings = await fetch_billing_settings(db, invoice.get("device_id"))
+        wa_url = settings.get("wa_api_url", "https://api.fonnte.com/send")
+        wa_token = settings.get("wa_token", "")
+        wa_type = settings.get("wa_gateway_type", "fonnte")
+        total = invoice.get("total", 0)
+
+        msg = (
+            f"✅ *Pembayaran Voucher Berhasil!*\n\n"
+            f"Yth. *{cust_name}*,\n Pembayaran sebesar *{_rupiah(total)}* telah kami terima.\n\n"
+            f"🎫 *Kode Voucher Hotspot Anda:*\n"
+            f"Username : `{v_user}`\n"
+            f"Password : `{v_pass}`\n"
+            f"Paket    : {invoice.get('package_name', '-')}\n\n"
+            f"Cara pakai:\n"
+            f"1. Sambungkan ke WiFi hotspot\n"
+            f"2. Buka browser, akan muncul halaman login\n"
+            f"3. Masukkan username & password di atas\n\nSelamat menikmati! 🌐"
+        )
+        if wa_url and wa_token:
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    if wa_type == "fonnte":
+                        await client.post(wa_url, headers={"Authorization": wa_token}, data={"target": phone, "message": msg})
+                    elif wa_type == "watzap":
+                        await client.post(wa_url, json={"number_key": wa_token, "phone_no": phone, "message": msg})
+            except Exception as e:
+                logger.error(f"[VoucherPay] WA kirim gagal: {e}")
+
+    background_tasks.add_task(_send_voucher_wa, inv, vc_user, vc_pass)
+    return {"message": "Voucher order ditandai lunas, Voucher otomatis dicetak & WA dikirim."}
 
 @router.delete("/voucher-orders/{order_id}")
 async def delete_voucher_order(order_id: str, user=Depends(get_current_user)):
