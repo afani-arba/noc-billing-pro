@@ -19,7 +19,7 @@ export default function ClientLogin() {
     // If token already exists, skip login
     Preferences.get({ key: 'clientToken' }).then(({ value }) => {
       if (value) {
-        navigate('/client/dashboard', { replace: true });
+        navigate('/portal/dashboard', { replace: true });
       }
     }).catch(() => {});
 
@@ -51,7 +51,7 @@ export default function ClientLogin() {
       if (res.data.ok) {
         await Preferences.set({ key: 'clientToken', value: res.data.token });
         localStorage.setItem('clientToken', res.data.token);
-        navigate('/client/dashboard');
+        navigate('/portal/dashboard');
       }
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Gagal masuk. Periksa kembali data Anda.');

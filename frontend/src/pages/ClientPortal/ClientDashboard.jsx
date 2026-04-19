@@ -374,7 +374,7 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (!tokenLoaded) return;
-    if (!token) { navigate('/client/login'); return; }
+    if (!token) { navigate('/portal/login'); return; }
 
     const fetchDashboard = async () => {
       try {
@@ -386,7 +386,7 @@ export default function ClientDashboard() {
         if (err.response?.status === 401) {
           await Preferences.remove({ key: 'clientToken' });
           localStorage.removeItem('clientToken');
-          navigate('/client/login');
+          navigate('/portal/login');
         } else {
           setError(err.message || "Gagal memuat data portal.");
         }
@@ -526,7 +526,7 @@ export default function ClientDashboard() {
   const handleLogout = async () => {
     await Preferences.remove({ key: 'clientToken' });
     localStorage.removeItem('clientToken');
-    navigate('/client/login');
+    navigate('/portal/login');
   };
 
   const scrollToBilling = () => {
