@@ -223,11 +223,11 @@ export default function HotspotBillingPage() {
   const fetchWaOrders = useCallback(async (silent = false) => {
     if (!silent) setWaOrdersLoading(true);
     try {
-      const r = await api.get("/billing/voucher-orders", { params: { status: waOrdersFilter, limit: 50 } });
+      const r = await api.get("/billing/voucher-orders", { params: { status: waOrdersFilter, search: waSearch, limit: 50 } });
       setWaOrders(r.data?.data || []);
-    } catch { toast.error("Gagal memuat pesanan WA"); }
+    } catch { toast.error("Gagal memuat pesanan online"); }
     finally { setWaOrdersLoading(false); }
-  }, [waOrdersFilter]);
+  }, [waOrdersFilter, waSearch]);
 
   const [waPayModal, setWaPayModal] = useState(null); // { id, name }
   const [waPayMethod, setWaPayMethod] = useState("cash");
@@ -664,10 +664,11 @@ export default function HotspotBillingPage() {
                     placeholder="Cari nama, no HP, invoice..."
                     value={waSearch}
                     onChange={e => setWaSearch(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && fetchWaOrders()}
                     className="h-8 text-xs rounded-sm w-52 pr-7"
                   />
                   {waSearch && (
-                    <button onClick={() => setWaSearch("")}
+                    <button onClick={() => { setWaSearch(""); setTimeout(fetchWaOrders, 50); }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       <XCircle className="w-3 h-3" />
                     </button>
@@ -713,16 +714,10 @@ export default function HotspotBillingPage() {
                       </td></tr>
                     ) : (() => {
                         const q = waSearch.toLowerCase().trim();
+                        // Filter by status on the frontend just to be sure, although backend handles it too
                         const filtered = waOrders.filter(o => {
-                          const statusOk = !waOrdersFilter || o.status === waOrdersFilter;
-                          if (!statusOk) return false;
-                          if (!q) return true;
-                          return (
-                            (o.customer_name || "").toLowerCase().includes(q) ||
-                            (o.customer_phone || "").toLowerCase().includes(q) ||
-                            (o.invoice_number || "").toLowerCase().includes(q) ||
-                            (o.package_name || "").toLowerCase().includes(q)
-                          );
+                          if (waOrdersFilter && o.status !== waOrdersFilter) return false;
+                          return true;
                         });
                         if (filtered.length === 0) return (
                           <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
