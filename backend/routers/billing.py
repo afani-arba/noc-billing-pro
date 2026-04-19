@@ -2802,6 +2802,7 @@ async def hotspot_create_order(payload: HotspotCreateOrderPayload):
         "voucher_username": vc_user,
         "voucher_password": vc_pass,
         "voucher_sent": False,
+        "device_id": payload.device_id or bs.get("_id") or hs_device_id or "",
         "period_start": today.isoformat(),
         "period_end": today.isoformat(),
         "due_date": due_dt.isoformat(),
