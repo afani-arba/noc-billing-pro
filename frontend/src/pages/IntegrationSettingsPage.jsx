@@ -522,7 +522,7 @@ function BillingSettingsSection({ selectedDevice }) {
         <div className="space-y-3">
           <div className="space-y-1.5">
              <label className="text-xs text-muted-foreground">Webhook Endpoint URL</label>
-             <input readOnly value={`${window.location.protocol}//${window.location.host}/api/v1/billing/webhook/moota`} className="w-full h-8 text-[10px] rounded-sm border border-border bg-secondary/50 px-2 font-mono text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
+             <input readOnly value={`${window.location.protocol}//${window.location.host}/api/webhook/moota`} className="w-full h-8 text-[10px] rounded-sm border border-border bg-secondary/50 px-2 font-mono text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
           </div>
           <div className="space-y-1.5">
              <label className="text-xs text-muted-foreground">Webhook Secret (Opsional)</label>

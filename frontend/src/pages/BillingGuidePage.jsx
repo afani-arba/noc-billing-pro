@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { 
   BookOpen, Plug, Server, MessageSquare, CreditCard,
@@ -98,7 +98,7 @@ export default function BillingGuidePage() {
               <div className="bg-secondary/40 border border-border p-3 rounded-md">
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Webhook URL Endpoint</label>
                 <div className="font-mono text-xs bg-black text-green-400 p-2 rounded break-all select-all">
-                  https://[DOMAIN-ANDA]/api/billing/webhook/moota
+                  https://[DOMAIN-ANDA]/api/webhook/moota
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-2">
                   Masukkan URL di atas pada dashboard Moota Anda (Menu: Integrasi -&gt; Webhook). Pastikan domain server NOC Sentinel Anda bisa diakses secara publik (HTTPS).
