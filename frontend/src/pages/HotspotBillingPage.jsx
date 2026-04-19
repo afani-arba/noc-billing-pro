@@ -524,11 +524,11 @@ export default function HotspotBillingPage() {
                       <div className="flex items-center gap-2">
                         <span>{d.name}</span>
                         {rs?.loading ? (
-                          <span className="text-[9px] text-muted-foreground">â€¦</span>
+                          <span className="text-[9px] text-muted-foreground">...</span>
                         ) : rs?.radius_enabled ? (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-semibold">RADIUS âœ“</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 font-semibold flex items-center gap-1">RADIUS <CheckCircle2 className="w-3 h-3" /></span>
                         ) : (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">RADIUS âœ—</span>
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-semibold flex items-center gap-1">RADIUS <XCircle className="w-3 h-3" /></span>
                         )}
                       </div>
                     </SelectItem>
