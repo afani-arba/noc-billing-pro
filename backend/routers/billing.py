@@ -2632,10 +2632,29 @@ async def get_hotspot_public_config():
     
     bank_info = None
     if payment_enabled:
+        # Prioritas: hotspot_settings → system_settings.company_profile
+        _bank_name   = (hs.get("bank_name") or "").strip()
+        _acc_number  = (hs.get("bank_number") or hs.get("bank_account_number") or "").strip()
+        _acc_name    = (hs.get("bank_account_name") or "").strip()
+
+        if not _bank_name or not _acc_number:
+            _company  = await db.system_settings.find_one({"_id": "company_profile"}) or {}
+            _bank_raw = (_company.get("bank_account") or "").strip()
+            if _bank_raw:
+                _parts = _bank_raw.split()
+                if len(_parts) >= 2:
+                    _bank_name  = _bank_name  or _parts[0]
+                    _acc_number = _acc_number or _parts[1]
+                    try:
+                        _an_idx  = next(i for i, p in enumerate(_parts) if p.lower() in ("a.n", "a/n", "an"))
+                        _acc_name = _acc_name or " ".join(_parts[_an_idx + 1:])
+                    except StopIteration:
+                        pass
+
         bank_info = {
-            "bank_name":      hs.get("bank_name") or bs.get("bank_name") or "Bank",
-            "account_number": hs.get("bank_account_number") or hs.get("bank_number") or bs.get("bank_account") or "Auto Gateway",
-            "account_name":   hs.get("bank_account_name") or bs.get("bank_account_name") or "Sistem",
+            "bank_name":      _bank_name  or "Transfer Bank",
+            "account_number": _acc_number or "Hubungi Admin",
+            "account_name":   _acc_name   or "Admin",
         }
 
     # 4. Packages: ambil dari billing_packages sebagai sumber kebenaran
@@ -2719,10 +2738,32 @@ async def hotspot_create_order(payload: HotspotCreateOrderPayload):
     if not bs:
         bs = await fetch_billing_settings(db, None)
 
-    # 2. Ambil info bank dari hotspot_settings atau billing_settings
-    bank_name      = hs.get("bank_name") or bs.get("bank_name") or "Bank Transfer"
-    account_number = hs.get("bank_account_number") or hs.get("bank_number") or bs.get("bank_account") or "Hubungi Admin"
-    account_name   = hs.get("bank_account_name") or bs.get("bank_account_name") or "Admin"
+    # 2. Ambil info bank — prioritas: hotspot_settings → system_settings.company_profile → default
+    bank_name      = (hs.get("bank_name") or "").strip()
+    account_number = (hs.get("bank_number") or hs.get("bank_account_number") or "").strip()
+    account_name   = (hs.get("bank_account_name") or "").strip()
+
+    # Fallback: ambil dari system_settings.company_profile (sumber bank_account WA CS)
+    if not bank_name or not account_number:
+        company = await db.system_settings.find_one({"_id": "company_profile"}) or {}
+        bank_raw = (company.get("bank_account") or "").strip()
+        if bank_raw:
+            # Format: "BCA 8520480189 a.n PT ARSYA BAROKAH ABADI"
+            # Split: [bank_name, account_number, "a.n", account_name...]
+            parts = bank_raw.split()
+            if len(parts) >= 2:
+                bank_name      = bank_name or parts[0]
+                account_number = account_number or parts[1]
+                # Cari "a.n" lalu ambil sisanya sebagai nama
+                try:
+                    an_idx = next(i for i, p in enumerate(parts) if p.lower() in ("a.n", "a/n", "an"))
+                    account_name = account_name or " ".join(parts[an_idx + 1:])
+                except StopIteration:
+                    account_name = account_name or ""
+
+    bank_name      = bank_name or "Transfer Bank"
+    account_number = account_number or "Hubungi Admin"
+    account_name   = account_name or "Admin"
 
     # 3. Kode unik Moota (1–500) + hitung total
     unique_code = random.randint(1, 500)
