@@ -133,7 +133,7 @@ async def list_hotspot_vouchers(
     now_utc = datetime.now(timezone.utc)
     result = []
     for v in vouchers:
-        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "â€”"))
+        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "—"))
 
         limit_uptime  = int(v.get("limit_uptime_secs", 0))
         used_uptime   = int(v.get("used_uptime_secs", 0))
@@ -212,7 +212,7 @@ async def update_hotspot_voucher(
     if result.matched_count == 0:
         raise HTTPException(404, "Voucher tidak ditemukan")
 
-    # FULL RADIUS MODE: Tidak sync ke MikroTik â€” password/profile dikelola murni via RADIUS DB.
+    # FULL RADIUS MODE: Tidak sync ke MikroTik — password/profile dikelola murni via RADIUS DB.
     # MikroTik akan membaca credential dari RADIUS NOC Billing secara otomatis.
     logger.info(f"[hotspot][RADIUS] Voucher '{voucher_id}' diperbarui di DB, tidak sync ke MikroTik.")
 
@@ -286,7 +286,7 @@ async def delete_hotspot_voucher(voucher_id: str, user=Depends(require_write)):
     if not check_device_access(user, voucher.get("device_id", "")):
         raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus voucher pada router ini")
 
-    # FULL RADIUS MODE: Hapus HANYA dari DB â€” tidak perlu hapus dari MikroTik.
+    # FULL RADIUS MODE: Hapus HANYA dari DB — tidak perlu hapus dari MikroTik.
     # MikroTik otomatis menolak login karena user tidak lagi ada di RADIUS DB.
     await db.hotspot_vouchers.delete_one({"id": voucher_id})
     logger.info(f"[hotspot][RADIUS] Voucher '{voucher.get('username')}' dihapus dari DB (tidak sync ke MikroTik).")
@@ -473,7 +473,7 @@ async def batch_create_hotspot_users(
     """
     Buat voucher Hotspot secara massal.
     FULL RADIUS MODE: Voucher HANYA disimpan ke database NOC Billing.
-    MikroTik mengautentikasi user melalui RADIUS â€” tidak ada user yang dikirim ke router.
+    MikroTik mengautentikasi user melalui RADIUS — tidak ada user yang dikirim ke router.
     """
     db = get_db()
 
@@ -522,7 +522,7 @@ async def batch_create_hotspot_users(
             await db.hotspot_vouchers.insert_one(voucher_doc)
             voucher_doc.pop("_id", None)
             created.append(username)
-            logger.info(f"[hotspot-batch][RADIUS] Voucher '{username}' dicatat di DB â€” tidak dikirim ke MikroTik.")
+            logger.info(f"[hotspot-batch][RADIUS] Voucher '{username}' dicatat di DB — tidak dikirim ke MikroTik.")
         except Exception as e:
             logger.error(f"[hotspot-batch] Gagal simpan {username}: {e}")
             failed.append({"username": username, "error": str(e)})

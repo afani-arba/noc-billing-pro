@@ -336,8 +336,8 @@ async def get_ip_addresses(device_id: str, user=Depends(get_current_user)):
 async def get_system_health(device_id: str, user=Depends(get_current_user)):
     """
     Ambil data sensor hardware dari MikroTik.
-    - ROS 6.x (API Protocol): /system/health â€” {name, value, type} per sensor
-    - ROS 7.x (REST API): /rest/system/health â€” [{name, value, type}]
+    - ROS 6.x (API Protocol): /system/health — {name, value, type} per sensor
+    - ROS 7.x (REST API): /rest/system/health — [{name, value, type}]
     Fallback: baca dari MongoDB jika live API call gagal/kosong.
     """
     db = get_db()
@@ -784,7 +784,7 @@ async def dashboard_interfaces(device_id: str = "", user=Depends(get_current_use
 
     iface_list = device["last_poll_data"].get("interfaces", [])
 
-    # â”€â”€ Filter virtual interface â€” berlapis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â”€â”€ Filter virtual interface — berlapis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Layer 1: gunakan flag 'virtual' yang sudah dihitung oleh polling.py
     # Layer 2: fallback prefix-based detection untuk data lama (tanpa flag 'virtual')
     VIRTUAL_TYPES = {
@@ -823,7 +823,7 @@ async def dashboard_interfaces(device_id: str = "", user=Depends(get_current_use
 
         physical.append(name)
 
-    # Deduplicate â€” jaga urutan
+    # Deduplicate — jaga urutan
     seen = set()
     unique_physical = []
     for n in physical:
@@ -976,7 +976,7 @@ async def bandwidth_history_range(
                 {"$sort": {"_id": 1}},
             ]
         else:
-            # â”€â”€ Pipeline "all" â€” ISP-aware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # â”€â”€ Pipeline "all" — ISP-aware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             # Prioritas 1: isp_bandwidth (sum semua ISP interface, disimpan oleh polling.py)
             #   Format: {isp_bandwidth: {ether1: {download_bps, upload_bps}, ether2: {...}}}
             # Prioritas 2: fallback ke sum semua bandwidth.* (lama, jika isp_bandwidth tidak ada)
@@ -1531,11 +1531,11 @@ async def get_traffic_history(
         "history": result,
     }
 
-# (system-resource endpoint is defined at line 171 â€” only one instance needed)
+# (system-resource endpoint is defined at line 171 — only one instance needed)
 
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# BANDWIDTH LIVE â€” per-interface real-time bandwidth dari traffic_history
+# BANDWIDTH LIVE — per-interface real-time bandwidth dari traffic_history
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.get("/bandwidth/live/{device_id}")
@@ -1676,7 +1676,7 @@ async def bandwidth_live(
 
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# TOPOLOGY â€” nodes + edges untuk network map
+# TOPOLOGY — nodes + edges untuk network map
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
@@ -1697,7 +1697,7 @@ async def reboot_device(device_id: str, user=Depends(require_admin)):
         raise HTTPException(404, "Device tidak ditemukan")
 
     if device.get("status") == "offline":
-        raise HTTPException(400, "Device sedang offline â€” tidak bisa reboot")
+        raise HTTPException(400, "Device sedang offline — tidak bisa reboot")
 
     ip = device["ip_address"]
     username = device.get("api_username", "admin")
@@ -1708,7 +1708,7 @@ async def reboot_device(device_id: str, user=Depends(require_admin)):
 
     try:
         if api_mode == "api":
-            # ROS 6 â€” RouterOS API Socket
+            # ROS 6 — RouterOS API Socket
             import routeros_api
             def _parse_ip(target, default_port):
                 if ":" in target:
@@ -1734,7 +1734,7 @@ async def reboot_device(device_id: str, user=Depends(require_admin)):
                 try:
                     conn.disconnect()
                 except Exception:
-                    pass  # Koneksi bisa terputus saat reboot â€” normal
+                    pass  # Koneksi bisa terputus saat reboot — normal
             except Exception as api_err:
                 # Jika error adalah connection reset SETELAH command dikirim = reboot berhasil
                 err_str = str(api_err).lower()
@@ -1743,7 +1743,7 @@ async def reboot_device(device_id: str, user=Depends(require_admin)):
                 else:
                     raise
         else:
-            # ROS 7 â€” REST API
+            # ROS 7 — REST API
             def _parse_ip(target, default_port):
                 if ":" in target:
                     try:
@@ -1773,7 +1773,7 @@ async def reboot_device(device_id: str, user=Depends(require_admin)):
                 httpx.ReadError,             # Gagal baca response (device sudah reboot)
                 httpx.ConnectError,          # Koneksi terputus saat proses
                 httpx.PoolTimeout,           # Request pool timeout
-                httpx.ReadTimeout,           # Read timeout â€” device reboot sebelum response
+                httpx.ReadTimeout,           # Read timeout — device reboot sebelum response
             ) as conn_err:
                 # NORMAL: MikroTik memutus koneksi TCP tepat saat mulai reboot.
                 # Artinya perintah reboot sudah DITERIMA dan sedang dieksekusi.
@@ -1793,7 +1793,7 @@ async def get_winbox_url(device_id: str, user=Depends(get_current_user)):
     """
     Kembalikan URL Winbox dengan credential yang sudah terisi otomatis.
     Format: winbox://username:password@ip_address
-    Password disimpan di server â€” tidak pernah dikirim ke frontend JS bundle.
+    Password disimpan di server — tidak pernah dikirim ke frontend JS bundle.
     Hanya admin yang bisa akses endpoint ini.
     """
     import urllib.parse

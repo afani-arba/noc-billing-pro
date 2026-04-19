@@ -2596,27 +2596,25 @@ async def get_hotspot_public_config():
 
     # 1. Baca hotspot_settings — sumber kebenaran untuk payment & branding
     hs = await db.hotspot_settings.find_one({}, {"_id": 0}) or {}
+    bs = await fetch_billing_settings(db, None)
 
     # WA Number: prioritas dari hotspot_settings
     wa_number = (hs.get("wa_number") or "").strip()
     if not wa_number:
         # Fallback ke billing_settings jika hotspot_settings belum punya WA
-        bs = await fetch_billing_settings(db, None)
         wa_number = (bs.get("whatsapp") or bs.get("phone") or "6282228304543").strip()
 
-    # 3. Payment info dari hotspot_settings
-    payment_enabled = hs.get("payment_enabled", False)
+    # 3. Payment info: Sinkronkan dengan fitur Moota dan Payment Gateway
+    is_gateway_active = bs.get("payment_gateway_enabled", False) or bool(bs.get("moota_webhook_secret", ""))
+    payment_enabled = hs.get("payment_enabled", False) or is_gateway_active
+    
     bank_info = None
     if payment_enabled:
         bank_info = {
-            "bank_name":      hs.get("bank_name", ""),
-            "account_number": hs.get("bank_account_number", ""),
-            "account_name":   hs.get("bank_account_name", ""),
+            "bank_name":      hs.get("bank_name") or "Bank",
+            "account_number": hs.get("bank_account_number") or bs.get("bank_account") or "Auto Gateway",
+            "account_name":   hs.get("bank_account_name") or "Sistem",
         }
-        # Nonaktifkan jika rekening belum dikonfigurasi
-        if not bank_info["account_number"]:
-            payment_enabled = False
-            bank_info = None
 
     # 4. Packages: Selalu ambil dari billing_packages sebagai sumber kebenaran (source of truth) untuk properti paket (seperti price dan profile)
     pkgs_cursor = db.billing_packages.find(

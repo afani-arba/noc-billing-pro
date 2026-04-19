@@ -301,7 +301,7 @@ export default function HotspotBillingPage() {
   }, [activeTab, fetchVouchers, fetchSales, fetchWaOrders]);
 
   // FIX: Satu interval yang menggabungkan ticker 1s (UI) dan refresh 10s (data)
-  // Sebelumnya ada 2 interval terpisah â€” mubazir dan bisa bentrok
+  // Sebelumnya ada 2 interval terpisah — mubazir dan bisa bentrok
   useEffect(() => {
     let tick = 0;
     const timer = setInterval(() => {
@@ -351,7 +351,7 @@ export default function HotspotBillingPage() {
     if (v.rem_validity_secs === undefined || v.rem_validity_secs === null || v.rem_validity_secs >= 999999999) return "Unlimited";
     
     let rem = v.rem_validity_secs;
-    // Validitas berbasis kalender â€” terus mundur saat active MAUPUN offline
+    // Validitas berbasis kalender — terus mundur saat active MAUPUN offline
     // Hanya berhenti jika voucher berstatus 'new' (belum pernah dipakai sama sekali)
     if (v.status === "active" || v.status === "offline") {
       const diff = Math.floor((now - lastFetchTime.current) / 1000);
@@ -443,7 +443,7 @@ export default function HotspotBillingPage() {
   const vOffline = vouchers.filter(v => v.session_start_time && v.status !== "active" && v.status !== "expired").length;
   const vExpired = vouchers.filter(v => v.status === "expired").length;
 
-  const fmtDt = (s) => s ? new Date(s).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "â€”";
+  const fmtDt = (s) => s ? new Date(s).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
 
   const parseUptime = (str) => {
     if (!str) return 0;
@@ -611,7 +611,7 @@ export default function HotspotBillingPage() {
           <DialogHeader>
             <DialogTitle>Tandai Lunas Manual</DialogTitle>
             <DialogDescription>
-              Pesanan <b>{waPayModal?.name || waPayModal?.invoice}</b> â€” konfirmasi metode pembayaran sebelum melanjutkan.
+              Pesanan <b>{waPayModal?.name || waPayModal?.invoice}</b> — konfirmasi metode pembayaran sebelum melanjutkan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -655,7 +655,7 @@ export default function HotspotBillingPage() {
                 <h2 className="text-base font-semibold flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-green-400" /> Pesanan Voucher dari WhatsApp AI
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Invoice otomatis dari AI Sales Agent (Sherly/Niken) â€” tersimpan TERPISAH dari tagihan PPPoE</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Invoice otomatis dari AI Sales Agent (Sherly/Niken) — tersimpan TERPISAH dari tagihan PPPoE</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {["", "unpaid", "paid"].map(f => (
@@ -705,10 +705,10 @@ export default function HotspotBillingPage() {
                       <tr key={o.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.invoice_number}</td>
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-sm">{o.customer_name || 'â€”'}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{o.customer_phone || 'â€”'}</p>
+                          <p className="font-semibold text-sm">{o.customer_name || '—'}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{o.customer_phone || '—'}</p>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.package_name || 'â€”'}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.package_name || '—'}</td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-primary">{fmt(o.total)}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
@@ -719,7 +719,7 @@ export default function HotspotBillingPage() {
                             {o.status === 'paid' ? 'âœ… Lunas' : o.status === 'overdue' ? 'âš ï¸ Kedaluwarsa' : 'â³ Pending'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : 'â€”'}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1 justify-center">
                             {/* FIX: Tambah tombol Tandai Lunas untuk order yang belum bayar */}
@@ -808,12 +808,12 @@ export default function HotspotBillingPage() {
                       </td></tr>
                     ) : vouchers.map(v => (
                       <tr key={v.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "â€”"}</td>
+                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "—"}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{v.username} <div className="text-[10px] text-muted-foreground">Pass: {v.password}</div></td>
-                        <td className="px-4 py-3 text-xs">{v.profile || "â€”"}</td>
+                        <td className="px-4 py-3 text-xs">{v.profile || "—"}</td>
                         <td className="px-4 py-3 text-xs">
                           {v.uptime_limit ? <div className="text-primary font-semibold">Limit: {v.uptime_limit}</div> : null}
-                          <div className="text-[10px] text-muted-foreground">Aktif: {v.validity || "â€”"}</div>
+                          <div className="text-[10px] text-muted-foreground">Aktif: {v.validity || "—"}</div>
                         </td>
                         <td className="px-4 py-3 text-xs">
                            <span className="font-mono bg-muted/50 px-1 py-0.5 rounded">{getLiveUptime(v)}</span>
@@ -839,7 +839,7 @@ export default function HotspotBillingPage() {
 
                         <td className="px-4 py-3 text-right font-medium">{fmt(v.price)}</td>
                         <td className="px-4 py-3 text-center"><VoucherStatusBadge status={v.status} /></td>
-                        {/* Kolom Login Pertama â€” menggunakan session_start_time dari backend */}
+                        {/* Kolom Login Pertama — menggunakan session_start_time dari backend */}
                         <td className="px-4 py-3 text-xs min-w-[120px]">
                           {v.session_start_time ? (
                             <div className="space-y-0.5">
@@ -931,7 +931,7 @@ export default function HotspotBillingPage() {
                       <tr key={s.id || i} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{s.username}</td>
                         <td className="px-4 py-3 text-right font-semibold text-green-400">{fmt(s.price)}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{s.device_name || "â€”"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{s.device_name || "—"}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDt(s.created_at)}</td>
                       </tr>
                     ))}
