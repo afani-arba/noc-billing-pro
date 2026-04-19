@@ -361,7 +361,7 @@ function AIIntegrationSection() {
 // ── Billing Settings Section (WA Templates, Auto Isolir, FCM, Payment Gateway) ─
 function BillingSettingsSection({ selectedDevice }) {
   const [settings, setSettings] = useState({
-    wa_template_unpaid: "", wa_template_paid: "", wa_template_h1: "", wa_template_isolir: "",
+    wa_template_unpaid: "", wa_template_paid: "", wa_template_h1: "", wa_template_isolir: "", wa_template_new_customer: "",
     fcm_template_h3: "", fcm_template_h2: "", fcm_template_h1: "", fcm_template_due: "",
     fcm_template_overdue: "", fcm_template_paid: "", fcm_template_network_error: "",
     auto_isolir_enabled: false, auto_isolir_method: "whatsapp", auto_isolir_time: "00:05",
@@ -389,7 +389,7 @@ function BillingSettingsSection({ selectedDevice }) {
     setSaving(false);
   };
 
-  const VARS = "{customer_name} {invoice_number} {package_name} {period} {total} {due_date} {payment_method}";
+  const VARS = "{customer_name} {username} {invoice_number} {package_name} {period} {total} {due_date} {payment_method}";
 
   if (loading) return <div className="bg-card border border-border rounded-sm p-6 text-center text-sm text-muted-foreground animate-pulse">Memuat konfigurasi billing...</div>;
 
@@ -407,6 +407,7 @@ function BillingSettingsSection({ selectedDevice }) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
+            ["wa_template_new_customer", "Sambutan Pelanggan Baru"],
             ["wa_template_unpaid", "Tagihan Baru (Unpaid)"],
             ["wa_template_paid", "Pembayaran Lunas"],
             ["wa_template_h1", "Pengingat H-1"],

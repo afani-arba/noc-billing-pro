@@ -102,8 +102,12 @@ async def _bg_send_customer_greeting(customer: dict):
     name = customer.get("name", "")
     username = customer.get("username", "")
     
-    # Template sederhana untuk pelanggan baru
-    msg = f"Halo *{name}*,\n\nTerima kasih telah bergabung! Layanan internet Anda dengan username *{username}* telah AKTIF.\n\nSimpan pesan ini jika butuh bantuan teknis. Selamat menggunakan layanan dari kami."
+    # Ambil template kustom atau gunakan default
+    template = settings.get("wa_template_new_customer", "")
+    if template:
+        msg = template.replace("{customer_name}", name).replace("{username}", username)
+    else:
+        msg = f"Halo *{name}*,\n\nTerima kasih telah bergabung! Layanan internet Anda dengan username *{username}* telah AKTIF.\n\nSimpan pesan ini jika butuh bantuan teknis. Selamat menggunakan layanan dari kami."
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
