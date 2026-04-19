@@ -139,10 +139,14 @@ async def list_hotspot_vouchers(
         used_uptime   = int(v.get("used_uptime_secs", 0))
         validity_secs = int(v.get("validity_secs", 0))
         
-        # ── FIX: Fallback untuk voucher yang tidak tergenerate validity_secs-nya 
+        # ── FIX: Fallback untuk voucher yang tidak tergenerate secs-nya (misal dari Moota/Portal)
         if validity_secs <= 0 and v.get("validity"):
             validity_secs = _parse_uptime_to_secs(v.get("validity"))
+            v["validity_secs"] = validity_secs
 
+        if limit_uptime <= 0 and v.get("uptime_limit"):
+            limit_uptime = _parse_uptime_to_secs(v.get("uptime_limit"))
+            v["limit_uptime_secs"] = limit_uptime
 
         # ── Sisa Uptime (hitung mundur, BERHENTI saat offline) ──────────────
         current_sess_elapsed = 0
