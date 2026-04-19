@@ -378,6 +378,8 @@ function ZTPModal({ device, onClose, onSuccess }) {
     payment_status: "belum_bayar",
     initial_payment_method: "cash",
     use_radius: true,
+    bind_lan: ["LAN1"],
+    bind_ssid: ["SSID1"],
   });
 
 
@@ -640,6 +642,63 @@ function ZTPModal({ device, onClose, onSuccess }) {
                     <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1">SSID (Nama WiFi)</Label>
                     <Input value={form.ssid} onChange={e => setForm(f => ({ ...f, ssid: e.target.value }))}
                       placeholder="Budi Home" className="rounded-sm text-xs h-8" />
+                  </div>
+
+                  {/* Binding Port LAN & SSID */}
+                  <div className="space-y-2 sm:col-span-2 p-3 bg-secondary/10 border border-border rounded-sm mt-1">
+                    <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1 font-semibold">Binding Port TR-069 <span className="font-normal text-muted-foreground/60">(Huawei, ZTE, C-DATA, Fiberhome)</span></Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* LAN Binding */}
+                      <div>
+                        <p className="text-[9px] text-muted-foreground mb-1.5 font-medium">LAN Ports</p>
+                        <div className="flex flex-wrap gap-3">
+                          {["LAN1", "LAN2", "LAN3", "LAN4"].map(lan => (
+                            <label key={lan} className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={form.bind_lan.includes(lan)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setForm(f => ({
+                                    ...f,
+                                    bind_lan: checked 
+                                      ? [...f.bind_lan, lan] 
+                                      : f.bind_lan.filter(l => l !== lan)
+                                  }));
+                                }}
+                                className="w-3 h-3 text-primary bg-background border-border rounded-sm focus:ring-primary/50"
+                              />
+                              {lan.replace("LAN", "LAN ")}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      {/* SSID Binding */}
+                      <div>
+                        <p className="text-[9px] text-muted-foreground mb-1.5 font-medium">SSID (WLAN) Ports</p>
+                        <div className="flex flex-wrap gap-3">
+                          {["SSID1", "SSID2", "SSID3", "SSID4"].map(ssid => (
+                            <label key={ssid} className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={form.bind_ssid.includes(ssid)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setForm(f => ({
+                                    ...f,
+                                    bind_ssid: checked 
+                                      ? [...f.bind_ssid, ssid] 
+                                      : f.bind_ssid.filter(s => s !== ssid)
+                                  }));
+                                }}
+                                className="w-3 h-3 text-primary bg-background border-border rounded-sm focus:ring-primary/50"
+                              />
+                              {ssid.replace("SSID", "SSID ")}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -484,6 +484,8 @@ class ZTPActivateRequest(BaseModel):
     payment_status: str = "belum_bayar"  # sudah_bayar | belum_bayar
     initial_payment_method: str = "cash" # cash | transfer
     use_radius: bool = True              # Gunakan RADIUS sebagai default
+    bind_lan: list[str] = []             # List of LANs, e.g. ["LAN1"]
+    bind_ssid: list[str] = []            # List of SSIDs, e.g. ["SSID1"]
 
 
 @router.post("/devices/{device_id:path}/activate-customer")
@@ -577,6 +579,8 @@ async def activate_customer_ztp(
             body.ssid,
             body.wifi_password,
             body.vlan_id,
+            body.bind_lan,
+            body.bind_ssid,
         )
         genieacs_ok = True
         steps.append({

@@ -443,9 +443,9 @@ def _find_pppoe_wan_path(device_id: str) -> str:
         return default
 
 
-def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "") -> dict:
+def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "", bind_lan: list = None, bind_ssid: list = None) -> dict:
     """
-    Zero Touch Provisioning: Mengatur PPPoE dan WiFi SSID/Password pada ONT ZTE.
+    Zero Touch Provisioning: Mengatur PPPoE dan WiFi SSID/Password pada ONT ZTE/Huawei.
 
     Alur:
     1. Cek apakah WANPPPConnection sudah ada di device cache GenieACS.
@@ -464,12 +464,14 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
     existing_path = _find_pppoe_wan_path(device_id)
     try:
         chk_params = {
-            "projection": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice",
+            "projection": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice,InternetGatewayDevice.DeviceInfo.Manufacturer",
             "limit": 1,
             "query": '{\"_id\":\"' + device_id.replace('"', '\\"') + '\"}',
         }
         chk = _get("/devices", chk_params)
+        mfg = ""
         if chk:
+            mfg = str((chk[0].get("InternetGatewayDevice") or {}).get("DeviceInfo", {}).get("Manufacturer", {}).get("_value", "")).lower()
             wan_dev = (chk[0].get("InternetGatewayDevice") or {}).get("WANDevice", {}).get("1", {})
             wan_cds = wan_dev.get("WANConnectionDevice", {})
             wan_cd_keys = [k for k in wan_cds.keys() if k.isdigit()]
@@ -490,6 +492,38 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
             
     except Exception as e:
         logger.warning(f"ZTP WANPPPConnection check error: {e}")
+
+    # ── Vendor Binding Logic ──────────────────────────────────────────────────
+    def _build_bindings(base_path: str) -> list:
+        if not bind_lan and not bind_ssid:
+            return []
+        
+        sn = device_id.lower()
+        manuf = mfg
+        params = []
+        
+        # HUAWEI
+        if "huawei" in manuf or "00259e" in sn or "485754" in sn or "0819a6" in sn:
+            hw_binds = []
+            if bind_lan: hw_binds.extend([l.replace("LAN", "LAN") for l in bind_lan])
+            if bind_ssid: hw_binds.extend([s.replace("SSID", "WLAN") for s in bind_ssid])
+            if hw_binds:
+                params.append([f"{base_path}.X_HW_LANBinding", ",".join(hw_binds), "xsd:string"])
+                
+        # ZTE / C-DATA / FiberHome (CT-COM model commonly)
+        elif "zte" in manuf or "zteg" in sn or "146080" in sn or "14608f" in sn or "fiberhome" in manuf or "c-data" in manuf:
+            ct_binds = []
+            if bind_lan: ct_binds.extend([f"InternetGatewayDevice.LANDevice.1.LANEthernetInterfaceConfig.{l.replace('LAN','')}" for l in bind_lan])
+            if bind_ssid: ct_binds.extend([f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{s.replace('SSID','')}" for s in bind_ssid])
+            if ct_binds:
+                val = ",".join(ct_binds)
+                # Most standard firmwares 
+                if "fiberhome" in manuf or "c-data" in manuf:
+                    params.append([f"{base_path}.X_CT-COM_LanInterface", val, "xsd:string"])
+                else: # ZTE usually uses ZTE-COM
+                    params.append([f"{base_path}.X_ZTE-COM_LanInterface", val, "xsd:string"])
+                    params.append([f"{base_path}.X_CT-COM_LanInterface", val, "xsd:string"])
+        return params
 
 
     # ── Shared params: WiFi + Management ─────────────────────────────────────
@@ -520,6 +554,7 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
                 [f"{bp}.ConnectionTrigger","AlwaysOn",  "xsd:string"],
                 [f"{bp}.ServiceList",      "INTERNET",  "xsd:string"],
             ])
+            pppoe_params.extend(_build_bindings(bp))
             if vlan_id:
                 pppoe_params.append([f"{bp}.X_ZTE-COM_VLANID", str(vlan_id), "xsd:string"])
         all_params = pppoe_params + extra_params
@@ -558,6 +593,8 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
                 # Disable VLAN (Untagged)
                 pppoe_params.append([f"{ppp_base}.X_ZTE-COM_VLANID", "0", "xsd:string"])
                 pppoe_params.append([f"{ppp_base}.X_HW_VLAN", "0", "xsd:string"])
+            
+            pppoe_params.extend(_build_bindings(ppp_base))
 
         # Task 1: addObject WANConnectionDevice (TANPA trailing dot) -> Menghasilkan index .2
         t1 = requests.post(cr_url, json={"name": "addObject", "objectName": new_wan_cd}, auth=_auth(), timeout=TIMEOUT)
