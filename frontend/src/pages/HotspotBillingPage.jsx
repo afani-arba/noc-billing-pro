@@ -110,6 +110,7 @@ export default function HotspotBillingPage() {
   const [waOrders, setWaOrders]         = useState([]);
   const [waOrdersLoading, setWaOrdersLoading] = useState(false);
   const [waOrdersFilter, setWaOrdersFilter] = useState(""); // "" | "unpaid" | "paid"
+  const [waSearch, setWaSearch]             = useState("");  // search query for pembelian online
   
   const [editVoucher, setEditVoucher] = useState(null);
   const [transferVoucher, setTransferVoucher] = useState(null);
@@ -482,7 +483,7 @@ export default function HotspotBillingPage() {
     return res;
   };
   const tabs = [
-    { id: "wa_orders", label: "Pesanan WA", icon: MessageCircle },
+    { id: "wa_orders", label: "Pembelian Online", icon: ShoppingCart },
     { id: "vouchers", label: "Voucher History", icon: RpIcon },
     { id: "sales", label: "Laporan penjualan", icon: TrendingUp },
     { id: "packages", label: "Paket Layanan", icon: Package },
@@ -650,13 +651,28 @@ export default function HotspotBillingPage() {
 
         {activeTab === "wa_orders" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="text-base font-semibold flex items-center gap-2">
                   <ShoppingCart className="w-4 h-4 text-green-400" /> Pembelian Online
                 </h2>
               </div>
-              <div className="flex gap-2 flex-wrap">
+              {/* Search */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Input
+                    placeholder="Cari nama, no HP, invoice..."
+                    value={waSearch}
+                    onChange={e => setWaSearch(e.target.value)}
+                    className="h-8 text-xs rounded-sm w-52 pr-7"
+                  />
+                  {waSearch && (
+                    <button onClick={() => setWaSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
                 {["", "unpaid", "paid"].map(f => (
                   <button key={f} onClick={() => setWaOrdersFilter(f)}
                     className={`text-[10px] font-semibold px-2.5 py-1 rounded-sm border transition-all ${
@@ -695,12 +711,26 @@ export default function HotspotBillingPage() {
                       <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
                         <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan...
                       </td></tr>
-                    ) : waOrders.length === 0 ? (
-                      <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                        <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                        <p className="text-sm">Belum ada pesanan voucher dari WhatsApp</p>
-                      </td></tr>
-                    ) : waOrders.map(o => (
+                    ) : (() => {
+                        const q = waSearch.toLowerCase().trim();
+                        const filtered = waOrders.filter(o => {
+                          const statusOk = !waOrdersFilter || o.status === waOrdersFilter;
+                          if (!statusOk) return false;
+                          if (!q) return true;
+                          return (
+                            (o.customer_name || "").toLowerCase().includes(q) ||
+                            (o.customer_phone || "").toLowerCase().includes(q) ||
+                            (o.invoice_number || "").toLowerCase().includes(q) ||
+                            (o.package_name || "").toLowerCase().includes(q)
+                          );
+                        });
+                        if (filtered.length === 0) return (
+                          <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
+                            <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                            <p className="text-sm">{q ? `Tidak ada pembelian yang cocok dengan "${waSearch}"` : "Belum ada pembelian online"}</p>
+                          </td></tr>
+                        );
+                        return filtered.map(o => (
                       <tr key={o.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.invoice_number}</td>
                         <td className="px-4 py-3">
@@ -742,7 +772,9 @@ export default function HotspotBillingPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ))
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
