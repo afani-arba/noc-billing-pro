@@ -646,39 +646,78 @@ async def activate_customer_ztp(
         })
         logger.warning(f"ZTP step3 failed for {body.customer_name}: {e}")
 
-    # ─── STEP 4: Create Initial Invoice (Biaya Pasang + Bulan Pertama) ────────
+    # ─── STEP 4: Create Initial Invoice (Biaya Pasang + Bulan Pertama + Pro-Rata) ─
     invoice_ok = True
+    inv_doc = None   # kita butuh referensi ini di STEP 5 (WA notification)
     if billing_ok and (body.installation_fee > 0 or body.package_id):
         try:
             from datetime import date
+            from calendar import monthrange
+
             def _inv_num(seq: int) -> str:
                 d = date.today()
                 return f"INV-{d.year}-{d.month:02d}-{seq:04d}"
 
             today = date.today()
-            period_start = today.isoformat()
-            
-            from calendar import monthrange
             _, last_day = monthrange(today.year, today.month)
-            period_end = f"{today.year}-{today.month:02d}-{last_day:02d}"
+
+            # ── Pro-Rata Calculation ──────────────────────────────────────────
+            # Hitung biaya paket berdasarkan sisa hari di bulan berjalan.
+            # Biaya pasang (installation_fee) TIDAK ikut pro-rata, selalu penuh.
+            #
+            # Rumus: round((harga_paket / total_hari) * sisa_hari)
+            # Contoh: Pasang tgl 20, hari dlm bulan = 30 → sisa = 11 hari
+            #   Pro-rata = round((100_000 / 30) * 11) = 36_667
+            #
+            # Jika pasang di tanggal 1 atau sisa >= total hari → tagih PENUH.
+            pkg_price_full = pkg.get("price", 0) if pkg else 0
+            days_remaining = last_day - today.day + 1   # termasuk hari ini
+            is_prorata = days_remaining < last_day       # False jika pasang tgl 1
+
+            if is_prorata and pkg_price_full > 0:
+                pkg_price_prorata = round((pkg_price_full / last_day) * days_remaining)
+                prorata_note = (
+                    f"Pro-Rata {days_remaining}/{last_day} hari "
+                    f"(Rp {pkg_price_full:,} × {days_remaining}/{last_day} = Rp {pkg_price_prorata:,})"
+                )
+            else:
+                pkg_price_prorata = pkg_price_full
+                prorata_note = "Tagihan penuh (pasang awal bulan)"
+
+            amount = pkg_price_prorata + body.installation_fee
+
+            # Period billing: hari ini → akhir bulan berjalan
+            period_start = today.isoformat()
+            period_end   = f"{today.year}-{today.month:02d}-{last_day:02d}"
             due_day_safe = min(body.due_day, last_day)
-            due_date = f"{today.year}-{today.month:02d}-{due_day_safe:02d}"
-            
+            due_date     = f"{today.year}-{today.month:02d}-{due_day_safe:02d}"
+
             period_prefix = f"{today.year}-{today.month:02d}"
             count = await db.invoices.count_documents(
                 {"period_start": {"$regex": f"^{period_prefix}"}}
             )
-            
-            pkg_price = pkg.get("price", 0) if pkg else 0
-            amount = pkg_price + body.installation_fee
-            
+
             if amount > 0:
-                import random
-                unique_code = random.randint(1, 999)
+                # ── Unique Code: hanya untuk pembayaran transfer ──────────────
+                # Pembayaran cash/tunai → kode unik = 0 (total tepat = amount)
+                # Pembayaran transfer   → kode unik = random 1-999 (agar unik di bank)
+                is_transfer = body.initial_payment_method.lower() in ("transfer", "bank_transfer", "online")
+                if is_transfer:
+                    import random
+                    unique_code = random.randint(1, 999)
+                else:
+                    unique_code = 0   # Cash/QRIS scan = nominal persis, tidak perlu kode unik
+
                 total = amount + unique_code
-                
                 is_paid = (body.payment_status == "sudah_bayar")
-                
+
+                notes_parts = [
+                    f"Tagihan Pertama.",
+                    f"Paket: Rp {pkg_price_prorata:,}" + (f" (Pro-Rata dari Rp {pkg_price_full:,})" if is_prorata else ""),
+                    f"Biaya Pasang: Rp {body.installation_fee:,}",
+                    prorata_note,
+                ]
+
                 inv_doc = {
                     "id": str(uuid.uuid4()),
                     "invoice_number": _inv_num(count + 1),
@@ -692,7 +731,7 @@ async def activate_customer_ztp(
                     "period_end": period_end,
                     "due_date": due_date,
                     "status": "paid" if is_paid else "unpaid",
-                    "notes": f"Tagihan Pertama. Paket: Rp {pkg_price}, Biaya Pasang: Rp {body.installation_fee}",
+                    "notes": " | ".join(notes_parts),
                     "paid_at": _now() if is_paid else None,
                     "payment_method": body.initial_payment_method if is_paid else None,
                     "created_at": _now(),
@@ -720,61 +759,122 @@ async def activate_customer_ztp(
             bs = await db.billing_settings.find_one({}, {"_id": 0}) or {}
             wa_token = bs.get("wa_token", "")
             if wa_token:
-                pkg_name = pkg.get("name", "-") if pkg else "-"
-                
+                pkg_name     = pkg.get("name", "-") if pkg else "-"
+                is_paid_val  = (body.payment_status == "sudah_bayar")
+                is_cash      = body.initial_payment_method.lower() not in ("transfer", "bank_transfer", "online")
+
+                # ── Ambil info rekening pembayaran dari company_profile ────────
+                company_profile = await db.system_settings.find_one(
+                    {"key": "company_profile"}, {"_id": 0}
+                ) or {}
+                # Fallback ke legacy field jika company_profile kosong
+                if not company_profile:
+                    company_profile = await db.system_settings.find_one({}, {"_id": 0}) or {}
+
+                bank_account_raw  = (company_profile.get("bank_account") or bs.get("bank_account") or "").strip()
+                bank_name         = (company_profile.get("bank_name") or "").strip()
+                bank_account_name = (company_profile.get("bank_account_name") or "").strip()
+                qris_url          = (company_profile.get("qris_url") or bs.get("qris_url") or "").strip()
+                company_name      = (company_profile.get("company_name") or "Internet Kami").strip()
+
+                # ── Header & data pelanggan ───────────────────────────────────
                 msg = (
-                    f"🎉 *Selamat Datang di Layanan Internet Kami!*\n\n"
+                    f"🎉 *Selamat Datang di {company_name}!*\n\n"
                     f"Halo *{body.customer_name}*,\n"
-                    f"Pemasangan layanan internet Anda telah berhasil diaktifkan.\n\n"
-                    f"👤 *Akses Portal Pelanggan*\n"
-                    f"• ID Pelanggan: {client_id}\n"
-                    f"• No HP: {body.phone}\n\n"
-                    f"📡 *Data Akun & WiFi*\n"
-                    f"• Paket: {pkg_name}\n"
-                    f"• Nama WiFi (SSID): {body.ssid}\n"
+                    f"Pemasangan layanan internet Anda telah selesai dilakukan oleh teknisi kami.\n\n"
+                    f"👤 *Akun Pelanggan*\n"
+                    f"• ID Pelanggan : {client_id}\n"
+                    f"• No HP        : {body.phone}\n\n"
+                    f"📡 *Data Layanan & WiFi*\n"
+                    f"• Paket        : {pkg_name}\n"
+                    f"• Nama WiFi    : {body.ssid}\n"
                     f"• Password WiFi: {body.wifi_password}\n\n"
-                    f"💳 *Informasi Tagihan Awal*\n"
                 )
-                
-                pkg_price_val = pkg.get("price", 0) if pkg else 0
-                amount_val = pkg_price_val + body.installation_fee
-                is_paid_val = (body.payment_status == "sudah_bayar")
-                status_pembayaran = "LUNAS. Terima kasih atas pembayaran Anda." if is_paid_val else "BELUM LUNAS. Mohon segera lakukan pembayaran agar layanan tetap aktif."
-                
-                if invoice_ok and amount_val > 0:
-                    # Ambil total terakhir dari inv_doc yang tersimpan jika ada, jika tidak estimasi.
-                    # Tapi total dihitung dengan unique_code saat doc dibuat. Karena local scope terbatas, mending pakai manual lookup dari DB atau fallback
-                    last_inv = await db.invoices.find_one({"customer_id": customer_id}, sort=[("created_at", -1)])
-                    final_total = last_inv.get("total", amount_val) if last_inv else amount_val
-                    
-                    msg += (
-                        f"• Total Tagihan: *Rp {final_total}*\n"
-                        f"• Status: {status_pembayaran}\n"
-                    )
+
+                # ── Bagian Tagihan ─────────────────────────────────────────────
+                if inv_doc:
+                    final_total       = inv_doc.get("total", 0)
+                    final_amount      = inv_doc.get("amount", 0)
+                    final_unique_code = inv_doc.get("unique_code", 0)
+                    inv_number        = inv_doc.get("invoice_number", "-")
+                    due_date_str      = inv_doc.get("due_date", "-")
+
+                    if is_paid_val:
+                        # ── SUDAH BAYAR: konfirmasi & terima kasih ────────────
+                        msg += (
+                            f"✅ *Tagihan Awal — LUNAS*\n"
+                            f"• No. Invoice  : {inv_number}\n"
+                            f"• Total Tagihan: *Rp {final_total:,}*\n"
+                            f"• Metode Bayar : {'Tunai' if is_cash else 'Transfer'}\n\n"
+                            f"Terima kasih atas pembayaran Anda! 🙏\n"
+                            f"Internet Anda sudah aktif dan siap digunakan.\n"
+                        )
+                    else:
+                        # ── BELUM BAYAR: instruksi pembayaran lengkap ─────────
+                        msg += (
+                            f"💳 *Tagihan Awal — BELUM LUNAS*\n"
+                            f"• No. Invoice  : {inv_number}\n"
+                            f"• Nominal Paket: Rp {final_amount:,}\n"
+                        )
+                        if final_unique_code > 0:
+                            msg += (
+                                f"• Kode Unik    : Rp {final_unique_code:,}\n"
+                                f"• *Total Transfer: Rp {final_total:,}*\n"
+                                f"  _(Harap transfer tepat sesuai nominal di atas)_\n"
+                            )
+                        else:
+                            msg += f"• *Total Bayar : Rp {final_total:,}*\n"
+                        msg += f"• Jatuh Tempo  : {due_date_str}\n\n"
+
+                        # ── Info rekening / QRIS ──────────────────────────────
+                        if bank_account_raw or bank_name:
+                            msg += f"🏦 *Cara Pembayaran Transfer*\n"
+                            if bank_name:
+                                msg += f"• Bank         : {bank_name}\n"
+                            if bank_account_raw:
+                                msg += f"• No. Rekening : *{bank_account_raw}*\n"
+                            if bank_account_name:
+                                msg += f"• Atas Nama    : {bank_account_name}\n"
+                            msg += "\n"
+
+                        if qris_url:
+                            msg += (
+                                f"📱 *Atau Bayar via QRIS*\n"
+                                f"Scan QRIS: {qris_url}\n\n"
+                            )
+
+                        msg += (
+                            f"⚠️ *Penting:* Internet Anda saat ini dalam status *ISOLIR* "
+                            f"dan akan aktif otomatis setelah pembayaran dikonfirmasi.\n"
+                        )
                 else:
-                    msg += "• Status: Bebas Biaya Pemasangan/Awal\n"
-                
-                msg += "\nTerima kasih telah mempercayakan koneksi Anda kepada kami!"
-                
+                    # Tidak ada invoice (gratis / bebas biaya awal)
+                    msg += f"✅ *Status*: Bebas biaya pemasangan awal. Internet Anda langsung aktif!\n"
+
+                msg += f"\nSalam,\n*Tim {company_name}*"
+
                 ok = await send_whatsapp(body.phone, msg, wa_token)
                 if ok:
                     steps.append({
                         "step": "WhatsApp Notification",
                         "ok": True,
-                        "message": "Pesan selamat datang (Welcome Message) berhasil dikirim via WhatsApp"
+                        "message": (
+                            f"Pesan {'tagihan & instruksi bayar' if not is_paid_val and inv_doc else 'selamat datang'} "
+                            f"berhasil dikirim ke {body.phone}"
+                        )
                     })
-                    logger.info(f"ZTP: Welcome WA sent to {body.phone} for {customer_id}")
+                    logger.info(f"ZTP: WA sent to {body.phone} for {customer_id} (paid={is_paid_val})")
                 else:
                     steps.append({
                         "step": "WhatsApp Notification",
                         "ok": False,
-                        "message": "Gagal mengirim WhatsApp (API merespon gagal)"
+                        "message": "Gagal mengirim WhatsApp (Fonnte API merespon error)"
                     })
             else:
                 steps.append({
                     "step": "WhatsApp Notification",
                     "ok": False,
-                    "message": "Token Fonnte tidak tersedia di pengaturan"
+                    "message": "Token Fonnte tidak dikonfigurasi di Pengaturan Billing"
                 })
         except Exception as e:
             steps.append({
