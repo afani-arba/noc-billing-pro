@@ -146,8 +146,14 @@ async def get_dashboard(customer=Depends(get_current_client)):
             "days_until_due": days_until_due
         }
 
-    settings = await db.settings.find_one({"id": "global"}) or {}
-    raw_bank = settings.get("bank_account", "BCA 8520480189 a.n PT ARSYA BAROKAH ABADI")
+    # Baca company_profile dari system_settings (sumber yang benar)
+    company_profile = await db.system_settings.find_one({"_id": "company_profile"}) or {}
+    raw_bank = company_profile.get("bank_account", "")
+    
+    # Fallback ke db.settings (legacy) jika system_settings kosong
+    if not raw_bank:
+        settings_legacy = await db.settings.find_one({"id": "global"}) or {}
+        raw_bank = settings_legacy.get("bank_account", "")
     
     # Parsing string seperti "BCA 8520480189 a.n PT ARSYA BAROKAH ABADI"
     import re
@@ -165,14 +171,14 @@ async def get_dashboard(customer=Depends(get_current_client)):
     an_match = re.search(r'a\.?\s*n\.?', raw_bank, re.IGNORECASE)
     if an_match:
         account_name = raw_bank[an_match.end():].strip()
-        # Jika belum dapat bank_name karena tidak ada spasi sblm angka, fallback
         if bank_name == "Bank" or bank_name == "":
             bank_name = raw_bank[:an_match.start()].replace(account_number, "").strip()
 
     ai_cfg = await db.system_settings.find_one({"_id": "ai_chat_config"}) or {}
 
+
     platform_settings = {
-        "company_name": settings.get("company_name", "NOC Sentinel"),
+        "company_name": company_profile.get("company_name") or settings_legacy.get("company_name", "NOC Sentinel") if 'settings_legacy' in locals() else company_profile.get("company_name", "NOC Sentinel"),
         "bank_name": bank_name or "Bank",
         "bank_account": account_number,
         "bank_account_name": account_name,
