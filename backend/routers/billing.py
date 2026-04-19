@@ -2604,8 +2604,8 @@ async def get_hotspot_public_config():
         # Fallback ke billing_settings jika hotspot_settings belum punya WA
         wa_number = (bs.get("whatsapp") or bs.get("phone") or "6282228304543").strip()
 
-    # 3. Payment info: Sinkronkan dengan fitur Moota dan Payment Gateway
-    is_gateway_active = bs.get("payment_gateway_enabled", False) or bool(bs.get("moota_webhook_secret", ""))
+    # 3. Payment info: Tersinkronisasi dengan Payment Gateway & Moota Mutasi (keduanya ada di dalam satu checkbox sekarang)
+    is_gateway_active = bs.get("payment_gateway_enabled", False)
     payment_enabled = hs.get("payment_enabled", False) or is_gateway_active
     
     bank_info = None

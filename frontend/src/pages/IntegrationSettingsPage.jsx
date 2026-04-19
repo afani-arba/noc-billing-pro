@@ -514,38 +514,33 @@ function BillingSettingsSection({ selectedDevice }) {
         </button>
       </div>
 
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-3 border-b border-border/50 pb-4">
-          <div className="w-8 h-8 rounded-sm bg-blue-500/10 flex items-center justify-center"><CreditCard className="w-4 h-4 text-blue-400" /></div>
-          <div><h2 className="text-base font-semibold">Moota Mutasi (Auto-Pay)</h2><p className="text-[10px] text-muted-foreground">Otomatisasi pengecekan mutasi bank via webhook Moota</p></div>
-        </div>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-             <label className="text-xs text-muted-foreground">Webhook Endpoint URL</label>
-             <input readOnly value={`${window.location.protocol}//${window.location.host}/api/webhook/moota`} className="w-full h-8 text-[10px] rounded-sm border border-border bg-secondary/50 px-2 font-mono text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
-          </div>
-          <div className="space-y-1.5">
-             <label className="text-xs text-muted-foreground">Webhook Secret (Opsional)</label>
-             <input type="password" value={settings.moota_webhook_secret || ""} onChange={e => setSettings({ ...settings, moota_webhook_secret: e.target.value })} placeholder="Kosongkan jika di Moota tidak disetting" className="w-full h-8 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
-          </div>
-        </div>
-        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 text-xs h-8 px-3 rounded-sm border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors">
-          <Save className="w-3.5 h-3.5" />{saving ? "Menyimpan..." : "Simpan Pengaturan Moota"}
-        </button>
-      </div>
-
-      {/* Payment Gateway */}
+      {/* Payment Gateway & Moota */}
       <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><CreditCard className="w-4 h-4 text-emerald-400" /></div>
-          <div><h2 className="text-base font-semibold">Payment Gateway</h2><p className="text-[10px] text-muted-foreground">Xendit (VA/QRIS), BCA SNAP, BRI BRIVA</p></div>
+          <div><h2 className="text-base font-semibold">Payment Gateway & Moota Mutasi</h2><p className="text-[10px] text-muted-foreground">Gateway Otomatis, Xendit, BCA SNAP, BRI BRIVA</p></div>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={!!settings.payment_gateway_enabled} onChange={e => setSettings({ ...settings, payment_gateway_enabled: e.target.checked })} className="w-4 h-4 rounded" />
-          <span className="text-xs font-medium">Aktifkan Payment Gateway</span>
+          <span className="text-xs font-medium">Aktifkan Payment Gateway & Transfer Otomatis</span>
         </label>
         {settings.payment_gateway_enabled && (
           <div className="space-y-4">
+
+            {/* Moota Mutasi Integrasi */}
+            <div className="border border-border/50 rounded-sm p-3 space-y-3 bg-blue-500/5">
+               <h3 className="text-xs font-semibold text-blue-400">Moota Webhook (Mutasi Bank Auto-Pay)</h3>
+               <div className="space-y-3">
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] text-muted-foreground">Webhook Endpoint URL (Copy dan masukkan ke dashboard Moota)</label>
+                    <input readOnly value={`${window.location.protocol}//${window.location.host}/api/webhook/moota`} className="w-full h-7 text-[10px] rounded-sm border border-border bg-secondary/50 px-2 font-mono text-muted-foreground cursor-copy" onClick={e => { e.target.select(); document.execCommand("copy"); toast.success("Disalin"); }} />
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] text-muted-foreground">Webhook Secret (Opsional)</label>
+                    <input type="password" value={settings.moota_webhook_secret || ""} onChange={e => setSettings({ ...settings, moota_webhook_secret: e.target.value })} placeholder="Kosongkan jika di Moota tidak disetting" className="w-full h-7 text-xs rounded-sm border border-border bg-background px-2 font-mono" />
+                 </div>
+               </div>
+            </div>
             <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-sm text-[10px] text-blue-300 space-y-1">
               <p className="font-semibold">Webhook URLs — Daftarkan ke dashboard provider:</p>
               <p className="font-mono">Xendit: <span className="text-sky-300">[domain]/api/webhook/xendit</span></p>
