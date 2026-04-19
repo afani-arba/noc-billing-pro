@@ -2601,7 +2601,7 @@ async def get_hotspot_public_config():
     wa_number = (hs.get("wa_number") or "").strip()
     if not wa_number:
         # Fallback ke billing_settings jika hotspot_settings belum punya WA
-        bs = await fetch_billing_settings(db, device_id)
+        bs = await fetch_billing_settings(db, None)
         wa_number = (bs.get("whatsapp") or bs.get("phone") or "6282228304543").strip()
 
     # 3. Payment info dari hotspot_settings
