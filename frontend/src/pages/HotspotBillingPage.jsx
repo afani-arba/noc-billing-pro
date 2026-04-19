@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
-import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban } from "lucide-react";
+import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -396,7 +396,7 @@ export default function HotspotBillingPage() {
           uptime_limit: form.uptime_limit, validity: form.validity });
       }
       await api.post(`/hotspot-users/batch?device_id=${selectedDevice}`, { users: batch });
-      toast.success(`âœ… ${form.count} voucher berhasil dibuat dan disimpan ke database!`);
+      toast.success(`${form.count} voucher berhasil dibuat dan disimpan ke database!`);
       setGeneratedVouchers(preview);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal membuat voucher");
@@ -653,9 +653,8 @@ export default function HotspotBillingPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h2 className="text-base font-semibold flex items-center gap-2">
-                  <MessageCircle className="w-4 h-4 text-green-400" /> Pesanan Voucher dari WhatsApp AI
+                  <ShoppingCart className="w-4 h-4 text-green-400" /> Pembelian Online
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Invoice otomatis dari AI Sales Agent (Sherly/Niken) — tersimpan TERPISAH dari tagihan PPPoE</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {["", "unpaid", "paid"].map(f => (
@@ -667,7 +666,7 @@ export default function HotspotBillingPage() {
                           : "border-border text-foreground bg-muted"
                         : "border-border/30 text-muted-foreground/50"
                     }`}>
-                    {f === "" ? "Semua" : f === "unpaid" ? "â³ Belum Bayar" : "âœ… Sudah Bayar"}
+                    {f === "" ? "Semua" : f === "unpaid" ? "Belum Bayar" : "Sudah Bayar"}
                   </button>
                 ))}
                 <button onClick={fetchWaOrders}
@@ -694,7 +693,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {waOrdersLoading ? (
                       <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan WAâ€¦
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan...
                       </td></tr>
                     ) : waOrders.length === 0 ? (
                       <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
@@ -716,7 +715,11 @@ export default function HotspotBillingPage() {
                             : o.status === 'overdue' ? 'bg-red-500/10 text-red-400 border-red-500/20'
                             : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           }`}>
-                            {o.status === 'paid' ? 'âœ… Lunas' : o.status === 'overdue' ? 'âš ï¸ Kedaluwarsa' : 'â³ Pending'}
+                            {o.status === 'paid'
+                              ? <><CheckCircle2 className="w-3 h-3" /> Lunas</>
+                              : o.status === 'overdue'
+                                ? <><AlertCircle className="w-3 h-3" /> Kedaluwarsa</>
+                                : <><Clock className="w-3 h-3" /> Pending</>}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '—'}</td>
