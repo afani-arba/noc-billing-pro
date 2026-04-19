@@ -727,7 +727,7 @@ export default function HotspotBillingPage() {
                         if (filtered.length === 0) return (
                           <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
                             <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                            <p className="text-sm">{q ? `Tidak ada pembelian yang cocok dengan "${waSearch}"` : "Belum ada pembelian online"}</p>
+                            <p className="text-sm">{q ? `Tidak ada hasil untuk "${waSearch}"` : "Belum ada pembelian online"}</p>
                           </td></tr>
                         );
                         return filtered.map(o => (
@@ -755,7 +755,6 @@ export default function HotspotBillingPage() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1 justify-center">
-                            {/* FIX: Tambah tombol Tandai Lunas untuk order yang belum bayar */}
                             {o.status !== 'paid' && (
                               <button
                                 onClick={() => { setWaPayMethod("cash"); setWaPayModal({ id: o.id, name: o.customer_name, invoice: o.invoice_number }); }}
@@ -772,8 +771,7 @@ export default function HotspotBillingPage() {
                           </div>
                         </td>
                       </tr>
-                    ))
-                      );
+                    ));
                     })()}
                   </tbody>
                 </table>
