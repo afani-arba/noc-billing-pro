@@ -75,7 +75,7 @@ export default function DashboardPage() {
 
   // Jitter removed from Heatmap View
 
-  // â”â”â” SSE Real-time â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  // ━━━ SSE Real-time ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   const { devices: sseDevices, summary: sseSummary, connected: sseConnected, lastUpdate: sseLastUpdate } = useDeviceEvents();
 
   // Merge SSE data into stats summary ketika SSE aktif
@@ -92,7 +92,7 @@ export default function DashboardPage() {
       });
     }
   }, [sseConnected, sseSummary]);
-  // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   useEffect(() => {
     api.get("/devices").then(r => {
@@ -521,7 +521,7 @@ export default function DashboardPage() {
           </div>
 
 
-          {/* â”€â”€ ISP Multi-series Chart (hanya jika device spesifik & ada multi-ISP) â”€â”€ */}
+          {/* ── ISP Multi-series Chart (hanya jika device spesifik & ada multi-ISP) ── */}
           {ispSeries.length > 1 && selectedDevice !== "all" && (
             <div className="bg-card border border-border rounded-sm p-3 sm:p-5" data-testid="isp-multi-chart">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-4 gap-2">
@@ -584,7 +584,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* â”€â”€ Historical Comparison Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── Historical Comparison Panel ────────────────────────── */}
           <div className="bg-card border border-border rounded-sm p-3 sm:p-5" data-testid="historical-compare">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
               <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">

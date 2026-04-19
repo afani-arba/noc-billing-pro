@@ -127,9 +127,9 @@ export default function DdosShieldPanel({ deviceId }) {
                         </div>
                         <div>
                            <p className="font-bold">
-                              {e.type === 'block' && <span className="text-red-600">â›” BLOCKED (RTBH)</span>}
-                              {e.type === 'unblock' && <span className="text-green-600">âœ”ï¸Ž AUTO UNBLOCKED</span>}
-                              {e.type === 'manual_unblock' && <span className="text-yellow-600">âœ”ï¸Ž MANUAL UNBLOCK</span>}
+                              {e.type === 'block' && <span className="text-red-600">⛔ BLOCKED (RTBH)</span>}
+                              {e.type === 'unblock' && <span className="text-green-600">✔️ AUTO UNBLOCKED</span>}
+                              {e.type === 'manual_unblock' && <span className="text-yellow-600">✔️ MANUAL UNBLOCK</span>}
                            </p>
                            <p className="mt-1 font-mono text-gray-600 dark:text-gray-400">
                               {e.ip} {e.mbps_rate && ` (${e.mbps_rate.toFixed(0)} Mbps)`}

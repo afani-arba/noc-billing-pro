@@ -61,7 +61,7 @@ class ErrorBoundary extends Component {
 
 
 
-// â”€â”€ Format helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Format helpers ─────────────────────────────────────────────────────────────
 function fmtBytes(b) {
   if (!b) return "0 B";
   if (b >= 1e9) return `${(b / 1e9).toFixed(2)} GB`;
@@ -76,7 +76,7 @@ function fmtNum(n) {
   return String(n);
 }
 
-// â”€â”€ Range Options â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Range Options ──────────────────────────────────────────────────────────────
 const RANGES = [
   { value: "1h", label: "1 Jam" },
   { value: "6h", label: "6 Jam" },
@@ -88,7 +88,7 @@ const RANGES = [
 
 // Highcharts natively handles 3D Pie Labels.
 
-// â”€â”€ Stat Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stat Card ───────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, color = "text-primary" }) {
   return (
     <div className="bg-card border border-border rounded-sm px-4 py-3">
@@ -827,7 +827,7 @@ function PeeringEyePageInner() {
 
   const intervalRef = useRef(null);
 
-  // â”€â”€ Fetch all data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fetch all data ─────────────────────────────────────────────────────────
   const fetchAll = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
     const devId = selectedDev?.device_id || "";
@@ -1085,7 +1085,7 @@ function PeeringEyePageInner() {
     }
   };
 
-  // â”€â”€ Poll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Poll ──────────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchAll(true);
     clearInterval(intervalRef.current);
@@ -1110,12 +1110,12 @@ function PeeringEyePageInner() {
   }, []);
 
 
-  // â”€â”€ Build line chart series keys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Build line chart series keys ───────────────────────────────────────────
   const platformsInTimeline = timeline.length > 0
     ? Object.keys(timeline[0]).filter(k => k !== "time" && k !== "Others").slice(0, 10)
     : [];
 
-  // â”€â”€ Flatten timeline for recharts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Flatten timeline for recharts ───────────────────────────────────────────
   const chartData = timeline.map(row => {
     const flat = { time: row.time };
     platformsInTimeline.forEach(p => {
@@ -1144,7 +1144,7 @@ function PeeringEyePageInner() {
 
   return (
     <div className="space-y-4 pb-16">
-      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">

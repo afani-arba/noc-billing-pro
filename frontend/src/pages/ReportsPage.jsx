@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 function tgl(iso) {
   try {
     return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
@@ -17,7 +17,7 @@ function getInitials(name = "") {
   return name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "A";
 }
 
-// â”€â”€â”€ Print (export PDF via browser) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Print (export PDF via browser) ───────────────────────────────────────────
 function printReport(report, companyName, clientName, engineerName) {
   if (!report) return;
   const win = window.open("", "_blank");
@@ -99,7 +99,7 @@ function printReport(report, companyName, clientName, engineerName) {
     }).join("");
     return `
       <div style="page-break-inside:avoid;margin-top:24px;">
-        <h3 style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:8px;">ðŸ“Š Grafik Bandwidth per Device (Snapshot)</h3>
+        <h3 style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:8px;">📊 Grafik Bandwidth per Device (Snapshot)</h3>
         <svg width="${labelW + barMaxW + 60}" height="${chartH}" xmlns="http://www.w3.org/2000/svg" style="font-family:'Inter','Segoe UI',sans-serif">
           <text x="${labelW}" y="16" font-size="9" fill="#64748b">* Download (biru)</text>
           <text x="${labelW + 120}" y="16" font-size="9" fill="#64748b">* Upload (hijau)</text>
@@ -132,22 +132,22 @@ function printReport(report, companyName, clientName, engineerName) {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
 
-  /* â”€â”€ HEADER â”€â”€ */
+  /* ── HEADER ── */
   .header { background: #0f172a; color: #fff; padding: 18px 24px 14px; display: flex; align-items: flex-start; justify-content: space-between; }
   .header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 3px; }
   .header .sub1 { font-size: 11px; color: #94a3b8; }
   .header .sub2 { font-size: 10px; color: #64748b; margin-top: 1px; }
   .logo-box { width: 52px; height: 52px; border-radius: 8px; background: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; color: #fff; flex-shrink: 0; }
 
-  /* â”€â”€ META BAR â”€â”€ */
+  /* ── META BAR ── */
   .meta-bar { background: #f1f5f9; border-top: 1px solid #e2e8f0; padding: 8px 24px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px 16px; }
   .meta-bar .mkey { color: #94a3b8; font-size: 10px; }
   .meta-bar .mval { color: #0f172a; font-weight: 700; font-size: 11px; }
 
-  /* â”€â”€ SECTION HEADER â”€â”€ */
+  /* ── SECTION HEADER ── */
   .section-hdr { background: #1e3a8a; color: #fff; padding: 6px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 12px; }
 
-  /* â”€â”€ EXEC SUMMARY â”€â”€ */
+  /* ── EXEC SUMMARY ── */
   .exec-title { font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 24px 4px; }
   .exec-divider { border: none; border-top: 1.5px solid #dbeafe; margin: 0 24px 8px; }
   .exec-cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding: 0 24px 10px; }
@@ -157,19 +157,19 @@ function printReport(report, companyName, clientName, engineerName) {
   .ec-critical { font-size: 12px !important; }
   .exec-card .ec-sub { font-size: 9px; color: #6b7280; }
 
-  /* â”€â”€ ALERT BADGES (in exec) â”€â”€ */
+  /* ── ALERT BADGES (in exec) ── */
   .issue-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; }
   .ib-red { background:#fee2e2;color:#dc2626;border:1px solid #fca5a5; }
   .ib-yellow { background:#fef9c3;color:#854d0e;border:1px solid #fde047; }
 
-  /* â”€â”€ TABLES â”€â”€ */
+  /* ── TABLES ── */
   .tbl-wrap { padding: 0 24px 4px; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 10px; }
   th { background: #1e3a8a; color: #fff; padding: 5px 6px; text-align: left; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
   td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
   tr:hover td { background: #f0f9ff !important; }
 
-  /* â”€â”€ PERF SECTION â”€â”€ */
+  /* ── PERF SECTION ── */
   .perf-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 10px 24px; }
   .perf-box { }
   .perf-box h4 { font-size: 10px; font-weight: 700; color: #1d4ed8; margin-bottom: 6px; border-bottom: 1px solid #dbeafe; padding-bottom: 3px; }
@@ -180,17 +180,17 @@ function printReport(report, companyName, clientName, engineerName) {
   .pval-yellow { color: #d97706; }
   .pval-red { color: #dc2626; }
 
-  /* â”€â”€ AVAIL CARDS â”€â”€ */
+  /* ── AVAIL CARDS ── */
   .avail-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px 24px 14px; }
   .avail-card { background: #1d4ed8; color: #fff; border-radius: 4px; padding: 12px 14px; }
   .avail-card .av-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #bfdbfe; margin-bottom: 4px; }
   .avail-card .av-value { font-size: 26px; font-weight: 900; line-height: 1.1; }
   .avail-card .av-sub { font-size: 9px; color: #93c5fd; margin-top: 2px; }
 
-  /* â”€â”€ FOOTER â”€â”€ */
+  /* ── FOOTER ── */
   .footer { text-align: center; padding: 8px 24px; font-size: 9px; color: #94a3b8; border-top: 1px solid #f1f5f9; margin-top: 10px; }
 
-  /* â”€â”€ PRINT â”€â”€ */
+  /* ── PRINT ── */
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .no-print { display: none !important; }
@@ -204,29 +204,29 @@ function printReport(report, companyName, clientName, engineerName) {
 
 <!-- PRINT BUTTON (hidden on print) -->
 <div class="no-print" style="background:#1e3a8a;padding:8px 24px;display:flex;align-items:center;justify-content:space-between;">
-  <span style="color:#fff;font-size:12px;font-weight:600">Preview Laporan â€“ Siap untuk di-print/save sebagai PDF</span>
+  <span style="color:#fff;font-size:12px;font-weight:600">Preview Laporan – Siap untuk di-print/save sebagai PDF</span>
   <button onclick="window.print()" style="background:#2563eb;color:#fff;padding:6px 16px;border-radius:4px;border:none;cursor:pointer;font-size:12px;font-weight:700">Print / Save PDF</button>
 </div>
 
-<!-- â”€â”€ HEADER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── HEADER ──────────────────────────────────────────────────────────── -->
 <div class="header">
   <div>
     <h1>${companyName}</h1>
-    <div class="sub1">Laporan Monitoring Harian â€“ Managed Service Provider</div>
+    <div class="sub1">Laporan Monitoring Harian – Managed Service Provider</div>
     <div class="sub2">Daily Network Monitoring Report</div>
   </div>
   <div class="logo-box">${initials}</div>
 </div>
 
-<!-- â”€â”€ META â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── META ────────────────────────────────────────────────────────────── -->
 <div class="meta-bar">
   <div><div class="mkey">Client Name:</div><div class="mval">${displayClient}</div></div>
   <div><div class="mkey">Tanggal Laporan:</div><div class="mval">${displayDate}</div></div>
   <div><div class="mkey">Engineer on Duty:</div><div class="mval">${displayEngineer}</div></div>
-  <div><div class="mkey">Periode Monitoring:</div><div class="mval">00:00 â€“ 23:59 WIB</div></div>
+  <div><div class="mkey">Periode Monitoring:</div><div class="mval">00:00 – 23:59 WIB</div></div>
 </div>
 
-<!-- â”€â”€ RINGKASAN EKSEKUTIF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── RINGKASAN EKSEKUTIF ────────────────────────────────────────────── -->
 <div class="exec-title">Ringkasan Eksekutif</div>
 <hr class="exec-divider">
 <div class="exec-cards">
@@ -264,7 +264,7 @@ function printReport(report, companyName, clientName, engineerName) {
   </div>
 </div>
 
-<!-- â”€â”€ SECTION 1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── SECTION 1 ────────────────────────────────────────────────────────── -->
 <div class="section-hdr">Section 1: Status Perangkat (MikroTik Devices)</div>
 <div class="tbl-wrap" style="padding-top:6px">
   <table>
@@ -283,7 +283,7 @@ function printReport(report, companyName, clientName, engineerName) {
 <!-- PAGE 2 -->
 <div class="page2">
 
-<!-- â”€â”€ SECTION 2 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── SECTION 2 ────────────────────────────────────────────────────────── -->
 <div class="section-hdr" style="margin-top:0">Section 2: Analisis Performa</div>
 <div class="perf-grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
   <div class="perf-box">
@@ -314,7 +314,7 @@ function printReport(report, companyName, clientName, engineerName) {
   </div>
 </div>
 
-<!-- â”€â”€ SECTION 3 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── SECTION 3 ────────────────────────────────────────────────────────── -->
 <div class="section-hdr">Section 3: Incident &amp; Issue Log</div>
 <div class="tbl-wrap" style="padding-top:6px">
   <table>
@@ -325,7 +325,7 @@ function printReport(report, companyName, clientName, engineerName) {
   </table>
 </div>
 
-<!-- â”€â”€ SECTION 4 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── SECTION 4 ────────────────────────────────────────────────────────── -->
 <div class="section-hdr">Section 4: Network Availability Stats</div>
 <div class="avail-cards">
   <div class="avail-card">
@@ -358,7 +358,7 @@ function printReport(report, companyName, clientName, engineerName) {
   win.document.close();
 }
 
-// â”€â”€â”€ STATUS BADGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATUS BADGE ───────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
     online: "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400",
@@ -375,7 +375,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// â”€â”€â”€ MAIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MAIN ───────────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [period, setPeriod] = useState("daily");
   const [selectedDevice, setSelectedDevice] = useState("all");
@@ -497,7 +497,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* â”€â”€ LAPORAN PREVIEW â”€â”€ */}
+      {/* ── LAPORAN PREVIEW ── */}
       {report && s && (
         <div className="border border-border rounded-sm overflow-hidden shadow-lg">
 
@@ -505,7 +505,7 @@ export default function ReportsPage() {
           <div className="bg-[#0f172a] flex items-start justify-between px-6 py-5">
             <div>
               <h2 className="text-[22px] font-black text-white tracking-tight">{report.company_name}</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Laporan Monitoring Harian â€“ Managed Service Provider</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Laporan Monitoring Harian – Managed Service Provider</p>
               <p className="text-[10px] text-slate-500 mt-0.5">Daily Network Monitoring Report</p>
             </div>
             <div className="w-14 h-14 rounded-lg bg-blue-600 flex items-center justify-center text-xl font-black text-white flex-shrink-0">
@@ -519,7 +519,7 @@ export default function ReportsPage() {
             ["Client Name:", clientName || report.client_name || "—"],
             ["Tanggal Laporan:", tgl(new Date().toISOString())],
             ["Engineer on Duty:", engineerName || report.engineer_name || "—"],
-            ["Periode Monitoring:", "00:00 â€“ 23:59 WIB"],
+            ["Periode Monitoring:", "00:00 – 23:59 WIB"],
             ].map(([k, v]) => (
               <div key={k} className="text-xs">
                 <span className="text-muted-foreground">{k} </span>

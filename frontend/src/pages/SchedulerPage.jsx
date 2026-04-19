@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { Calendar, Clock, Save, Play, RefreshCw, CheckCircle2, XCircle, Activity,
   Wifi, Server, AlertTriangle, GitBranch, Settings2, Trash2 } from "lucide-react";
@@ -18,7 +18,7 @@ const ttStyle = {
   }
 };
 
-// â”€â”€ Tab: Backup Scheduler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab: Backup Scheduler ────────────────────────────────────────────────────────────
 function BackupTab() {
   const [config, setConfig] = useState({ enabled: true, hour_wib: 2, minute: 0, retention_days: 30 });
   const [status, setStatus] = useState(null);
@@ -185,7 +185,7 @@ function BackupTab() {
   );
 }
 
-// â”€â”€ Tab: BGP/OSPF Alert â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab: BGP/OSPF Alert ─────────────────────────────────────────────────────────────
 function RoutingAlertTab() {
   const [state, setState] = useState({ bgp: [], ospf: [] });
   const [history, setHistory] = useState([]);
@@ -293,7 +293,7 @@ function RoutingAlertTab() {
   );
 }
 
-// â”€â”€ Tab: Speed Test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tab: Speed Test ─────────────────────────────────────────────────────────────────
 function SpeedTestTab() {
   const [results, setResults] = useState([]);
   const [config, setConfig] = useState({ enabled: true, interval_minutes: 60, ping_count: 5 });
@@ -501,7 +501,7 @@ function SpeedTestTab() {
   );
 }
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Page ───────────────────────────────────────────────────────────────────────
 const TABS = [
   { id: "backup", label: "Auto Backup", icon: Calendar },
   { id: "routing", label: "BGP/OSPF Alert", icon: GitBranch },

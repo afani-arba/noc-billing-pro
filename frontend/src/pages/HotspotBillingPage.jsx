@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
-import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban } from "lucide-react";
+import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { PackagesTab } from "@/components/BillingPackages";
 import { toast } from "sonner";
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => `Rp ${parseInt(n || 0).toLocaleString("id-ID")}`;
 
 const VoucherStatusBadge = ({ status }) => {
@@ -64,11 +64,11 @@ const TabBtn = ({ active, onClick, icon: Icon, label }) => (
   </button>
 );
 
-// â”€â”€â”€ RADIUS Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── RADIUS Status Badge ───────────────────────────────────────────────────────
 const RadiusBadge = ({ enabled, loading }) => {
   if (loading) return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-muted text-muted-foreground border-border">
-      <Loader2 className="w-3 h-3 animate-spin" /> Memeriksaâ€¦
+      <Loader2 className="w-3 h-3 animate-spin" /> Memeriksa...
     </span>
   );
   return enabled
@@ -76,7 +76,7 @@ const RadiusBadge = ({ enabled, loading }) => {
     : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-red-500/10 text-red-400 border-red-500/20"><XCircle className="w-3 h-3" /> RADIUS Tidak Aktif</span>;
 };
 
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HotspotBillingPage() {
   const { user } = useAuth();
   const isViewer = user?.role === "viewer" || user?.role === "helpdesk";
@@ -622,10 +622,10 @@ export default function HotspotBillingPage() {
                 <SelectValue placeholder="Pilih metode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cash">ðŸ’µ Cash / Tunai</SelectItem>
-                <SelectItem value="transfer">ðŸ¦ Transfer Bank</SelectItem>
-                <SelectItem value="qris">ðŸ“± QRIS</SelectItem>
-                <SelectItem value="transfer_moota">ðŸ¤– Transfer (Auto-Moota)</SelectItem>
+                <SelectItem value="cash"><div className="flex items-center gap-1.5"><Banknote className="w-4 h-4"/> Tunai / Cash</div></SelectItem>
+                <SelectItem value="transfer"><div className="flex items-center gap-1.5"><Landmark className="w-4 h-4"/> Transfer Bank</div></SelectItem>
+                <SelectItem value="qris"><div className="flex items-center gap-1.5"><QrCode className="w-4 h-4"/> QRIS</div></SelectItem>
+                <SelectItem value="transfer_moota"><div className="flex items-center gap-1.5"><Bot className="w-4 h-4"/> Auto-Moota</div></SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -827,7 +827,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {vLoading ? (
                       <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuatâ€¦
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat…
                       </td></tr>
                     ) : vouchers.length === 0 ? (
                       <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
@@ -948,7 +948,7 @@ export default function HotspotBillingPage() {
                   <tbody className="divide-y divide-border">
                     {salesLoading ? (
                       <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat laporanâ€¦
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat laporan…
                       </td></tr>
                     ) : sales.length === 0 ? (
                       <tr><td colSpan={4} className="py-12 text-center text-muted-foreground">
@@ -987,7 +987,7 @@ export default function HotspotBillingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Jumlah Voucher (1â€“100)</Label>
+                <Label className="text-xs text-muted-foreground">Jumlah Voucher (1-100)</Label>
                 <Input type="number" min={1} max={100} value={form.count}
                   onChange={e => setForm({ ...form, count: parseInt(e.target.value) || 0 })}
                   className="h-9 text-sm rounded-sm" />
@@ -1116,3 +1116,4 @@ export default function HotspotBillingPage() {
     </div>
   );
 }
+

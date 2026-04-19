@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
-import { Radio, Loader2, CheckCircle2, XCircle, ShieldCheck, RefreshCw, Zap, Trash2, List, Save, Settings2 } from "lucide-react";
+import { Radio, Loader2, CheckCircle2, XCircle, ShieldCheck, RefreshCw, Zap, Trash2, List, Save, Settings2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,7 +143,7 @@ export default function RadiusSettingsPage() {
       setPushLog(r.data.steps || []);
       if (r.data.success) {
         toast.success("Konfigurasi RADIUS berhasil di-push ke MikroTik!");
-        setPushLog(prev => [...prev, "⏳ Menunggu MikroTik menerapkan konfigurasi..."]);
+        setPushLog(prev => [...prev, "[WAIT] Menunggu MikroTik menerapkan konfigurasi..."]);
         await new Promise(res => setTimeout(res, 1200));
         
         setDevRadiusMap(prev => ({ ...prev, [selectedDevice]: { ...prev[selectedDevice], loading: true } }));
@@ -157,13 +157,13 @@ export default function RadiusSettingsPage() {
           }));
 
           setPushLog(prev => prev.map(msg => 
-            msg.startsWith("⏳ Menunggu") ? "✅ MikroTik telah menerapkan konfigurasi" : msg
+            msg.startsWith("[WAIT] Menunggu") ? "[OK] MikroTik telah menerapkan konfigurasi" : msg
           ));
 
           if (statusRes.data?.radius_enabled) {
-            setPushLog(prev => [...prev, "✅ Verifikasi: RADIUS aktif dan terkonfirmasi dari MikroTik!"]);
+            setPushLog(prev => [...prev, "[OK] Verifikasi: RADIUS aktif dan terkonfirmasi dari MikroTik!"]);
           } else {
-            setPushLog(prev => [...prev, "⚠️ Verifikasi: MikroTik belum menunjukkan RADIUS aktif. Coba refresh manual."]);
+            setPushLog(prev => [...prev, "[WARN] Verifikasi: MikroTik belum menunjukkan RADIUS aktif. Coba refresh manual."]);
           }
         } catch {
           setDevRadiusMap(prev => ({ ...prev, [selectedDevice]: { ...prev[selectedDevice], loading: false } }));
@@ -265,7 +265,7 @@ export default function RadiusSettingsPage() {
 
               {radiusStatus && (
                 <div className={`rounded-md p-3 text-xs space-y-1 border ${radiusStatus.radius_enabled ? "bg-green-500/5 border-green-500/20" : "bg-amber-500/5 border-amber-500/20"}`}>
-                  <p className="font-semibold text-[13px]">{radiusStatus.radius_enabled ? "✅ RADIUS aktif" : "⚠️ RADIUS belum aktif di hotspot profile"}</p>
+                  <p className="font-semibold text-[13px] flex items-center gap-1.5">{radiusStatus.radius_enabled ? <><CheckCircle2 className="w-4 h-4 text-green-500" /> RADIUS aktif</> : <><AlertTriangle className="w-4 h-4 text-amber-500" /> RADIUS belum aktif di hotspot profile</>}</p>
                   {radiusStatus.radius_enabled && <p className="text-muted-foreground">Hotspot Profile: <span className="text-primary font-mono">{radiusStatus.active_profile || "?"}</span></p>}
                 </div>
               )}

@@ -69,7 +69,7 @@ const navItems = [
   { to: "/admin/license",  icon: ShieldAlert,     label: "Lisensi Sistem",         serviceKey: "license",        adminOnly: true },
 ];
 
-// â”€â”€â”€ SidebarContent sebagai komponen TERPISAH di luar Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SidebarContent sebagai komponen TERPISAH di luar Layout ──────────────────
 // PENTING: jangan definisikan komponen di dalam komponen lain —
 // setiap render akan dianggap komponen baru → remount → scroll reset
 function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
@@ -168,7 +168,7 @@ function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
   );
 }
 
-// â”€â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Layout ───────────────────────────────────────────────────────────────────
 export default function Layout() {
   const { user, logout } = useAuth();
   const { edition, edition_name, features } = useEdition();

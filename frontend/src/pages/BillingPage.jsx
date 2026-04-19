@@ -1850,14 +1850,14 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                           value={form.package_id} 
                           onChange={e => set("package_id", e.target.value)}
                           className="w-full h-9 text-xs rounded-sm border border-border/50 bg-background px-3 text-emerald-500 font-bold focus:ring-1 focus:ring-emerald-500/30 outline-none transition-all">
-                          <option value="">â€” Belum ada paket dipilih â€”</option>
+                          <option value=""> Belum ada paket dipilih </option>
                           {filteredPkgs.map(p => (
                             <option key={p.id} value={p.id} className="text-foreground">{p.name} ({Rp(p.price)})</option>
                           ))}
                         </select>
                         {form.device_id && filteredPkgs.length === 0 && (
                            <p className="text-[10px] text-amber-500 mt-1 font-bold">
-                             âš ï¸ Router ini belum memiliki paket. Buat atau Sync Paket terlebih dahulu!
+                             ⚠️ Router ini belum memiliki paket. Buat atau Sync Paket terlebih dahulu!
                            </p>
                         )}
                       </>
@@ -2123,7 +2123,7 @@ function ImportModal({ onClose, onImported }) {
                     ))}
                   </div>
                   <p className="text-[10px] text-red-400/70 italic">Tutup dialog ini → buka Tab Paket → isi harga → buka kembali dialog ini</p>
-                  <p className="text-[10px] text-red-400/70 italic">Tutup dialog ini â†’ buka Tab Paket â†’ isi harga â†’ buka kembali dialog ini</p>
+
                 </div>
               )}
             </>
@@ -2135,7 +2135,7 @@ function ImportModal({ onClose, onImported }) {
           </div>
           {result && (
             <div className="p-2 bg-green-500/10 border border-green-500/20 rounded-sm text-xs text-green-300">
-              âœ“ {result.message}
+              ✓ {result.message}
             </div>
           )}
         </div>
@@ -2157,7 +2157,7 @@ function ImportModal({ onClose, onImported }) {
 }
 
 
-// â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+// 
 
 function BulkReminderModal({ invoices, onClose }) {
   const [sending, setSending] = useState(false);
@@ -2192,7 +2192,7 @@ function BulkReminderModal({ invoices, onClose }) {
             Akan mengirim pesan tagihan ke <strong className="text-foreground">{invoices.length} pelanggan</strong> yang belum bayar dan memiliki nomor telepon.
           </p>
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-sm p-3 text-xs text-blue-400">
-            â„¹ï¸ Proses pengiriman akan berjalan bertahap secara otomatis di server (*Background Task*). Anda bebas menutup modal/tab ini setelah menekan "Kirim Semua".
+            ℹï¸ Proses pengiriman akan berjalan bertahap secara otomatis di server (*Background Task*). Anda bebas menutup modal/tab ini setelah menekan "Kirim Semua".
           </div>
           <div className="max-h-48 overflow-y-auto space-y-1.5 border border-border rounded-sm p-2">
             {invoices.map((inv, i) => (
@@ -2606,7 +2606,7 @@ function PpoeMonitoringTab({ deviceId }) {
                     : `${actives.length} sesi PPPoE aktif`}
                   {actives.filter(a => a.is_radius).length > 0 && (
                     <span className="ml-2 text-purple-400">
-                      â€¢ {actives.filter(a => a.is_radius).length} via RADIUS
+                      • {actives.filter(a => a.is_radius).length} via RADIUS
                     </span>
                   )}
                 </span>

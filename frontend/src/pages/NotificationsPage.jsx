@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import api from "@/lib/api";
-import { Bell, Plus, Trash2, Send, Save, Phone, Settings2, AlertTriangle, Info, Activity, Network, MessageSquare, Bot } from "lucide-react";
+import { Bell, Plus, Trash2, Send, Save, Phone, Settings2, AlertTriangle, Info, Activity, Network, MessageSquare, Bot, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +30,7 @@ function PhoneRow({ r, idx, onChange, onRemove }) {
         onClick={() => onChange(idx, "active", !r.active)}
         title={r.active ? "Nonaktifkan" : "Aktifkan"}
       >
-        {r.active ? "âœ“" : "âœ—"}
+        {r.active ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
       </button>
       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onRemove(idx)}>
         <Trash2 className="w-3.5 h-3.5" />
@@ -337,7 +337,7 @@ export default function NotificationsPage() {
               </div>
             </div>
 
-            {/* Interface picker â€“ hanya tampil jika toggle aktif */}
+            {/* Interface picker - hanya tampil jika toggle aktif */}
             {settings.notify_interface_down && (
               <div className="border border-t-0 border-border/50 rounded-b-sm p-3 bg-secondary/10 space-y-2">
                 <div className="flex items-center gap-2">
@@ -377,7 +377,7 @@ export default function NotificationsPage() {
                                 : "bg-secondary text-muted-foreground border-border hover:border-orange-500/30"
                             }`}
                           >
-                            {isWatched && "âœ“ "}{iface}
+                            {isWatched && <Check className="w-3 h-3 inline mr-1" />}{iface}
                           </button>
                         );
                       })}
@@ -394,7 +394,7 @@ export default function NotificationsPage() {
                           className="text-[10px] rounded-sm font-mono text-orange-400 border-orange-500/30 cursor-pointer"
                           onClick={() => toggleInterface(i)}
                         >
-                          {i} âœ•
+                          {i} <X className="w-2.5 h-2.5 inline ml-1" />
                         </Badge>
                       ))}
                     </div>
@@ -406,7 +406,7 @@ export default function NotificationsPage() {
 
         </div>
         <p className="text-[10px] text-muted-foreground/70 pt-1 border-t border-border/50">
-          â„¹ï¸ Alert tidak akan dikirim ulang selama kondisi masih berlanjut. Sistem baru kirim ulang setelah kondisi kembali normal lalu muncul lagi.
+          ℹï¸ Alert tidak akan dikirim ulang selama kondisi masih berlanjut. Sistem baru kirim ulang setelah kondisi kembali normal lalu muncul lagi.
         </p>
       </div>
 

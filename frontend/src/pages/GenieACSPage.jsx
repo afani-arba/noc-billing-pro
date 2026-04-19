@@ -16,7 +16,7 @@ import {
   ShieldCheck, Sparkles, Phone, MapPin, CalendarDays, Package
 } from "lucide-react";
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function timeAgo(isoStr) {
   if (!isoStr) return "—";
@@ -55,7 +55,7 @@ function RxPowerBadge({ value }) {
   );
 }
 
-// â”€â”€ Stats Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Stats Bar ─────────────────────────────────────────────────────────────────
 
 function StatsBar({ stats, loading }) {
   const items = [
@@ -76,7 +76,7 @@ function StatsBar({ stats, loading }) {
   );
 }
 
-// â”€â”€ Device Detail / Edit Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Device Detail / Edit Modal ────────────────────────────────────────────────
 
 function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
   const [form, setForm] = useState({
@@ -987,7 +987,7 @@ function DeviceRow({ device, isAdmin, onOpenModal, onActivate }) {
   );
 }
 
-// â”€â”€ Faults Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Faults Tab ────────────────────────────────────────────────────────────────
 
 function FaultsTab() {
   const [faults, setFaults] = useState([]);
@@ -1114,7 +1114,7 @@ function FaultsTab() {
 }
 
 
-// â”€â”€ Server Config Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Server Config Tab ─────────────────────────────────────────────────────────
 
 function ServerConfigTab() {
   const [cfg, setCfg] = useState({ url: "", username: "", password: "", sync_interval_mins: 30 });
@@ -1281,7 +1281,7 @@ function ServerConfigTab() {
   );
 }
 
-// â”€â”€ Guide Tab (Advanced Features) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Guide Tab (Advanced Features) ──────────────────────────────────────────────
 
 function GuideTab() {
   return (
@@ -1330,7 +1330,7 @@ function GuideTab() {
   );
 }
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GenieACSPage() {
   const { user } = useAuth();
@@ -1350,7 +1350,7 @@ export default function GenieACSPage() {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [ztpDevice, setZtpDevice] = useState(null); // ONT yang akan diaktivasi via ZTP
 
-  // â”€â”€â”€ Bulk Reboot state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Bulk Reboot state ────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkRebooting, setBulkRebooting] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
@@ -1378,7 +1378,7 @@ export default function GenieACSPage() {
       return !isNaN(rx) && rx < -26.99;
     });
   }, [devices]);
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const fetchDevices = useCallback(async () => {
     setLoading(true);
@@ -1407,7 +1407,7 @@ export default function GenieACSPage() {
     setSearch(searchInput.trim());
   };
 
-  // â”€â”€â”€ Bulk selection helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Bulk selection helpers ───────────────────────────────────────────────────
   const offlineDevices = devices.filter(d => !d.online);
 
   const toggleSelect = (id) => {
@@ -1439,7 +1439,7 @@ export default function GenieACSPage() {
     }
     setBulkRebooting(false);
   };
-  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const tabs = [
     { id: "devices", label: "CPE Devices", icon: Cpu },
