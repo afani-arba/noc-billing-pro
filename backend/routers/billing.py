@@ -2588,47 +2588,66 @@ async def get_whatsapp_link(invoice_id: str, user=Depends(get_current_user)):
 async def get_hotspot_public_config():
     """
     Endpoint PUBLIK untuk Captive Portal MikroTik (tanpa auth).
-    [HOTFIX 2026-04-11] Baca dari hotspot_settings agar payment_enabled,
-    bank_info, dan branding portal tersinkron dengan konfigurasi admin hotspot.
-    Fallback ke billing_packages jika hotspot_settings.packages kosong.
+    [FIX 2026-04-19] Billing settings dibaca PER-DEVICE, bukan GLOBAL.
+    hotspot_settings menyimpan device_id dari device yang aktifkan hotspot.
+    Fallback: cari billing_settings device manapun yang punya payment_gateway_enabled=True.
     """
     db = get_db()
 
     # 1. Baca hotspot_settings — sumber kebenaran untuk payment & branding
     hs = await db.hotspot_settings.find_one({}, {"_id": 0}) or {}
-    bs = await fetch_billing_settings(db, None)
+
+    # 2. Cari billing_settings per-device:
+    #    - Prioritas: device_id yang sama dengan hotspot_settings (jika ada)
+    #    - Fallback 1: device manapun yang punya payment_gateway_enabled=True atau moota_webhook_secret terisi
+    #    - Fallback 2: GLOBAL
+    bs = {}
+    hs_device_id = hs.get("device_id")
+    
+    if hs_device_id:
+        bs = await fetch_billing_settings(db, hs_device_id)
+    
+    # Jika tidak ada device_id di hs, atau bs dari device itu tidak punya payment aktif,
+    # cari billing_settings device apapun yang payment_gateway_enabled=True
+    if not bs.get("payment_gateway_enabled") and not bs.get("moota_webhook_secret"):
+        # Cari semua billing_settings, prioritaskan yang punya payment aktif
+        all_bs = await db.billing_settings.find({}, {"_id": 0}).to_list(length=50)
+        for candidate_bs in all_bs:
+            if candidate_bs.get("payment_gateway_enabled") or candidate_bs.get("moota_webhook_secret"):
+                bs = candidate_bs
+                break
+        # Jika belum ada yang aktif, pakai GLOBAL sebagai fallback terakhir
+        if not bs:
+            bs = await fetch_billing_settings(db, None)
 
     # WA Number: prioritas dari hotspot_settings
     wa_number = (hs.get("wa_number") or "").strip()
     if not wa_number:
-        # Fallback ke billing_settings jika hotspot_settings belum punya WA
         wa_number = (bs.get("whatsapp") or bs.get("phone") or "6282228304543").strip()
 
-    # 3. Payment info: Tersinkronisasi dengan Payment Gateway & Moota Mutasi (keduanya ada di dalam satu checkbox sekarang)
-    is_gateway_active = bs.get("payment_gateway_enabled", False)
-    payment_enabled = hs.get("payment_enabled", False) or is_gateway_active
+    # 3. Payment: aktif jika payment_gateway_enabled=True ATAU moota_webhook_secret terisi
+    is_gateway_active = bool(bs.get("payment_gateway_enabled")) or bool((bs.get("moota_webhook_secret") or "").strip())
+    payment_enabled = bool(hs.get("payment_enabled")) or is_gateway_active
     
     bank_info = None
     if payment_enabled:
         bank_info = {
-            "bank_name":      hs.get("bank_name") or "Bank",
-            "account_number": hs.get("bank_account_number") or bs.get("bank_account") or "Auto Gateway",
-            "account_name":   hs.get("bank_account_name") or "Sistem",
+            "bank_name":      hs.get("bank_name") or bs.get("bank_name") or "Bank",
+            "account_number": hs.get("bank_account_number") or hs.get("bank_number") or bs.get("bank_account") or "Auto Gateway",
+            "account_name":   hs.get("bank_account_name") or bs.get("bank_account_name") or "Sistem",
         }
 
-    # 4. Packages: Selalu ambil dari billing_packages sebagai sumber kebenaran (source of truth) untuk properti paket (seperti price dan profile)
+    # 4. Packages: ambil dari billing_packages sebagai sumber kebenaran
     pkgs_cursor = db.billing_packages.find(
         {"service_type": {"$in": ["hotspot", "both"]}, "active": {"$ne": False}}
     )
     all_hotspot_pkgs = await pkgs_cursor.to_list(length=100)
     
-    # Buat lookup table untuk mengisi ulang (enrich) properti yang hilang
     bp_dict = {p.get("name"): p for p in all_hotspot_pkgs if p.get("name")}
 
     hs_packages = hs.get("packages", [])
     packages = []
     
-    # Jika frontend telah menyimpan filter paket ke hotspot_settings, gunakan urutan tersebut namun lengkapi propertinya
     if hs_packages:
         for hp in hs_packages:
             name = hp.get("name")
@@ -2642,7 +2661,6 @@ async def get_hotspot_public_config():
                 "profile":      hp.get("profile") or bp.get("profile_name") or bp.get("profile") or bp.get("hotspot_profile") or name
             })
     else:
-        # Fallback semua paket aktif
         for p in all_hotspot_pkgs:
             packages.append({
                 "name":         p.get("name"),
