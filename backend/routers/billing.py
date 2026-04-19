@@ -3,13 +3,14 @@ Billing router: kelola paket berlangganan dan invoice tagihan pelanggan.
 Endpoint prefix: /billing
 """
 import uuid
-from datetime import datetime, timezone, date
+import random
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 import httpx
 import asyncio
 import logging
 import json
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, Request
 from pydantic import BaseModel
 from core.db import get_db
 from core.auth import (
@@ -2683,7 +2684,148 @@ async def get_hotspot_public_config():
     }
 
 
-# ── Hotspot Voucher Orders (dari AI CS WhatsApp) ─────────────────────────────
+# ── Hotspot Portal: Create Order (Captive Portal — tanpa auth) ───────────────
+
+class HotspotCreateOrderPayload(BaseModel):
+    package_name: str
+    package_price: int
+    package_profile: Optional[str] = "default"
+    package_validity: Optional[str] = ""
+    uptime_limit: Optional[str] = ""
+    device_id: Optional[str] = ""
+    customer_phone: Optional[str] = ""
+
+@webhook_router.post("/hotspot-create-order")
+async def hotspot_create_order(payload: HotspotCreateOrderPayload):
+    """
+    Endpoint PUBLIK untuk Captive Portal: buat order voucher hotspot berbasis Moota.
+    Dipanggil dari login.html saat pengguna klik 'Beli Sekarang'.
+    Response: order_id, total, bank_name, account_number, account_name, timeout_minutes
+    """
+    db = get_db()
+
+    # 1. Ambil billing_settings (per-device, fallback cari yg payment aktif)
+    hs = await db.hotspot_settings.find_one({}, {"_id": 0}) or {}
+    bs = {}
+    hs_device_id = hs.get("device_id")
+    if hs_device_id:
+        bs = await fetch_billing_settings(db, hs_device_id)
+    if not bs.get("payment_gateway_enabled") and not bs.get("moota_webhook_secret"):
+        all_bs = await db.billing_settings.find({}, {"_id": 0}).to_list(length=50)
+        for candidate in all_bs:
+            if candidate.get("payment_gateway_enabled") or candidate.get("moota_webhook_secret"):
+                bs = candidate
+                break
+    if not bs:
+        bs = await fetch_billing_settings(db, None)
+
+    # 2. Ambil info bank dari hotspot_settings atau billing_settings
+    bank_name      = hs.get("bank_name") or bs.get("bank_name") or "Bank Transfer"
+    account_number = hs.get("bank_account_number") or hs.get("bank_number") or bs.get("bank_account") or "Hubungi Admin"
+    account_name   = hs.get("bank_account_name") or bs.get("bank_account_name") or "Admin"
+
+    # 3. Kode unik Moota (1–500) + hitung total
+    unique_code = random.randint(1, 500)
+    total = payload.package_price + unique_code
+
+    # 4. Generate kode voucher hotspot (pre-generate, dikirim setelah bayar)
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    vc_user = "VC" + "".join(random.choices(chars, k=6))
+    vc_pass = vc_user
+
+    # 5. Nomor invoice
+    today = datetime.now(timezone.utc).date()
+    period_prefix = f"{today.year}-{today.month:02d}"
+    count = await db.hotspot_invoices.count_documents({"period_start": {"$regex": f"^{period_prefix}"}})
+    invoice_number = f"VCH-{today.year}-{today.month:02d}-{(count + 1):04d}"
+
+    timeout_minutes = int(hs.get("payment_timeout_minutes") or 60)
+    due_dt = datetime.now(timezone.utc) + timedelta(minutes=timeout_minutes)
+
+    # 6. Simpan invoice di hotspot_invoices (koleksi sama dgn WA CS)
+    order_id = str(uuid.uuid4())
+    invoice = {
+        "id": order_id,
+        "invoice_number": invoice_number,
+        "customer_name": f"Portal-{vc_user}",
+        "customer_phone": (payload.customer_phone or "").strip(),
+        "customer_id": None,
+        "package_name": payload.package_name,
+        "profile_name": payload.package_profile or "default",
+        "uptime_limit": payload.uptime_limit or "",
+        "validity": payload.package_validity or "",
+        "amount": payload.package_price,
+        "discount": 0,
+        "unique_code": unique_code,
+        "total": total,
+        "voucher_username": vc_user,
+        "voucher_password": vc_pass,
+        "voucher_sent": False,
+        "period_start": today.isoformat(),
+        "period_end": today.isoformat(),
+        "due_date": due_dt.isoformat(),
+        "status": "unpaid",
+        "payment_method": "transfer_moota",
+        "source": "captive_portal",
+        "notes": f"Order dari Captive Portal — {payload.package_name}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.hotspot_invoices.insert_one(invoice)
+
+    return {
+        "order_id":        order_id,
+        "invoice_number":  invoice_number,
+        "total":           total,
+        "unique_code":     unique_code,
+        "bank_name":       bank_name,
+        "account_number":  account_number,
+        "account_name":    account_name,
+        "timeout_minutes": timeout_minutes,
+    }
+
+
+@webhook_router.get("/hotspot-order-status/{order_id}")
+async def hotspot_order_status(order_id: str):
+    """
+    Endpoint PUBLIK untuk Captive Portal: cek status pembayaran order voucher.
+    Dipoll setiap 3 detik oleh login.html.
+    Response: status ('unpaid'|'paid'|'expired'), voucher_code (jika paid)
+    """
+    db = get_db()
+    inv = await db.hotspot_invoices.find_one({"id": order_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Order tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+    status = inv.get("status", "unpaid")
+
+    # Cek expired berdasarkan due_date
+    if status == "unpaid":
+        try:
+            due = datetime.fromisoformat(inv["due_date"].replace("Z", "+00:00"))
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+            if now > due:
+                status = "expired"
+                await db.hotspot_invoices.update_one(
+                    {"id": order_id},
+                    {"$set": {"status": "expired", "updated_at": now.isoformat()}}
+                )
+        except Exception:
+            pass
+
+    if status == "paid":
+        return {
+            "status":          "paid",
+            "voucher_code":    inv.get("voucher_username", ""),
+            "voucher_password": inv.get("voucher_password", inv.get("voucher_username", "")),
+        }
+
+    return {"status": status}
+
+
+
 
 @router.get("/voucher-orders")
 async def list_voucher_orders(
