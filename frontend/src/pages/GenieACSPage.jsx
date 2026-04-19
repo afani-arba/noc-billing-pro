@@ -360,8 +360,6 @@ function ZTPModal({ device, onClose, onSuccess }) {
   const [result, setResult] = useState(null);
   const [showPppPwd, setShowPppPwd] = useState(false);
   const [showWifiPwd, setShowWifiPwd] = useState(false);
-  const [mtProfiles, setMtProfiles] = useState([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -370,7 +368,6 @@ function ZTPModal({ device, onClose, onSuccess }) {
     pppoe_username: "",
     pppoe_password: generatePassword(),
     mikrotik_device_id: "",
-    mikrotik_profile: "",
     package_id: "",
     due_day: 10,
     ssid: device.ssid || "",
@@ -383,29 +380,7 @@ function ZTPModal({ device, onClose, onSuccess }) {
     use_radius: true,
   });
 
-  useEffect(() => {
-    if (form.mikrotik_device_id) {
-      setLoadingProfiles(true);
-      api.get(`/genieacs/mikrotik-profiles/${form.mikrotik_device_id}`)
-        .then(r => {
-          setMtProfiles(r.data || []);
-          setLoadingProfiles(false);
-        })
-        .catch(() => setLoadingProfiles(false));
-    } else {
-      setMtProfiles([]);
-    }
-  }, [form.mikrotik_device_id]);
 
-  // Auto-select PPP Profile when package changes
-  useEffect(() => {
-    if (form.package_id && options.billing_packages.length > 0) {
-      const pkg = options.billing_packages.find(p => p.id === form.package_id);
-      if (pkg && pkg.profile_name) {
-        setForm(f => ({ ...f, mikrotik_profile: pkg.profile_name }));
-      }
-    }
-  }, [form.package_id, options.billing_packages]);
 
   const handleNameChange = (val) => {
     setForm(f => ({
@@ -433,7 +408,7 @@ function ZTPModal({ device, onClose, onSuccess }) {
     if (!form.pppoe_username.trim()) return toast.error("Username PPPoE wajib diisi");
     if (!form.pppoe_password.trim()) return toast.error("Password PPPoE wajib diisi");
     if (!form.mikrotik_device_id) return toast.error("Pilih router MikroTik terlebih dahulu");
-    if (!form.mikrotik_profile) return toast.error("Pilih profile PPP MikroTik");
+    if (!form.package_id) return toast.error("Pilih Paket Layanan NOC terlebih dahulu");
 
     setSubmitting(true);
     setSteps([
@@ -601,19 +576,20 @@ function ZTPModal({ device, onClose, onSuccess }) {
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[10px] text-muted-foreground uppercase">PPP Profile (MikroTik) <span className="text-destructive">*</span></Label>
-                    {loadingProfiles ? (
+                    <Label className="text-[10px] text-muted-foreground uppercase">Paket Layanan (Profile NOC) <span className="text-destructive">*</span></Label>
+                    {loadingOptions ? (
                       <div className="h-8 bg-secondary/30 rounded-sm animate-pulse" />
                     ) : (
                       <select
-                        value={form.mikrotik_profile}
-                        disabled={!form.mikrotik_device_id}
-                        onChange={e => setForm(f => ({ ...f, mikrotik_profile: e.target.value }))}
-                        className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground"
+                        value={form.package_id}
+                        onChange={e => setForm(f => ({ ...f, package_id: e.target.value }))}
+                        className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground font-semibold"
                       >
-                        <option value="">-- Pilih Profile --</option>
-                        {mtProfiles.map(p => (
-                          <option key={p.name} value={p.name}>{p.name}</option>
+                        <option value="">-- Pilih Paket Layanan NOC --</option>
+                        {options.billing_packages.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} — {p.speed_down}/{p.speed_up} — Rp {p.price?.toLocaleString("id-ID")}
+                          </option>
                         ))}
                       </select>
                     )}
@@ -674,26 +650,7 @@ function ZTPModal({ device, onClose, onSuccess }) {
                   <Package className="w-3.5 h-3.5" /> Paket & Biaya Langganan
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label className="text-[10px] text-muted-foreground uppercase">Paket Berlangganan</Label>
-                    {loadingOptions ? (
-                      <div className="h-8 bg-secondary/30 rounded-sm animate-pulse" />
-                    ) : (
-                      <select
-                        value={form.package_id}
-                        onChange={e => setForm(f => ({ ...f, package_id: e.target.value }))}
-                        className="w-full h-8 text-xs rounded-sm border border-input bg-background px-2 text-foreground"
-                      >
-                        <option value="">-- Pilih Paket (opsional) --</option>
-                        {options.billing_packages.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} — {p.speed_down}/{p.speed_up} — Rp {p.price?.toLocaleString("id-ID")}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                  
+
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground uppercase">Biaya Pasang (Rp)</Label>
                     <Input 
