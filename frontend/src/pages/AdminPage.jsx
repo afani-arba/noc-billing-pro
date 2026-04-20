@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Plus, Pencil, Trash2, RefreshCw, Shield, Eye, User, Server, Check,
   Activity, Wifi, WifiOff, Clock, MapPin, Bell, LogOut, ToggleLeft,
@@ -87,6 +88,8 @@ const EMPTY_FORM = {
 };
 
 export default function AdminPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -310,11 +313,11 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Users className="w-7 h-7 text-primary" />
-              User Management
+            <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2 ${ isCyber ? "gradient-text font-mono" : "" }`}>
+              <Users className={`w-7 h-7 ${ isCyber ? "" : "text-primary" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+              {isCyber ? "> User Management" : "User Management"}
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            <p className={`text-xs sm:text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>
               Kelola akun staf, role akses, device & service yang diizinkan
             </p>
           </div>
@@ -333,7 +336,7 @@ export default function AdminPage() {
           {Object.entries(roleConfig).map(([role, cfg]) => {
             const count = users.filter(u => u.role === role).length;
             return (
-              <div key={role} className={`bg-card border rounded-sm p-3 ${cfg.bg}`}>
+              <div key={role} className={`rounded-sm p-3 ${ isCyber ? `glass-card` : `bg-card border`} ${cfg.bg}`}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <cfg.icon className={`w-4 h-4 ${cfg.color}`} />
                   <span className="text-[10px] text-muted-foreground truncate">{cfg.label}</span>
@@ -357,7 +360,7 @@ export default function AdminPage() {
 
           {/* ── Users Tab ─────────────────────────────────────────────────── */}
           <TabsContent value="users">
-            <div className="bg-card border border-border rounded-sm overflow-x-auto">
+          <div className={`overflow-x-auto ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">

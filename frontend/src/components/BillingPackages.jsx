@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
+import { useTheme } from "@/context/ThemeContext";
 import { 
   Plus, RefreshCw, Edit2, Trash2, X, Package, Save, Router
 } from "lucide-react";
@@ -13,6 +14,8 @@ const Rp = (n) => `Rp ${(Number(n) || 0).toLocaleString("id-ID")}`;
 
 // ── PackageForm ────────────────────────────────────────────────────────────────
 export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "pppoe" }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [formTab, setFormTab] = useState("basic");
   const [form, setForm] = useState({
     name:               initial?.name || "",
@@ -87,7 +90,7 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-sm w-full max-w-md shadow-2xl flex flex-col max-h-[92vh]">
+      <div className={`w-full max-w-md shadow-2xl flex flex-col max-h-[92vh] ${ isCyber ? "glass-modal rounded-xl border border-[rgba(0,230,118,0.2)]" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
           <h3 className="font-semibold">{isEdit ? "Edit Paket" : "Tambah Paket"}</h3>
           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose}>
@@ -508,6 +511,8 @@ function TableHeader({ defaultServiceType }) {
 
 // ── PackagesTab ───────────────────────────────────────────────────────────────
 export function PackagesTab({ packages, onRefresh, deviceId, defaultServiceType = "pppoe" }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [showForm, setShowForm] = useState(false);
   const [editPkg, setEditPkg] = useState(null);
   const [devices, setDevices] = useState([]);
@@ -621,7 +626,7 @@ export function PackagesTab({ packages, onRefresh, deviceId, defaultServiceType 
           {Object.entries(deviceGroups).map(([devId, group]) => {
             const zeroPriceCount = group.packages.filter(p => !p.price || p.price === 0).length;
             return (
-              <div key={devId} className="border border-border rounded-sm overflow-hidden">
+              <div key={devId} className={`overflow-hidden ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
                 <div className={`flex items-center justify-between px-3 py-2 border-b ${zeroPriceCount > 0 ? "bg-amber-500/10 border-amber-500/20" : "bg-secondary/40 border-border"}`}>
                   <div className="flex items-center gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${zeroPriceCount > 0 ? "bg-amber-400" : "bg-blue-400"}`} />

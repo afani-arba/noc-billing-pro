@@ -6,11 +6,14 @@ import {
   GitBranch, Terminal, Package,
   ArrowUpCircle, Loader2, History, GitCommit, User
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 // ── Komponen helper ───────────────────────────────────────────────────────────
 function Card({ children, className = "" }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   return (
-    <div className={`rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur p-5 ${className}`}>
+    <div className={`rounded-xl p-5 ${ isCyber ? "glass-card border-none" : "border border-white/10 bg-white/[0.03] backdrop-blur" } ${className}`}>
       {children}
     </div>
   );
@@ -35,6 +38,8 @@ function StatusBadge({ status }) {
 
 // ── Halaman utama ─────────────────────────────────────────────────────────────
 export default function UpdatePage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [appInfo, setAppInfo]         = useState(null);
   const [updateInfo, setUpdateInfo]   = useState(null);
   const [status, setStatus]           = useState("idle");
@@ -232,25 +237,24 @@ export default function UpdatePage() {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div
-      className="min-h-screen p-4 sm:p-6 space-y-5"
-      style={{ background: "linear-gradient(135deg, #020817 0%, #0a1628 100%)" }}
+      className="max-w-4xl mx-auto space-y-6 pb-20"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center">
-            <Package className="w-5 h-5 text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Update Aplikasi</h1>
-            <p className="text-xs text-slate-400">NOC Sentinel v3</p>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6">
+        <div>
+          <h1 className={`text-3xl font-bold tracking-tight flex items-center gap-3 ${ isCyber ? "gradient-text font-mono" : "text-white" }`}>
+            <Package className={`w-8 h-8 ${ isCyber ? "" : "text-blue-500" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+            {isCyber ? "> System Updater" : "System Updater"}
+          </h1>
+          <p className={`mt-2 text-sm ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-slate-400" }`}>
+            Update core engine NOC Billing Sentinel ke versi terbaru dari GitHub secara otomatis.
+          </p>
         </div>
         <StatusBadge status={status} />
       </div>
 
       {/* Versi Info + Aksi */}
-      <Card>
+      <Card className={isCyber ? "border-[hsl(162,100%,50%)]/30 bg-black/40" : ""}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Info versi */}
           <div className="space-y-1.5">

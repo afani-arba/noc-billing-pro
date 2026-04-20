@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
+import { useTheme } from "@/context/ThemeContext";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,14 +34,14 @@ const VoucherStatusBadge = ({ status }) => {
   );
 };
 
-const SummaryCard = ({ icon: Icon, label, value, color }) => (
-  <div className="bg-card border border-border rounded-lg p-4 flex items-center gap-4">
+const SummaryCard = ({ icon: Icon, label, value, color, isCyber }) => (
+  <div className={isCyber ? "glass-card p-4 flex items-center gap-4" : "bg-card border border-border rounded-lg p-4 flex items-center gap-4"}>
     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
       <Icon className="w-5 h-5" />
     </div>
     <div className="min-w-0">
-      <p className="text-xs text-muted-foreground truncate">{label}</p>
-      <p className="text-xl font-bold leading-tight">{value}</p>
+      <p className={`text-xs truncate ${ isCyber ? "font-mono text-[hsl(162,100%,35%)]" : "text-muted-foreground" }`}>{label}</p>
+      <p className={`text-xl font-bold leading-tight ${ isCyber ? "font-mono text-[hsl(162,100%,75%)]" : "" }`}>{value}</p>
     </div>
   </div>
 );
@@ -51,13 +52,17 @@ const RpIcon = ({ className = "w-5 h-5" }) => (
   </div>
 );
 
-const TabBtn = ({ active, onClick, icon: Icon, label }) => (
+const TabBtn = ({ active, onClick, icon: Icon, label, isCyber }) => (
   <button
     onClick={onClick}
     className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
       active
-        ? "border-primary text-primary"
-        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+        ? isCyber
+          ? "border-[hsl(162,100%,50%)] text-[hsl(162,100%,50%)] font-mono"
+          : "border-primary text-primary"
+        : isCyber
+          ? "border-transparent text-muted-foreground hover:text-[hsl(162,100%,50%)] hover:border-[rgba(0,230,118,0.3)] font-mono"
+          : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
     }`}
   >
     <Icon className="w-4 h-4" />{label}
@@ -78,6 +83,8 @@ const RadiusBadge = ({ enabled, loading }) => {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HotspotBillingPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { user } = useAuth();
   const isViewer = user?.role === "viewer" || user?.role === "helpdesk";
 
@@ -495,10 +502,11 @@ export default function HotspotBillingPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Wifi className="w-7 h-7 text-primary" /> Hotspot Billing
+          <h1 className={`text-2xl font-bold tracking-tight flex items-center gap-2 ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            <Wifi className={`w-7 h-7 ${ isCyber ? "" : "text-primary" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+            {isCyber ? "> Hotspot Billing" : "Hotspot Billing"}
           </h1>
-          <p className="text-sm text-muted-foreground">Manage your vouchers, sales, and hotspot packages</p>
+          <p className={`text-sm ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Manage your vouchers, sales, and hotspot packages</p>
         </div>
         <div className="flex items-center gap-3">
           {loadingDevices ? (
@@ -626,169 +634,6 @@ export default function HotspotBillingPage() {
                 <SelectItem value="transfer"><div className="flex items-center gap-1.5"><Landmark className="w-4 h-4"/> Transfer Bank</div></SelectItem>
                 <SelectItem value="qris"><div className="flex items-center gap-1.5"><QrCode className="w-4 h-4"/> QRIS</div></SelectItem>
                 <SelectItem value="transfer_moota"><div className="flex items-center gap-1.5"><Bot className="w-4 h-4"/> Auto-Moota</div></SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWaPayModal(null)}>Batal</Button>
-            <Button onClick={() => markWaOrderPaid(waPayModal.id, waPayMethod)}
-              className="bg-green-600 hover:bg-green-700 text-white">
-              <CheckCircle2 className="w-4 h-4 mr-1.5" /> Konfirmasi Lunas
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Tabs */}
-      <div className="flex border-b border-border overflow-x-auto no-scrollbar">
-        {tabs.map(t => (
-          <TabBtn key={t.id} active={activeTab === t.id} onClick={() => setActiveTab(t.id)} icon={t.icon} label={t.label} />
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      <div className="min-h-[400px]">
-
-        {activeTab === "wa_orders" && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
-              <div>
-                <h2 className="text-base font-semibold flex items-center gap-2">
-                  <ShoppingCart className="w-4 h-4 text-green-400" /> Pembelian Online
-                </h2>
-              </div>
-              {/* Search */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="relative">
-                  <Input
-                    placeholder="Cari nama, no HP, invoice..."
-                    value={waSearch}
-                    onChange={e => setWaSearch(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && fetchWaOrders()}
-                    className="h-8 text-xs rounded-sm w-52 pr-7"
-                  />
-                  {waSearch && (
-                    <button onClick={() => { setWaSearch(""); setTimeout(fetchWaOrders, 50); }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      <XCircle className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-                {["", "unpaid", "paid"].map(f => (
-                  <button key={f} onClick={() => setWaOrdersFilter(f)}
-                    className={`text-[10px] font-semibold px-2.5 py-1 rounded-sm border transition-all ${
-                      waOrdersFilter === f
-                        ? f === "paid" ? "border-green-500/40 text-green-400 bg-green-500/10"
-                          : f === "unpaid" ? "border-amber-500/40 text-amber-400 bg-amber-500/10"
-                          : "border-border text-foreground bg-muted"
-                        : "border-border/30 text-muted-foreground/50"
-                    }`}>
-                    {f === "" ? "Semua" : f === "unpaid" ? "Belum Bayar" : "Sudah Bayar"}
-                  </button>
-                ))}
-                <button onClick={fetchWaOrders}
-                  className="text-[10px] px-2 py-1 rounded-sm border border-border text-muted-foreground hover:text-foreground">
-                  <RefreshCw className={`w-3 h-3 inline ${waOrdersLoading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-widest text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 text-left">No. Invoice</th>
-                      <th className="px-4 py-3 text-left">Pelanggan</th>
-                      <th className="px-4 py-3 text-left">Paket</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      <th className="px-4 py-3 text-left">Dibuat</th>
-                      <th className="px-4 py-3 text-center">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {waOrdersLoading ? (
-                      <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat pesanan...
-                      </td></tr>
-                    ) : (() => {
-                        const q = waSearch.toLowerCase().trim();
-                        // Filter by status on the frontend just to be sure, although backend handles it too
-                        const filtered = waOrders.filter(o => {
-                          if (waOrdersFilter && o.status !== waOrdersFilter) return false;
-                          return true;
-                        });
-                        if (filtered.length === 0) return (
-                          <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                            <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                            <p className="text-sm">{q ? `Tidak ada hasil untuk "${waSearch}"` : "Belum ada pembelian online"}</p>
-                          </td></tr>
-                        );
-                        return filtered.map(o => (
-                      <tr key={o.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.invoice_number}</td>
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-sm">{o.customer_name || '—'}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{o.customer_phone || '—'}</p>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.package_name || '—'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-primary">{fmt(o.total)}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            o.status === 'paid' ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                            : o.status === 'overdue' ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          }`}>
-                            {o.status === 'paid'
-                              ? <><CheckCircle2 className="w-3 h-3" /> Lunas</>
-                              : o.status === 'overdue'
-                                ? <><AlertCircle className="w-3 h-3" /> Kedaluwarsa</>
-                                : <><Clock className="w-3 h-3" /> Pending</>}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{o.created_at ? new Date(o.created_at).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '—'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-1 justify-center">
-                            {o.status !== 'paid' && (
-                              <button
-                                onClick={() => { setWaPayMethod("cash"); setWaPayModal({ id: o.id, name: o.customer_name, invoice: o.invoice_number }); }}
-                                className="text-[10px] px-2 py-1 rounded border border-green-500/30 text-green-400 hover:bg-green-500/10 flex items-center gap-1"
-                                title="Tandai Lunas Manual">
-                                <CheckCircle2 className="w-3 h-3" /> Lunas
-                              </button>
-                            )}
-                            <button onClick={() => deleteWaOrder(o.id)}
-                              className="text-[10px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10"
-                              title="Hapus Pesanan">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "vouchers" && (
-          <div className="space-y-4">
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex justify-center mb-4">
-              <span className="text-sm font-semibold flex items-center gap-2">
-                <Wifi className="w-5 h-5 text-primary" /> Live Aktif: <span className="text-xl text-primary">{vOnline}</span>
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <SummaryCard icon={RpIcon} label="Total Voucher" value={vouchers.length} color="bg-blue-500/20 text-blue-400" />
-              <SummaryCard icon={WifiOff} label="OFFLINE" value={vOffline} color="bg-purple-500/20 text-purple-400" />
-              <SummaryCard icon={CheckCircle2} label="Aktif" value={vOnline} color="bg-green-500/20 text-green-400" />
-              <SummaryCard icon={XCircle} label="Kadaluarsa" value={vExpired} color="bg-red-500/20 text-red-400" />
-            </div>
-
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <div className="relative">
                 <Input placeholder="Cari username voucher..."

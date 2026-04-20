@@ -24,12 +24,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import LatencyHeatmap from "@/components/ui/LatencyHeatmap";
+import { useTheme } from "@/context/ThemeContext";
 
 const alertIcons = { warning: AlertTriangle, error: AlertCircle, info: Info, success: CheckCircle2 };
 const alertColors = { warning: "text-yellow-500", error: "text-red-500", info: "text-blue-500", success: "text-green-500" };
-const ttStyle = { contentStyle: { backgroundColor: "#121214", borderColor: "#27272a", borderRadius: "4px", color: "#fafafa", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" } };
+// ttStyle dikonfigurasi secara dinamis di dalam komponen berdasarkan tema
 const Rp = (n) => `Rp ${(Number(n) || 0).toLocaleString("id-ID")}`;
 const brushStyle = { stroke: "#334155", fill: "#0f172a", travellerWidth: 6 };
+const cyberBrushStyle = { stroke: "rgba(0,230,118,0.2)", fill: "rgba(0,10,6,0.8)", travellerWidth: 6 };
 
 const BrushTick = ({ x, y, payload }) => <text x={x} y={y} dy={10} fill="#475569" fontSize={8} textAnchor="middle">{payload?.value}</text>;
 function formatBwTooltip(v) {
@@ -39,13 +41,17 @@ function formatBwTooltip(v) {
   return `${(n * 1000).toFixed(0)} Kbps`;
 }
 
+
 export default function DashboardPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [stats, setStats] = useState(null);
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("all");
   const [interfaces, setInterfaces] = useState(["all"]);
   const [selectedInterface, setSelectedInterface] = useState("all");
   const [loading, setLoading] = useState(true);
+
   const [sysResource, setSysResource] = useState(null);
   // Bandwidth history filter
   const [bandwidthRange, setBandwidthRange] = useState("1h");
@@ -273,8 +279,14 @@ export default function DashboardPage() {
       .catch(() => setCompareData(null));
   }, [showCompare, comparePeriod, selectedDevice]);
 
-  if (loading && !stats) return <div className="flex items-center justify-center h-64" data-testid="dashboard-loading"><span className="text-muted-foreground text-sm">Loading dashboard...</span></div>;
+  if (loading && !stats) return <div className="flex items-center justify-center h-64" data-testid="dashboard-loading"><span className="text-muted-foreground text-sm font-mono">{isCyber ? "> Loading dashboard..." : "Loading dashboard..."}</span></div>;
   if (!stats) return null;
+
+  // Tooltip style sesuai tema
+  const ttStyle = isCyber
+    ? { contentStyle: { backgroundColor: "rgba(0,8,6,0.95)", borderColor: "rgba(0,230,118,0.25)", borderRadius: "6px", color: "hsl(162,100%,75%)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" } }
+    : { contentStyle: { backgroundColor: "#121214", borderColor: "#27272a", borderRadius: "4px", color: "#fafafa", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" } };
+  const activeBrushStyle = isCyber ? cyberBrushStyle : brushStyle;
 
   const td = bandwidthData ?? (stats?.traffic_data || []);
   // Find first non-null/non-zero index to auto-scroll chart to active data
@@ -314,7 +326,9 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+            <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${isCyber ? "gradient-text font-mono" : ""}`}>
+              {isCyber ? "> Dashboard" : "Dashboard"}
+            </h1>
             <div className="h-6 w-[1px] bg-border hidden sm:block" />
             <div className="hidden sm:flex items-center gap-2">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Laporan Periode:</span>
@@ -451,16 +465,36 @@ export default function DashboardPage() {
       </h3>
       <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
-          { label: "Devices", value: `${devStat.online ?? 0}/${devStat.total ?? 0}`, sub: "online/total", icon: Server, color: "text-purple-500", bg: "bg-purple-500/10" },
-          { label: "Ping (ms)", value: latestPing, sub: "rata-rata", icon: Activity, color: "text-cyan-500", bg: "bg-cyan-500/10" },
-          { label: "Jitter (ms)", value: latestJitter, sub: "rata-rata", icon: Radio, color: "text-rose-500", bg: "bg-rose-500/10" },
-          { label: "Download", value: `${bw.download ?? 0}`, sub: "Mbps", icon: ArrowDown, color: "text-blue-500", bg: "bg-blue-500/10" },
-          { label: "Upload", value: `${bw.upload ?? 0}`, sub: "Mbps", icon: ArrowUp, color: "text-green-500", bg: "bg-green-500/10" },
+          { label: "Devices", value: `${devStat.online ?? 0}/${devStat.total ?? 0}`, sub: "online/total", icon: Server, color: "text-purple-500", bg: "bg-purple-500/10", accentClass: "stat-accent-purple" },
+          { label: "Ping (ms)", value: latestPing, sub: "rata-rata", icon: Activity, color: "text-cyan-500", bg: "bg-cyan-500/10", accentClass: "stat-accent-cyan" },
+          { label: "Jitter (ms)", value: latestJitter, sub: "rata-rata", icon: Radio, color: "text-rose-500", bg: "bg-rose-500/10", accentClass: "stat-accent-red" },
+          { label: "Download", value: `${bw.download ?? 0}`, sub: "Mbps", icon: ArrowDown, color: isCyber ? "text-[hsl(162,100%,50%)]" : "text-blue-500", bg: isCyber ? "bg-[rgba(0,230,118,0.1)]" : "bg-blue-500/10", accentClass: "stat-accent-green" },
+          { label: "Upload", value: `${bw.upload ?? 0}`, sub: "Mbps", icon: ArrowUp, color: isCyber ? "text-[hsl(185,100%,50%)]" : "text-green-500", bg: isCyber ? "bg-[rgba(0,229,255,0.1)]" : "bg-green-500/10", accentClass: "stat-accent-cyan" },
         ].map((c, i) => (
-          <div key={c.label} className="bg-card border border-border rounded-sm p-3 sm:p-4 opacity-0 animate-slide-up" style={{ animationDelay: `${i * 0.04}s`, animationFillMode: 'forwards' }} data-testid={`stat-card-${c.label.toLowerCase().replace(/\s/g, '-')}`}>
+          <div
+            key={c.label}
+            className={`p-3 sm:p-4 opacity-0 animate-slide-up ${
+              isCyber ? `glass-card ${c.accentClass}` : "bg-card border border-border rounded-sm"
+            }`}
+            style={{ animationDelay: `${i * 0.04}s`, animationFillMode: 'forwards' }}
+            data-testid={`stat-card-${c.label.toLowerCase().replace(/\s/g, '-')}`}
+          >
             <div className="flex items-start justify-between">
-              <div><p className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider">{c.label}</p><p className="text-lg sm:text-xl font-bold mt-0.5 sm:mt-1">{c.value} <span className="text-xs sm:text-sm font-normal text-muted-foreground">{c.sub}</span></p></div>
-              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-sm ${c.bg} flex items-center justify-center`}><c.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${c.color}`} /></div>
+              <div>
+                <p className={`text-[9px] sm:text-[10px] uppercase tracking-wider ${
+                  isCyber ? "font-mono text-[hsl(162,100%,35%)]" : "text-muted-foreground"
+                }`}>{c.label}</p>
+                <p className={`text-lg sm:text-xl font-bold mt-0.5 sm:mt-1 ${
+                  isCyber ? "font-mono" : ""
+                }`}>
+                  {c.value} <span className={`text-xs sm:text-sm font-normal ${
+                    isCyber ? "text-[hsl(162,100%,30%)]" : "text-muted-foreground"
+                  }`}>{c.sub}</span>
+                </p>
+              </div>
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-sm ${c.bg} flex items-center justify-center`}>
+                <c.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${c.color}`} />
+              </div>
             </div>
           </div>
         ))}
@@ -473,7 +507,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Bandwidth Chart */}
-          <div className="bg-card border border-border rounded-sm p-3 sm:p-5" data-testid="bandwidth-chart">
+          <div className={`p-3 sm:p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`} data-testid="bandwidth-chart">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold ">Bandwidth History</h3>
@@ -505,25 +539,25 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={td} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
                   <defs>
-                    <linearGradient id="gDlBandwidth" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.6} /><stop offset="95%" stopColor="#ef4444" stopOpacity={0.1} /></linearGradient>
-                    <linearGradient id="gUlBandwidth" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.6} /><stop offset="95%" stopColor="#f97316" stopOpacity={0.1} /></linearGradient>
+                    <linearGradient id="gDlBandwidth" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={isCyber ? "#00e676" : "#ef4444"} stopOpacity={0.6} /><stop offset="95%" stopColor={isCyber ? "#00e676" : "#ef4444"} stopOpacity={0.05} /></linearGradient>
+                    <linearGradient id="gUlBandwidth" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={isCyber ? "#00e5ff" : "#f97316"} stopOpacity={0.6} /><stop offset="95%" stopColor={isCyber ? "#00e5ff" : "#f97316"} stopOpacity={0.05} /></linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={40} />
-                  <YAxis tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} width={80} tickFormatter={formatBwTooltip} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={isCyber ? "rgba(0,230,118,0.07)" : "#27272a"} vertical={false} />
+                  <XAxis dataKey="time" tick={{ fill: isCyber ? "rgba(0,230,118,0.5)" : "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={40} />
+                  <YAxis tick={{ fill: isCyber ? "rgba(0,230,118,0.5)" : "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} width={80} tickFormatter={formatBwTooltip} />
                   <Tooltip contentStyle={ttStyle.contentStyle} formatter={(v, n) => [formatBwTooltip(v), n === "Download" || n === "download" ? "Download" : "Upload"]} />
-                  <Area type="linear" dataKey="download" stroke="#ef4444" fill="url(#gDlBandwidth)" strokeWidth={1.5} name="Download" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
-                  <Area type="linear" dataKey="upload" stroke="#f97316" fill="url(#gUlBandwidth)" strokeWidth={1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
-                  <Brush dataKey="time" height={18} startIndex={brushStart} endIndex={Math.min(td.length - 1, brushStart + 80)} {...brushStyle} tick={<BrushTick />} />
+                  <Area type="linear" dataKey="download" stroke={isCyber ? "#00e676" : "#ef4444"} fill="url(#gDlBandwidth)" strokeWidth={isCyber ? 2 : 1.5} name="Download" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
+                  <Area type="linear" dataKey="upload" stroke={isCyber ? "#00e5ff" : "#f97316"} fill="url(#gUlBandwidth)" strokeWidth={isCyber ? 2 : 1.5} name="Upload" activeDot={{ r: 4 }} connectNulls={true} dot={false} />
+                  <Brush dataKey="time" height={18} startIndex={brushStart} endIndex={Math.min(td.length - 1, brushStart + 80)} {...activeBrushStyle} tick={<BrushTick />} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
 
-          {/* ── ISP Multi-series Chart (hanya jika device spesifik & ada multi-ISP) ── */}
+          {/* ── ISP Multi-series Chart ── */}
           {ispSeries.length > 1 && selectedDevice !== "all" && (
-            <div className="bg-card border border-border rounded-sm p-3 sm:p-5" data-testid="isp-multi-chart">
+            <div className={`p-3 sm:p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`} data-testid="isp-multi-chart">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-4 gap-2">
                 <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                   <Wifi className="w-4 h-4 text-violet-400" />
@@ -585,7 +619,7 @@ export default function DashboardPage() {
           )}
 
           {/* ── Historical Comparison Panel ────────────────────────── */}
-          <div className="bg-card border border-border rounded-sm p-3 sm:p-5" data-testid="historical-compare">
+          <div className={`p-3 sm:p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`} data-testid="historical-compare">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
               <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <GitCompare className="w-4 h-4 text-amber-400" />
@@ -659,8 +693,10 @@ export default function DashboardPage() {
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-sm p-5" data-testid="system-health">
-          <h3 className="text-lg font-semibold mb-4">System Health {sd && <span className="text-sm text-muted-foreground font-normal">- {sd.identity || sd.name}</span>}</h3>
+        <div className={`p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`} data-testid="system-health">
+          <h3 className={`text-lg font-semibold mb-4 ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            System Health {sd && <span className="text-sm text-muted-foreground font-normal font-sans">- {sd.identity || sd.name}</span>}
+          </h3>
           <div className="space-y-4">
             {/* BUG 3 FIX: CPU & Memory bars — selalu tampil */}
             {[
@@ -813,14 +849,19 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-        <div className="bg-card border border-border rounded-sm p-5" data-testid="recent-alerts">
-          <h3 className="text-lg font-semibold mb-4">Alerts</h3>
+        <div className={`p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`} data-testid="recent-alerts">
+          <h3 className={`text-lg font-semibold mb-4 ${ isCyber ? "gradient-text font-mono" : "" }`}>Alerts</h3>
           <div className="space-y-3">
             {(stats.alerts || []).map(a => {
               const Icon = alertIcons[a.type] || Info; return (
-                <div key={a.id} className="flex items-start gap-3 p-2.5 rounded-sm bg-secondary/30 border border-border/50 hover:bg-secondary/50 transition-colors">
+                <div key={a.id} className={`flex items-start gap-3 p-2.5 rounded-sm border transition-colors ${
+                  isCyber ? "glass-card hover:bg-[var(--glass-bg-hover)]" : "bg-secondary/30 border-border/50 hover:bg-secondary/50"
+                }`}>
                   <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${alertColors[a.type]}`} />
-                  <div className="flex-1 min-w-0"><p className="text-sm text-foreground">{a.message}</p><p className="text-xs text-muted-foreground mt-0.5 font-mono">{a.time}</p></div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${isCyber ? "font-mono" : "text-foreground"}`}>{a.message}</p>
+                    <p className={`text-xs mt-0.5 font-mono ${ isCyber ? "text-[hsl(185,100%,35%)]" : "text-muted-foreground"}`}>{a.time}</p>
+                  </div>
                 </div>
               );
             })}

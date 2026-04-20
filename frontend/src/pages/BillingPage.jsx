@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/App";
 import api from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
 import { toast } from "sonner";
 import { printInvoiceWithProfile } from "@/lib/printUtils";
@@ -40,14 +41,24 @@ const fmtRpShort = (val) => {
   return Rp(val);
 };
 
-function BillingSummaryCard({ icon: Icon, label, value, sub, accent, iconColor }) {
+function BillingSummaryCard({ icon: Icon, label, value, sub, accent, iconColor, isCyber }) {
   return (
-    <div className={`bg-card border border-border rounded-sm p-4 relative overflow-hidden border-l-2 ${accent}`}>
+    <div className={`${
+      isCyber
+        ? `glass-card p-4 relative overflow-hidden ${accent.replace('border-l-2', '')} stat-accent-${accent.includes('green') ? 'green' : accent.includes('red') ? 'red' : accent.includes('amber') ? 'amber' : accent.includes('blue') || accent.includes('primary') || accent.includes('sky') ? 'cyan' : 'purple'}`
+        : `bg-card border border-border rounded-sm p-4 relative overflow-hidden border-l-2 ${accent}`
+    }`}>
       <div className="flex items-start justify-between relative z-10">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">{label}</p>
-          <p className="text-2xl font-bold font-mono mt-1 truncate">{value}</p>
-          {sub && <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">{sub}</p>}
+          <p className={`text-[10px] uppercase tracking-widest font-semibold ${
+            isCyber ? "font-mono text-[hsl(162,100%,35%)]" : "text-muted-foreground"
+          }`}>{label}</p>
+          <p className={`text-2xl font-bold font-mono mt-1 truncate ${
+            isCyber ? "text-[hsl(162,100%,80%)]" : ""
+          }`}>{value}</p>
+          {sub && <p className={`text-[10px] mt-1 line-clamp-1 ${
+            isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground"
+          }`}>{sub}</p>}
         </div>
         <div className={`w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0 ml-3 ${iconColor}`}>
           <Icon className="w-4.5 h-4.5" />
@@ -69,8 +80,23 @@ const STATUS_MAP = {
   overdue: { label: "Jatuh Tempo", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, isCyber }) {
   const s = STATUS_MAP[status] || STATUS_MAP.unpaid;
+  if (isCyber) {
+    const cyberMap = {
+      paid: "text-[hsl(162,100%,50%)] border-[rgba(0,230,118,0.3)] bg-[rgba(0,230,118,0.08)]",
+      unpaid: "text-amber-400 border-amber-500/30 bg-amber-500/06",
+      overdue: "text-red-400 border-red-500/30 bg-red-500/06",
+    };
+    return (
+      <span className={`inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${cyberMap[status] || cyberMap.unpaid}`}>
+        {status === "paid" && <CheckCircle2 className="w-2.5 h-2.5" />}
+        {status === "overdue" && <AlertTriangle className="w-2.5 h-2.5" />}
+        {status === "unpaid" && <Clock className="w-2.5 h-2.5" />}
+        {s.label}
+      </span>
+    );
+  }
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-sm border ${s.cls}`}>
       {status === "paid" && <CheckCircle2 className="w-2.5 h-2.5" />}
@@ -86,15 +112,21 @@ function StatusBadge({ status }) {
 
 // ─ Stat Card ─
 
-function StatCard({ label, value, sub, color, badge }) {
+function StatCard({ label, value, sub, color, badge, isCyber }) {
   return (
-    <div className={`bg-card border border-border rounded-sm p-4 border-l-2 ${color}`}>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+    <div className={`${
+      isCyber
+        ? `glass-card p-4 stat-accent-${color.includes('green') ? 'green' : color.includes('red') ? 'red' : color.includes('amber') || color.includes('yellow') ? 'amber' : color.includes('blue') || color.includes('primary') ? 'cyan' : 'purple'}`
+        : `bg-card border border-border rounded-sm p-4 border-l-2 ${color}`
+    }`}>
+      <p className={`text-[10px] uppercase tracking-wider ${
+        isCyber ? "font-mono text-[hsl(162,100%,35%)]" : "text-muted-foreground"
+      }`}>{label}</p>
       <div className="flex items-end gap-2 mt-1">
-        <p className="text-xl font-bold font-mono">{value}</p>
+        <p className={`text-xl font-bold font-mono ${ isCyber ? "text-[hsl(162,100%,75%)]" : "" }`}>{value}</p>
         {badge && <span className="text-xs font-semibold text-green-400 mb-0.5">{badge}</span>}
       </div>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className={`text-[10px] mt-0.5 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>{sub}</p>}
     </div>
   );
 }

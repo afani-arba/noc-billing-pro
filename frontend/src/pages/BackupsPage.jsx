@@ -1,5 +1,6 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import api from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
 import { HardDrive, Download, Trash2, RefreshCw, Server, Play, FileText, Clock, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,8 @@ function formatDate(iso) {
 }
 
 export default function BackupsPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [backups, setBackups] = useState([]);
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("");
@@ -101,7 +104,7 @@ export default function BackupsPage() {
       </div>
 
       {/* Trigger Manual Backup */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-3">
+      <div className={`p-4 space-y-3 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Play className="w-4 h-4 text-green-500" /> Backup Manual
         </h2>
@@ -137,7 +140,7 @@ export default function BackupsPage() {
       </div>
 
       {/* Backup List */}
-      <div className="bg-card border border-border rounded-sm">
+      <div className={`${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="p-4 border-b border-border flex items-center justify-between">
           <h2 className="text-base font-semibold flex items-center gap-2">
             <Database className="w-4 h-4 text-primary" /> Daftar Backup

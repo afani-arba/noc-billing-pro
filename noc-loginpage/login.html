@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <title id="title">Hotspot Login</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <!-- Tailwind CSS (CDN for Captive Portal usage if internet is somehow reachable, otherwise relying on compiled CSS) -->
+    <!-- Not using tailwind cdn to avoid captive portal block, using custom CSS below -->
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Modern Glassmorphism & UI Adjustments */
+        :root {
+            --primary: #38bdf8;
+            --primary-hover: #0284c7;
+        }
+
+        .tab-container {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 4px;
+            margin-bottom: 16px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            background: transparent;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Payment Flow UI */
+        .payment-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .amount-display {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            margin: 10px 0;
+            letter-spacing: -1px;
+        }
+
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .payment-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+            font-size: 13px;
+        }
+
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .voucher-display {
+            background: #fff;
+            color: #000;
+            font-family: monospace;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 12px;
+            border-radius: 8px;
+            letter-spacing: 2px;
+            margin: 16px 0;
+        }
+
+        .alert-warning {
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            color: #fde047;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: left;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══ CHAP hidden form (MikroTik requirement) ═══ -->
+    $(if chap-id)
+    <form name="sendin" action="$(link-login-only)" method="post">
+        <input type="hidden" name="username" />
+        <input type="hidden" name="password" />
+        <input type="hidden" name="dst" value="$(link-orig)" />
+        <input type="hidden" name="popup" value="true" />
+    </form>
+    <script type="text/javascript" src="md5.js"></script>
+    <script type="text/javascript">
+        function doLogin() {
+            document.sendin.username.value = document.login.username.value;
+            document.sendin.password.value = hexMD5('$(chap-id)' + document.login.password.value + '$(chap-challenge)');
+            document.sendin.submit();
+            return false;
+        }
+    </script>
+    $(endif)
+
+    <!-- ═══ MAIN CARD ═══ -->
+    <div class="main" id="main">
+
+        <!-- Logo & Branding -->
+        <div class="logo-wrap">
+            <img src="logo.png" alt="Logo" id="logoImg">
+            <span class="brand-name" id="brandName">Hotspot Internet</span>
+            <div id="brandSubtitle" style="font-size: 11px; color: rgba(255,255,255,0.6); margin-top: 4px; display: none;"></div>
+        </div>
+
+        <!-- TABS -->
+        <div class="tab-container" id="tabContainer">
+            <button class="tab-btn active" onclick="switchTab('login')">Masuk Voucher</button>
+            <button class="tab-btn" onclick="switchTab('buy')" id="buyTabBtn">Beli Paket</button>
+        </div>
+
+        <!-- ── TAB 1: LOGIN VOUCHER ── -->
+        <div id="tab-login" class="tab-content active">
+            <div class="info-box" id="infologin" style="margin-top: 16px;">Masukkan kode voucher Anda</div>
+
+            <form autocomplete="off" name="login" action="$(link-login-only)" method="post"
+                $(if chap-id) onSubmit="return doLogin()" $(endif)>
+                <input type="hidden" name="dst" value="$(link-orig)" />
+                <input type="hidden" name="popup" value="true" />
+
+                <input class="username" id="username" name="username"
+                    type="text" value="$(username)"
+                    placeholder="Kode Voucher"
+                    autocomplete="off" autocapitalize="characters" spellcheck="false" />
+
+                <input type="hidden" id="password" name="password" />
+
+                <button class="button-big" type="submit" onclick="saveVoucher()" id="loginBtn">
+                    <i class="icon icon-login">&#xe803;</i> Masuk Internet
+                </button>
+            </form>
+
+        </div>
+
+        <!-- ── TAB 2: BELI PAKET ── -->
+        <div id="tab-buy" class="tab-content">
+
+            <!-- Spinner: Muncul selama config dimuat dari server -->
+            <div id="buyLoadingSpinner" style="margin-top: 24px; text-align: center; padding: 20px 0;">
+                <div class="loader" style="margin: 0 auto 12px;"></div>
+                <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Memuat informasi paket...</div>
+            </div>
+
+            <!-- Error saat gagal load config -->
+            <div id="buyLoadError" style="display:none; margin-top: 16px;">
+                <div class="alert-warning" style="border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.08); color: #fca5a5;">
+                    ⚠️ Gagal memuat paket dari server. Periksa koneksi WiFi Anda.
+                </div>
+                <button class="button-big" onclick="loadConfig()" style="margin-top:8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">
+                    🔄 Coba Lagi
+                </button>
+            </div>
+
+            <!-- Step 1: Pilih Paket (Moota) -->
+            <div id="buyStep1" style="display:none; margin-top: 8px;">
+                <div class="info-box" style="margin-bottom: 12px;">
+                    INI ADALAH HALAMAN PEMBELIAN VOUCHER ONLINE
+                </div>
+                
+                <!-- Peringatan Pembelian Tanpa WA & Info CNA iPhone -->
+                <div class="alert-warning" style="margin-bottom: 16px; border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); color: #fcd34d;">
+                    <strong style="color: #fbbf24;">⚠️ PENTING: Perhatian untuk Pengguna iPhone/Android</strong><br>
+                    Jika layar ini tertutup saat Anda membuka M-Banking, <b>WiFi akan terputus sementara</b>. Lanjutkan transfer pakai kuota seluler. <b>PERHATIAN:</b> Karena Anda beli tanpa mengisi nomor WA, kami tidak bertanggung jawab bila sistem terputus dan Anda gagal mendapatkan kode voucher di halaman ini. Pastikan layar tidak ditutup!
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <input
+                        id="buyPhoneInput"
+                        type="tel"
+                        placeholder="Contoh: 0812xxxx (Opsional)"
+                        style="width:100%;height:44px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;text-align:center;letter-spacing:0.05em;outline:none;padding:0 14px;margin-bottom:8px;"
+                    />
+                </div>
+
+                <div class="info-box" style="margin-top: 0; margin-bottom: 16px; background: rgba(0,0,0,0.2);">
+                    Pilih paket internet yang ingin dibeli:
+                </div>
+                <div class="packages-grid" id="apiPackagesGrid">
+                    <!-- Paket dari API -->
+                </div>
+            </div>
+
+            <!-- Step 2: Halaman Transfer -->
+            <div id="buyStep2" style="display: none;">
+                <div class="payment-box">
+                    <div style="font-size: 13px; color: rgba(255,255,255,0.7); text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">
+                        Transfer Sebanyak
+                    </div>
+                    <div class="amount-display" id="payAmount">Rp 0</div>
+                    <div style="font-size: 11px; color: #ef4444; font-weight: bold; margin-bottom: 12px; background: rgba(239, 68, 68, 0.1); padding: 6px; border-radius: 4px;">
+                        ⚠️ PENTING: Wajib transfer nominal TEPAT HINGGA 3 DIGIT TERAKHIR agar ototmatis masuk.
+                    </div>
+                    <div class="alert-warning" style="margin-bottom: 16px; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: #bae6fd; font-size: 11px; text-align: center;">
+                        <b>Silakan Tutup Layar Ini / Buka M-Banking Anda.</b><br>Jika WiFi terputus, lanjutkan transfer pakai kuota seluler. Voucher <b>DIJAMIN TETAP DIKIRIM</b> ke WA Anda.
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 0 16px; text-align: left;">
+                        <div class="payment-info-row">
+                            <span style="color: rgba(255,255,255,0.6);">Bank Tujuan</span>
+                            <strong id="payBankName">BCA</strong>
+                        </div>
+                        <div class="payment-info-row">
+                            <span style="color: rgba(255,255,255,0.6);">Nomor Rekening</span>
+                            <div>
+                                <strong id="payAccNum" style="font-size: 16px; font-family: monospace;">123456789</strong>
+                                <button class="copy-btn" onclick="copyText('payAccNum')">Salin</button>
+                            </div>
+                        </div>
+                        <div class="payment-info-row" style="border-bottom: none;">
+                            <span style="color: rgba(255,255,255,0.6);">Atas Nama</span>
+                            <strong id="payAccName">PT Contoh</strong>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 24px;">
+                        <div class="loader" id="paymentLoader"></div>
+                        <div style="font-size: 12px; margin-top: 12px; color: #38bdf8; font-weight: bold;" id="paymentStatusText">
+                            Menunggu Pembayaran...
+                        </div>
+                        <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 6px;">
+                            Batas waktu: <span id="payTimer" style="font-weight: bold; color: white;">15:00</span>
+                        </div>
+                    </div>
+
+                    <button onclick="cancelOrder()" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 16px; border-radius: 6px; font-size: 12px; margin-top: 24px; cursor: pointer; transition: all 0.2s;">
+                        Batalkan Pesanan
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Sukses -->
+            <div id="buyStep3" style="display: none;">
+                <div class="success-box">
+                    <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
+                    <h3 style="margin: 0 0 10px 0; color: #22c55e;">Pembayaran Berhasil!</h3>
+                    <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 0;">Ini adalah kode voucher Anda:</p>
+                    
+                    <div class="voucher-display" id="successVoucherCode">VC123456</div>
+                    
+                    <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 20px;">
+                        Kode voucher telah disimpan otomatis ke perangkat Anda.
+                    </p>
+
+                    <button class="button-big" onclick="autoLoginFromSuccess()" style="background: #22c55e; border: none; width: 100%;">
+                        <i class="icon icon-login">&#xe803;</i> Mulai Gunakan Internet
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Trial zone removed -->
+
+        <!-- Error -->
+        $(if error)<div class="notice">⚠️ $(error)</div>$(endif)
+
+
+
+        <!-- Powered By Footer -->
+        <div id="pbaba" class="pb-branding">
+            Powered by <b>NOC Sentinel Server</b>
+        </div>
+        
+        <div id="footerHost" style="margin-top:12px; text-align:center; font-size:10px; color:rgba(255,255,255,0.15);"></div>
+    </div>
+
+<script type="text/javascript">
+// ── KONFIGURASI API ──
+var CONFIG_API_URL = "https://rizal.arbatraining.com/api"; // GANTI DENGAN IP NOC SENTINEL / DOMAIN WALLED GARDEN
+var MAC_ADDR = "$(mac-esc)";
+
+// ── State ──
+var apiConfig = null;
+var activeOrderId = null;
+var customerPhone = '';    // ← No. WA pelanggan
+var pollingStatus = false;
+var countdownTimer = null;
+var pollInterval = null;
+
+// ── Inisialisasi ──────────────────────────────────────────────────
+var hostname = window.location.hostname;
+document.getElementById('title').innerHTML = hostname + " | WiFi Login";
+document.getElementById('footerHost').innerHTML = "📶 " + hostname;
+
+// Mode Voucher (Uppercase Auto-Sync)
+var inp = document.getElementById('username');
+var pass = document.getElementById('password');
+if(inp && pass) {
+    inp.oninput = function() {
+        this.value = this.value.toUpperCase();
+        pass.value = this.value.trim();
+    };
+    inp.focus();
+}
+
+function saveVoucher() {
+    var code = document.getElementById('username').value.trim().toUpperCase();
+    if (code) localStorage.setItem('hs_voucher', code);
+}
+
+// Auto Login if Available
+var hasError = document.querySelector('.notice') !== null;
+if (hasError) {
+    localStorage.removeItem('hs_voucher');
+} else {
+    var saved = localStorage.getItem('hs_voucher');
+    if (saved && inp && pass) {
+        inp.value = saved; pass.value = saved;
+        setTimeout(function() {
+            var form = document.login || document.querySelector('form[name="login"]');
+            if (form) form.submit();
+        }, 800);
+    }
+}
+
+// ── UI Tabs ──
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    event.currentTarget.classList.add('active');
+    document.getElementById('tab-' + tabId).classList.add('active');
+
+    if(tabId === 'login' && inp) inp.focus();
+}
+
+// ── Utils ──
+function fmtRp(n) { return "Rp " + parseInt(n).toLocaleString("id-ID"); }
+
+function copyText(elementId) {
+    var text = document.getElementById(elementId).innerText;
+    var textArea = document.createElement("textarea");
+    textArea.value = text.replace(/[^0-9]/g, "");
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+        var ok = document.execCommand('copy');
+        if (ok) alert("Berhasil Disalin!");
+    } catch (err) {}
+    document.body.removeChild(textArea);
+}
+
+function applyBranding(data) {
+    if (data.portal_title) {
+        document.getElementById('brandName').innerText = data.portal_title;
+        var footer = document.getElementById('portalFooterName');
+        if (footer) footer.innerText = "Portal Pelanggan " + data.portal_title;
+    }
+    if (data.portal_subtitle) {
+        var sub = document.getElementById('brandSubtitle');
+        sub.innerText = data.portal_subtitle;
+        sub.style.display = 'block';
+    }
+    if (data.portal_color) {
+        document.documentElement.style.setProperty('--primary', data.portal_color);
+        // auto generate hover color
+        document.documentElement.style.setProperty('--primary-hover', data.portal_color + 'cc');
+    }
+}
+
+// ── Fetch Config dari Backend ──
+// ── Fetch Config dari Backend ──
+function loadConfig() {
+    // Reset UI ke loading state
+    var spinner = document.getElementById('buyLoadingSpinner');
+    var errBox = document.getElementById('buyLoadError');
+    var step1 = document.getElementById('buyStep1');
+    
+    if (spinner) spinner.style.display = 'block';
+    if (errBox) errBox.style.display = 'none';
+    if (step1) step1.style.display = 'none';
+
+    var url = CONFIG_API_URL + "/webhook/hotspot-public-config";
+    fetch(url, {
+        headers: { "Accept": "application/json" },
+        mode: "cors",
+        cache: "no-store"
+    })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            apiConfig = data;
+            applyBranding(data);
+
+            // Sembunyikan spinner
+            if (spinner) spinner.style.display = 'none';
+
+            // Selalu tampilkan step1 baik mode Moota atau WA-only (grid sama)
+            renderPackages(data.packages, 'apiPackagesGrid', data.payment_enabled && data.bank_info);
+            if (step1) step1.style.display = 'block';
+        })
+        .catch(function(err) {
+            console.log("Config fetch failed", err);
+            if (spinner) spinner.style.display = 'none';
+            if (errBox) errBox.style.display = 'block';
+        });
+}
+
+// ── Render Paket ──
+function renderPackages(packages, gridId, isApi) {
+    var grid = document.getElementById(gridId);
+    grid.innerHTML = '';
+    
+    if (!packages || !packages.length) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 20px; color:rgba(255,255,255,0.5);">Tidak ada paket tersedia</div>';
+        return;
+    }
+
+    packages.forEach(function(pkg, i) {
+        var card = document.createElement('div');
+        card.className = 'pkg-card';
+        
+        var v = [];
+        if (pkg.uptime_limit) v.push('<div class="pkg-validity">Waktu: ' + pkg.uptime_limit + '</div>');
+        if (pkg.validity) v.push('<div class="pkg-validity">Masa: ' + pkg.validity + '</div>');
+
+        var actionBtn = isApi 
+            ? '<button class="pkg-btn pkg-btn-wa" onclick="createOrder(' + i + ')" style="background:var(--primary); border-color:var(--primary); color:white;">Beli Sekarang</button>'
+            : '<button class="pkg-btn pkg-btn-wa" onclick="buyViaWa(' + i + ')">Beli via WA</button>';
+
+        card.innerHTML =
+            '<div class="pkg-name">' + pkg.name + '</div>' +
+            '<div class="pkg-price">' + fmtRp(pkg.price) + '</div>' +
+            v.join('') +
+            '<div class="pkg-actions">' + actionBtn + '</div>';
+        
+        grid.appendChild(card);
+    });
+}
+
+function getAndValidatePhone() {
+    var inEl = document.getElementById('buyPhoneInput');
+    var raw = (inEl ? inEl.value : '').trim().replace(/\D/g, '');
+    if (raw) {
+        if (raw.length < 8) {
+            alert('Jika diisi, Nomor WhatsApp minimal 8 digit.');
+            return false;
+        }
+        if (raw.startsWith('0')) raw = '62' + raw.slice(1);
+        else if (!raw.startsWith('62')) raw = '62' + raw;
+    }
+    customerPhone = raw;
+    return true;
+}
+
+// ── Flow Pembayaran Moota ──
+function createOrder(pkgIndex) {
+    if (!apiConfig) return;
+    if (!getAndValidatePhone()) return;
+
+    var pkg = apiConfig.packages[pkgIndex];
+    if (!pkg) return;
+
+    // Loading State on Button
+    var btn = event.currentTarget || event.target;
+    var oldText = btn.innerHTML;
+    btn.innerHTML = 'Memproses...';
+    btn.disabled = true;
+
+    var payload = {
+        package_name: pkg.name,
+        package_price: parseInt(pkg.price),
+        package_profile: pkg.profile || "default",
+        package_validity: pkg.validity || "",
+        uptime_limit: pkg.uptime_limit || "",
+        device_id: "",
+        customer_phone: customerPhone  // ← kirim no. WA pelanggan opsional
+    };
+
+    fetch(CONFIG_API_URL + "/webhook/hotspot-create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.detail) throw new Error(res.detail);
+        
+        // Simpan state
+        activeOrderId = res.order_id;
+        
+        // Pindah ke Step 2 (Transfer)
+        document.getElementById('buyStep1').style.display = 'none';
+        document.getElementById('buyStep2').style.display = 'block';
+        
+        // Isi Data Bank
+        document.getElementById('payAmount').innerText = fmtRp(res.total);
+        document.getElementById('payBankName').innerText = res.bank_name;
+        document.getElementById('payAccNum').innerText = res.account_number;
+        document.getElementById('payAccName').innerText = res.account_name;
+        
+        // Start Polling & Timer
+        startPolling();
+        startTimer(res.timeout_minutes * 60);
+
+    })
+    .catch(err => {
+        alert("Gagal membuat pesanan: " + err.message);
+        btn.innerHTML = oldText;
+        btn.disabled = false;
+    });
+}
+
+function startPolling() {
+    pollingStatus = true;
+    if (pollInterval) clearInterval(pollInterval);
+    
+    pollInterval = setInterval(function() {
+        if (!pollingStatus || !activeOrderId) return;
+        
+        fetch(CONFIG_API_URL + "/webhook/hotspot-order-status/" + activeOrderId)
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'paid') {
+                    // Sukses!
+                    stopPolling();
+                    document.getElementById('buyStep2').style.display = 'none';
+                    document.getElementById('buyStep3').style.display = 'block';
+                    
+                    document.getElementById('successVoucherCode').innerText = res.voucher_code;
+                    
+                    // Simpan ke localstorage
+                    localStorage.setItem('hs_voucher', res.voucher_code);
+                    
+                    // Isi form background
+                    var uname = document.getElementById('username');
+                    var pw = document.getElementById('password');
+                    if(uname && pw) {
+                        uname.value = res.voucher_code;
+                        pw.value = res.voucher_password || res.voucher_code;
+                    }
+
+                    // Otomatis klik tombol login setelah 2.5 detik
+                    setTimeout(autoLoginFromSuccess, 2500);
+                }
+                else if (res.status === 'expired') {
+                    stopPolling();
+                    alert("Waktu pembayaran telah habis. Pesanan dibatalkan otomatis.");
+                    cancelOrder();
+                }
+            })
+            .catch(()=>console.log("polling error"));
+            
+    }, 3000); // Poll setiap 3 detik
+}
+
+function stopPolling() {
+    pollingStatus = false;
+    if (pollInterval) clearInterval(pollInterval);
+    if (countdownTimer) clearInterval(countdownTimer);
+}
+
+function startTimer(durationSeconds) {
+    var timer = durationSeconds;
+    var display = document.getElementById('payTimer');
+    
+    if(countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(function () {
+        var minutes = parseInt(timer / 60, 10);
+        var seconds = parseInt(timer % 60, 10);
+
+        minutes = minutes < 10 ? "0" + minutes : minutes;
+        seconds = seconds < 10 ? "0" + seconds : seconds;
+
+        display.textContent = minutes + ":" + seconds;
+
+        if (--timer < 0) {
+            clearInterval(countdownTimer);
+            display.textContent = "00:00 (EXPIRED)";
+        }
+    }, 1000);
+}
+
+function cancelOrder() {
+    stopPolling();
+    activeOrderId = null;
+    document.getElementById('buyStep2').style.display = 'none';
+    document.getElementById('buyStep3').style.display = 'none';
+    document.getElementById('buyStep1').style.display = 'block';
+
+    // Reset buttons
+    document.querySelectorAll('.pkg-btn').forEach(function(b) {
+        if(b.innerHTML === 'Memproses...') {
+            b.innerHTML = 'Beli Sekarang';
+            b.disabled = false;
+        }
+    });
+}
+
+function autoLoginFromSuccess() {
+    var form = document.login || document.querySelector('form[name="login"]');
+    if (form) {
+        document.getElementById('username').value = document.getElementById('successVoucherCode').innerText;
+        document.getElementById('password').value = document.getElementById('successVoucherCode').innerText;
+        form.submit();
+    }
+}
+
+// ── Manual WA Fallback ──
+function buyViaWa(index) {
+    if(!apiConfig) return;
+    var pkg = apiConfig.packages[index];
+    var wa = apiConfig.wa_number;
+    if(!wa) wa = '6282228304543';
+    
+    var msg = "Halo, saya ingin order voucher hotspot paket " + pkg.name + " ("+fmtRp(pkg.price)+"). Mohon info pembayarannya.";
+    var waLink = "https://wa.me/" + wa.replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg);
+    window.location.href = waLink;
+}
+
+// Run
+loadConfig();
+</script>
+</body>
+</html>

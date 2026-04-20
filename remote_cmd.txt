@@ -1,0 +1,1 @@
+cd /opt/noc-billing-pro && git pull && docker compose build noc-frontend && docker compose up -d noc-frontend

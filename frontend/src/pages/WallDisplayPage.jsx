@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
 import { AreaChart, Area, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { ShieldAlert, WifiOff, Monitor, Server, RotateCcw, MonitorPlay, X, Terminal, ArrowDown, ArrowUp, Activity, Zap, CheckCircle, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function WallDisplayPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const navigate = useNavigate();
   const [data, setData] = useState({ routers: [], security_alerts: [], global_stats: {} });
   const [time, setTime] = useState(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -182,24 +185,24 @@ export default function WallDisplayPage() {
   const warningCount = data.security_alerts.length;
 
   return (
-    <div className="min-h-screen border-t-[3px] border-blue-500 bg-[#0f172a] text-slate-300 font-sans flex flex-col overflow-hidden selection:bg-blue-900/50" style={{ background: 'radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 50%)' }}>
+    <div className={`min-h-screen font-sans flex flex-col overflow-hidden ${ isCyber ? "bg-[#0b101e] text-slate-300 selection:bg-[hsl(162,100%,50%)]/50" : "border-t-[3px] border-blue-500 bg-[#0f172a] text-slate-300 selection:bg-blue-900/50" }`} style={isCyber ? {} : { background: 'radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 50%)' }}>
       
       {/* ── HEADER NAVBAR ── */}
-      <div className="flex-none border-b border-white/[0.04] bg-[#0f172a]/60 z-20 shadow-xl shadow-black/20">
+      <div className={`flex-none z-20 ${ isCyber ? "bg-[#0f172a]/40 border-b border-white/5" : "bg-[#0f172a]/60 border-b border-white/[0.04] shadow-xl shadow-black/20" }`}>
 
         {/* SINGLE HEADER: Branding kiri, semua stats + jam kanan — flex-wrap agar turun ke bawah */}
         <div className="flex items-center justify-between gap-3 px-4 py-3">
 
           {/* Left: Branding */}
           <div className="flex items-center gap-3 cursor-pointer group flex-none" onClick={() => navigate('/')}>
-            <div className="w-9 h-9 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center text-slate-300 group-hover:text-blue-400 transition-all shadow-inner flex-none">
+            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all shadow-inner flex-none ${ isCyber ? "bg-[#09101b] border-white/5 text-[hsl(162,100%,50%)]" : "bg-slate-800 border-white/10 text-slate-300 group-hover:text-blue-400" }`}>
               <Monitor className="w-4 h-4" strokeWidth={1.5} />
             </div>
             <div>
-              <h1 className="text-[15px] font-bold tracking-tight text-white leading-none drop-shadow-lg">
-                NOC Billing <span className="text-blue-500 font-semibold">Pro</span>
+              <h1 className={`text-[15px] font-bold tracking-tight leading-none drop-shadow-lg ${ isCyber ? "gradient-text font-mono" : "text-white" }`}>
+                NOC Billing <span className={isCyber ? "" : "text-blue-500 font-semibold"}>{isCyber ? ">" : "Pro"}</span>
               </h1>
-              <p className="text-[9px] text-blue-400 font-bold tracking-[0.1em] uppercase mt-0.5">Wall Display</p>
+              <p className={`text-[9px] font-bold tracking-[0.1em] uppercase mt-0.5 ${ isCyber ? "text-cyan-400 font-mono" : "text-blue-400" }`}>Wall Display</p>
             </div>
           </div>
 

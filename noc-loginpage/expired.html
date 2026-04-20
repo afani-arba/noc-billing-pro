@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voucher Habis / Kadaluarsa</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="main">
+
+        <!-- Logo -->
+        <div class="logo-wrap">
+            <img src="logo.png" alt="Logo">
+        </div>
+
+        <!-- Icon + Judul -->
+        <div class="expired-icon">⏰</div>
+        <div class="expired-title">Waktu Habis!</div>
+
+        <!-- Pesan -->
+        <div class="expired-msg">
+            Voucher internet Anda sudah habis masa berlakunya.<br>
+            Beli voucher baru untuk kembali online.
+        </div>
+
+        <!-- Tombol Beli via WA -->
+        <a class="btn-wa" id="btnBeliWA" href="#" target="_blank">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.940 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.374 0 0 5.373 0 12c0 2.117.554 4.103 1.523 5.826L.057 23.868a.75.75 0 0 0 .921.921l6.042-1.466A11.94 11.94 0 0 0 12 24c6.626 0 12-5.373 12-12S18.626 0 12 0zm0 21.75a9.728 9.728 0 0 1-4.97-1.364l-.357-.212-3.706.9.914-3.613-.233-.374A9.717 9.717 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
+            </svg>
+            Beli Voucher via WhatsApp
+        </a>
+
+        <!-- Tombol Login Manual (jika sudah punya voucher baru) -->
+        <div class="divider">sudah punya voucher?</div>
+
+        <button class="button-big" onclick="window.location.href='login.html'">
+            <span>🔑</span> Masukkan Voucher Baru
+        </button>
+
+        <!-- Powered By Footer -->
+        <div id="pbaba" class="pb-branding">
+            Powered by <b>PT Arsya Barokah Abadi</b><br>
+            <a href="http://www.arbatraining.com" target="_blank">www.arbatraining.com</a>
+        </div>
+        
+        <div id="footerHost" style="margin-top:12px; text-align:center; font-size:10px; color:rgba(255,255,255,0.15);"></div>
+    </div>
+
+<script>
+    // ── CONFIG ──────────────────────────────────────────────────────
+    var N8N_WA_URL = "https://wa.me/628xxxxxxxxxx?text=Halo%2C+voucher+saya+sudah+habis.+Saya+ingin+beli+yang+baru.";
+    // Ganti dengan nomor WA Bot N8N Anda
+    // ────────────────────────────────────────────────────────────────
+
+    // Security Check for Footer (Anti-Tamper)
+    (function(){
+        var check = function() {
+            var f = document.getElementById('pbaba');
+            if (!f || f.innerHTML.indexOf("PT Arsya Barokah Abadi") === -1 || f.innerHTML.indexOf("www.arbatraining.com") === -1) {
+                document.body.innerHTML = '<div style="background:#020617;color:#ef4444;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:20px;"><div><h1>Sistem Terkunci</h1><p>Lisensi Halaman Login Tidak Valid atau Telah Dimodifikasi.<br>Silakan hubungi administrator PT Arsya Barokah Abadi.</p></div></div>';
+            }
+        };
+        setInterval(check, 3000);
+        setTimeout(check, 500);
+    })();
+
+    document.getElementById('footerHost').innerHTML = "📶 " + window.location.hostname;
+
+    var btnBeli = document.getElementById('btnBeliWA');
+    if (N8N_WA_URL && N8N_WA_URL.indexOf("628xxxxxxxxxx") === -1) {
+        btnBeli.href = N8N_WA_URL;
+    } else {
+        // fallback: sembunyikan jika belum dikonfigurasi
+        // btnBeli.style.display = 'none';
+        btnBeli.href = N8N_WA_URL;
+    }
+</script>
+</body>
+</html>

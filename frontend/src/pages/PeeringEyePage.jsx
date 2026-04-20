@@ -14,9 +14,9 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import PeeringPlatformModal from "@/components/PeeringPlatformModal";
-import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import highcharts3d from 'highcharts/highcharts-3d';
+import { useTheme } from "@/context/ThemeContext";
 
 if (typeof Highcharts === 'object') {
   highcharts3d(Highcharts);
@@ -90,8 +90,10 @@ const RANGES = [
 
 // ── Stat Card ───────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, color = "text-primary" }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   return (
-    <div className="bg-card border border-border rounded-sm px-4 py-3">
+    <div className={`px-4 py-3 rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border" }`}>
       <div className="flex items-center gap-2 mb-1">
         <Icon className={`w-3.5 h-3.5 ${color}`} />
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
@@ -133,6 +135,8 @@ function NoData({ message = "Belum ada data" }) {
 // BGP SETTINGS TAB
 // ===========================================================================
 function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoading, bgpSyncing, handleSvcCtrl, handleBgpSync, bgpStatus }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [form, setForm] = useState({ local_as: "", router_id: "" });
   const [saving, setSaving] = useState(false);
   const [allDevices, setAllDevices] = useState([]);
@@ -322,9 +326,9 @@ function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoadi
         <div className="space-y-4">
 
           {/* GoBGP Server Config Card */}
-          <div className="bg-card border border-border/60 rounded-xl overflow-hidden">
+          <div className={`overflow-hidden rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border/60" }`}>
             {/* Card header */}
-            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border/40 bg-secondary/20">
+            <div className={`flex items-center gap-2.5 px-5 py-3.5 border-b ${ isCyber ? "bg-[#0f172a]/40 border-white/10" : "border-border/40 bg-secondary/20" }`}>
               <div className="p-1.5 rounded-lg bg-violet-500/15">
                 <Server className="w-3.5 h-3.5 text-violet-400" />
               </div>
@@ -374,8 +378,8 @@ function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoadi
           </div>
 
           {/* Daemon Control Card */}
-          <div className="bg-card border border-border/60 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40 bg-secondary/20">
+          <div className={`overflow-hidden rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border/60" }`}>
+            <div className={`flex items-center justify-between px-5 py-3.5 border-b ${ isCyber ? "bg-[#0f172a]/40 border-white/10" : "border-border/40 bg-secondary/20" }`}>
               <div className="flex items-center gap-2.5">
                 <div className={`p-1.5 rounded-lg ${isActive ? "bg-emerald-500/15" : "bg-red-500/15"}`}>
                   <Activity className={`w-3.5 h-3.5 ${isActive ? "text-emerald-400" : "text-red-400"}`} />
@@ -434,11 +438,11 @@ function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoadi
           {/* Quick Stats */}
           {totalPeers > 0 && (
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-card border border-emerald-500/20 rounded-xl p-4 text-center">
+              <div className={`border-emerald-500/20 rounded-xl p-4 text-center ${ isCyber ? "glass-card border" : "bg-card border" }`}>
                 <p className="text-2xl font-black text-emerald-400">{established}</p>
                 <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide mt-1">Established</p>
               </div>
-              <div className="bg-card border border-slate-700/60 rounded-xl p-4 text-center">
+              <div className={`border-slate-700/60 rounded-xl p-4 text-center ${ isCyber ? "glass-card border" : "bg-card border" }`}>
                 <p className="text-2xl font-black text-slate-300">{totalPeers - established}</p>
                 <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide mt-1">Tidak Aktif</p>
               </div>
@@ -450,9 +454,9 @@ function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoadi
         <div className="lg:col-span-2 space-y-4">
 
           {/* Device BGP Peers Table */}
-          <div className="bg-card border border-border/60 rounded-xl overflow-hidden">
+          <div className={`overflow-hidden rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border/60" }`}>
             {/* Table header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40 bg-secondary/20">
+            <div className={`flex items-center justify-between px-5 py-3.5 border-b ${ isCyber ? "bg-[#0f172a]/40 border-white/10" : "border-border/40 bg-secondary/20" }`}>
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 rounded-lg bg-cyan-500/15">
                   <Wifi className="w-3.5 h-3.5 text-cyan-400" />
@@ -622,8 +626,8 @@ function BgpSettingsTab({ bgpSettings, setBgpSettings, bgpSvcStatus, bgpSvcLoadi
           </div>
 
           {/* Diagnostics Card */}
-          <div className="bg-card border border-border/60 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/40 bg-secondary/20">
+          <div className={`overflow-hidden rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border/60" }`}>
+            <div className={`flex items-center justify-between px-5 py-3.5 border-b ${ isCyber ? "bg-[#0f172a]/40 border-white/10" : "border-border/40 bg-secondary/20" }`}>
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 rounded-lg bg-amber-500/15">
                   <Terminal className="w-3.5 h-3.5 text-amber-400" />
@@ -785,6 +789,8 @@ export default function PeeringEyePage(props) {
 }
 
 function PeeringEyePageInner() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   // RBAC: device list difilter berdasarkan allowed_devices user
   const { devices: allowedDevList, isLocked, defaultDeviceId } = useAllowedDevices();
   // peeringDevices: format { device_id, device_name, hits } untuk dropdown

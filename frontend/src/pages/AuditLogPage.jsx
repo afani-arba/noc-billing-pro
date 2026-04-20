@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
 import {
   ClipboardList, RefreshCw, Search, Filter, X, ChevronLeft, ChevronRight, Trash2
 } from "lucide-react";
@@ -28,6 +29,8 @@ function ActionBadge({ action }) {
 }
 
 export default function AuditLogPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -105,7 +108,7 @@ export default function AuditLogPage() {
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          <div className="bg-card border border-border rounded-sm px-3 py-2 col-span-2 sm:col-span-1">
+          <div className={`col-span-2 sm:col-span-1 px-3 py-2 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
             <p className="text-[10px] uppercase text-muted-foreground">Last 7 Days</p>
             <p className="text-2xl font-bold text-foreground">{summary.total_last_7_days}</p>
           </div>
@@ -122,7 +125,7 @@ export default function AuditLogPage() {
       )}
 
       {/* Filter Bar */}
-      <div className="bg-card border border-border rounded-sm p-3 flex flex-wrap gap-2 items-center">
+      <div className={`p-3 flex flex-wrap gap-2 items-center ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 
         <div className="relative min-w-32">
@@ -176,7 +179,7 @@ export default function AuditLogPage() {
       </div>
 
       {/* Log Table */}
-      <div className="bg-card border border-border rounded-sm overflow-hidden">
+      <div className={`overflow-hidden ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

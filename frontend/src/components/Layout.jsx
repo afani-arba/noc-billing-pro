@@ -5,13 +5,13 @@ import {
   LayoutDashboard, Users, Wifi, WifiOff, FileText, Server, Shield, LogOut, Menu, ChevronLeft, Settings, Bell, HardDrive, Terminal,
   GitBranch, Route, Cable, ShieldAlert, Cpu, Monitor, BarChart2, AlertTriangle, Download, Radar, Zap, PieChart, TrendingUp, MessageCircle, Activity, Radio, Search
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 const RpIcon = ({ className = "w-5 h-5" }) => (
   <div className={`${className} flex items-center justify-center font-bold text-[9px] border-[1.5px] border-current rounded-[3px] leading-none select-none pt-[1px] px-[0.5px]`} style={{ fontFamily: 'Inter, sans-serif' }}>
     Rp
   </div>
 );
-
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,29 +24,27 @@ const navItems = [
   { separator: true, label: "Overview" },
   { to: "/",               icon: LayoutDashboard, label: "Dashboard",              end: true,  serviceKey: "dashboard" },
   { to: "/wall-display",   icon: Monitor,         label: "Wall Display",           serviceKey: "wallboard" },
-  
+
   // ── CUSTOMER & SERVICES ──
   { separator: true, label: "Customer Services" },
   { to: "/genieacs",       icon: Cpu,             label: "GenieACS / TR-069",      serviceKey: "genieacs",       nocOnly: true },
-  
+
   // ── HELPDESK & BILLING ──
   { separator: true, label: "Support & CRM" },
   { to: "/wa-customer-service", icon: MessageCircle, label: "CS Command Center",    serviceKey: "wa_customer_service", adminOnly: false },
   { to: "/reports",        icon: FileText,        label: "Data Reports",           serviceKey: "reports" },
-  
+
   { separator: true, label: "Keuangan & Penagihan", billingOnly: true, enterpriseOnly: true },
   { to: "/billing",        icon: RpIcon,          label: "Billing PPPoE",          serviceKey: "billing",        billingOnly: true, enterpriseOnly: true },
   { to: "/hotspot-billing",icon: RpIcon,          label: "Billing Hotspot",        serviceKey: "hotspot_billing", billingOnly: true, enterpriseOnly: true },
   { to: "/finance-report", icon: TrendingUp,      label: "Laporan Keuangan",       serviceKey: "finance_report", billingOnly: true, enterpriseOnly: true },
 
   // ── NOC & INFRASTRUCTURE ──
-  { separator: true, label: "NOC Infrastructure", nocOnly: false /* some are visible to helpdesk */ },
+  { separator: true, label: "NOC Infrastructure", nocOnly: false },
   { to: "/devices",        icon: Server,          label: "Devices Hub",            serviceKey: "devices",        nocOnly: true },
   { to: "/topology",       icon: GitBranch,       label: "Network Map",            serviceKey: "topology",       billingProHide: true },
-
   { to: "/ping",           icon: Activity,        label: "Network Ping Tool",      serviceKey: "ping",           billingProHide: true },
   { to: "/sla",            icon: BarChart2,       label: "SLA Monitor",            serviceKey: "sla",            billingProHide: true },
-
   { to: "/incidents",      icon: AlertTriangle,   label: "Incidents",              serviceKey: "incidents",      billingProHide: true },
 
   // ── ADVANCED ROUTING ──
@@ -54,7 +52,6 @@ const navItems = [
   { to: "/routing",        icon: Route,           label: "OSPF / Routes",          serviceKey: "routing",        nocOnly: true, billingProHide: true },
   { to: "/peering-eye",    icon: Radar,           label: "Sentinel Peering-Eye",   serviceKey: "peering_eye" },
   { to: "/bgp-steering",   icon: GitBranch,       label: "App Traffic & Steering", serviceKey: "bgp_steering" },
-
   { to: "/sdwan",          icon: Zap,             label: "Load Balance",           serviceKey: "sdwan",          nocOnly: true, billingProHide: true },
 
   // ── SYSTEM ADMINISTRATION ──
@@ -69,35 +66,62 @@ const navItems = [
   { to: "/admin/license",  icon: ShieldAlert,     label: "Lisensi Sistem",         serviceKey: "license",        adminOnly: true },
 ];
 
-// ─── SidebarContent sebagai komponen TERPISAH di luar Layout ──────────────────
-// PENTING: jangan definisikan komponen di dalam komponen lain —
-// setiap render akan dianggap komponen baru → remount → scroll reset
-function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
+// ─── SidebarContent ───────────────────────────────────────────────────────────
+function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition, isCyber }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <NavLink to="/" onClick={onNavClick} className="flex items-center gap-3 px-4 h-14 border-b border-border flex-shrink-0 hover:bg-secondary/50 transition-colors">
-        <div className="w-7 h-7 rounded bg-primary flex items-center justify-center flex-shrink-0">
-          <Server className="w-4 h-4 text-primary-foreground" />
+      <NavLink
+        to="/"
+        onClick={onNavClick}
+        className={`flex items-center gap-3 px-4 h-14 border-b flex-shrink-0 transition-colors ${
+          isCyber
+            ? "border-[var(--glass-border)] hover:bg-[var(--glass-bg-hover)]"
+            : "border-border hover:bg-secondary/50"
+        }`}
+      >
+        {/* Logo Icon */}
+        <div className={`w-7 h-7 rounded flex items-center justify-center flex-shrink-0 transition-all ${
+          isCyber
+            ? "bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-[0_0_12px_var(--glass-glow)]"
+            : "bg-primary"
+        }`}>
+          {isCyber ? (
+            <Server className="w-4 h-4" style={{ color: "hsl(162,100%,50%)" }} />
+          ) : (
+            <Server className="w-4 h-4 text-primary-foreground" />
+          )}
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-sm font-bold tracking-tight text-foreground">ARBA</h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Billing Pro</p>
+            <h1 className={`text-sm font-bold tracking-tight ${isCyber ? "gradient-text" : "text-foreground"}`}>
+              ARBA
+            </h1>
+            <p className={`text-[10px] uppercase tracking-widest ${
+              isCyber ? "font-mono" : ""
+            } text-muted-foreground`}>
+              {isCyber ? "NOC // Billing" : "Billing Pro"}
+            </p>
           </div>
         )}
       </NavLink>
 
       {/* Nav — scrollable */}
-      <nav className="flex-1 min-h-0 px-2 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 min-h-0 px-2 py-4 space-y-0.5 overflow-y-auto custom-scrollbar">
         {filteredNav.map((item, idx) => {
           if (item.separator) {
             return (
-              <div key={`sep-${idx}`} className="px-3 pt-3 pb-1">
+              <div key={`sep-${idx}`} className={`px-3 pt-4 pb-1.5 ${collapsed ? "py-2" : ""}`}>
                 {!collapsed && (
-                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest font-semibold">{item.label}</p>
+                  <p className={`text-[9px] uppercase tracking-widest font-semibold ${
+                    isCyber
+                      ? "text-[hsl(162,100%,35%)] font-mono"
+                      : "text-muted-foreground/50"
+                  }`}>
+                    {isCyber ? `> ${item.label}` : item.label}
+                  </p>
                 )}
-                {collapsed && <div className="border-t border-border/30 my-1" />}
+                {collapsed && <div className={`border-t my-1 ${isCyber ? "border-[var(--glass-border)]" : "border-border/30"}`} />}
               </div>
             );
           }
@@ -107,59 +131,93 @@ function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
               to={item.to}
               end={item.end}
               onClick={onNavClick}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-all duration-200 group ${
+              className={({ isActive }) => {
+                if (isCyber) {
+                  return `flex items-center gap-3 px-3 py-2 rounded text-sm transition-all duration-200 group ${
+                    isActive
+                      ? "glass-card nav-active"
+                      : "text-muted-foreground hover:text-[hsl(162,100%,50%)] hover:bg-[var(--glass-bg)]"
+                  }`;
+                }
+                return `flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm transition-all duration-200 group ${
                   isActive
                     ? "bg-primary/10 text-primary border-l-2 border-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                }`
-              }
+                }`;
+              }}
             >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <item.icon className={`w-4 h-4 flex-shrink-0 transition-all ${
+                isCyber ? "group-hover:drop-shadow-[0_0_4px_rgba(0,230,118,0.8)]" : ""
+              }`} />
+              {!collapsed && <span className={isCyber ? "font-mono text-xs tracking-wide" : ""}>{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
       {/* Edition Badge + User info */}
-      <div className="p-3 border-t border-border/50 flex-shrink-0">
+      <div className={`p-3 flex-shrink-0 ${
+        isCyber ? "border-t border-[var(--glass-border)]" : "border-t border-border/50"
+      }`}>
         {/* Edition Badge */}
         {!collapsed && (
           <div className={`mb-2 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest text-center ${
-            edition === "billing_pro"
-              ? "bg-primary/10 text-primary border border-primary/20"
-              : edition === "enterprise"
-              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-              : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+            isCyber
+              ? "glass-card border-[var(--glass-border)] text-[hsl(162,100%,50%)] font-mono"
+              : edition === "billing_pro"
+                ? "bg-primary/10 text-primary border border-primary/20"
+                : edition === "enterprise"
+                ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
           }`}>
-            {edition === "billing_pro" ? "💼 Billing Pro" : edition === "enterprise" ? "⚡ Enterprise" : "🔵 Pro"}
+            {isCyber
+              ? `[[ ${edition === "billing_pro" ? "BILLING PRO" : edition === "enterprise" ? "ENTERPRISE" : "PRO"} ]]`
+              : edition === "billing_pro" ? "💼 Billing Pro" : edition === "enterprise" ? "⚡ Enterprise" : "🔵 Pro"
+            }
           </div>
         )}
         {/* Role badge */}
         {!collapsed && user?.role && !(["administrator", "super_admin"]).includes(user.role) && (
           <div className={`mb-2 px-2 py-1 rounded text-[9px] font-semibold text-center border ${
-            user.role === "noc_engineer"  ? "bg-orange-500/10 text-orange-400 border-orange-500/20" :
-            user.role === "billing_staff" ? "bg-green-500/10 text-green-400 border-green-500/20" :
-            "bg-blue-500/10 text-blue-400 border-blue-500/20"
+            isCyber
+              ? "glass-card border-[var(--glass-border)] text-[hsl(185,100%,50%)] font-mono"
+              : user.role === "noc_engineer"  ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
+              : user.role === "billing_staff" ? "bg-green-500/10 text-green-400 border-green-500/20"
+              : "bg-blue-500/10 text-blue-400 border-blue-500/20"
           }`}>
-            {user.role === "noc_engineer" ? "🟠 NOC Engineer" :
-             user.role === "billing_staff" ? "🟢 Billing Staff" :
-             "🔵 Helpdesk"}
+            {isCyber
+              ? `> ${user.role.toUpperCase().replace("_", " ")}`
+              : user.role === "noc_engineer" ? "🟠 NOC Engineer"
+              : user.role === "billing_staff" ? "🟢 Billing Staff"
+              : "🔵 Helpdesk"
+            }
           </div>
         )}
+        {/* User avatar + name */}
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-semibold text-foreground">
+            <div className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+              isCyber
+                ? "glass-card border border-[var(--glass-border)] text-[hsl(162,100%,50%)] font-mono shadow-[0_0_8px_var(--glass-glow)]"
+                : "rounded-sm bg-secondary text-foreground"
+            }`}>
               {user?.full_name?.charAt(0)?.toUpperCase() || "A"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{user?.full_name}</p>
-              <p className="text-[10px] text-muted-foreground capitalize">{user?.role}</p>
+              <p className={`text-xs font-medium truncate ${isCyber ? "text-[hsl(162,100%,75%)]" : "text-foreground"}`}>
+                {user?.full_name}
+              </p>
+              <p className={`text-[10px] capitalize ${isCyber ? "text-[hsl(185,100%,40%)] font-mono" : "text-muted-foreground"}`}>
+                {user?.role}
+              </p>
             </div>
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-sm bg-secondary flex items-center justify-center text-xs font-semibold text-foreground mx-auto">
+          <div className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold mx-auto ${
+            isCyber
+              ? "glass-card text-[hsl(162,100%,50%)] font-mono"
+              : "rounded-sm bg-secondary text-foreground"
+          }`}>
             {user?.full_name?.charAt(0)?.toUpperCase() || "A"}
           </div>
         )}
@@ -172,10 +230,13 @@ function SidebarContent({ collapsed, filteredNav, user, onNavClick, edition }) {
 export default function Layout() {
   const { user, logout } = useAuth();
   const { edition, edition_name, features } = useEdition();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [now, setNow] = useState(new Date());
+
+  const isCyber = theme === "cyber";
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -191,63 +252,67 @@ export default function Layout() {
   };
 
   const ADMIN_ROLES   = ["super_admin", "administrator"];
-  const SUPER_ADMIN_ROLES = ["super_admin", "administrator"]; // User Management access
-  const FULL_ADMIN_ROLES  = ["super_admin", "administrator", "admin"]; // all other admin menus
+  const SUPER_ADMIN_ROLES = ["super_admin", "administrator"];
+  const FULL_ADMIN_ROLES  = ["super_admin", "administrator", "admin"];
   const NOC_ROLES   = ["super_admin", "administrator", "admin", "branch_admin", "noc_engineer"];
   const BILLING_ROLES = ["super_admin", "administrator", "admin", "branch_admin", "billing_staff"];
 
   const isAdmin         = FULL_ADMIN_ROLES.includes(user?.role);
-  const isSuperAdmin    = SUPER_ADMIN_ROLES.includes(user?.role); // user management only
+  const isSuperAdmin    = SUPER_ADMIN_ROLES.includes(user?.role);
   const isNOC           = NOC_ROLES.includes(user?.role);
   const isBillingRole   = BILLING_ROLES.includes(user?.role);
   const isBillingEnabled = features?.billing === true;
 
-  // Get user's allowed services (null/undefined = use role defaults)
   const userServices = user?.allowed_services || [];
 
   const canSeeService = (serviceKey) => {
-    if (!serviceKey) return true;  // separators/generic items
-    if (isAdmin) return true;      // admin sees everything
-    if (serviceKey === "dashboard") return true; // dashboard is always available
-    // If user has explicit allowed_services list, check it
+    if (!serviceKey) return true;
+    if (isAdmin) return true;
+    if (serviceKey === "dashboard") return true;
     if (user && Array.isArray(user.allowed_services)) {
       return user.allowed_services.includes(serviceKey);
     }
-    return null; // indicates we should use legacy role fallback
+    return null;
   };
 
   const filteredNav = navItems.filter((item) => {
-    // billingProHide: hide items that are NOC Sentinel specific (not in Billing Pro)
     if (item.billingProHide && edition === "billing_pro") return false;
-    // enterpriseOnly: hide if billing feature not available
     if (item.enterpriseOnly && !isBillingEnabled) return false;
-    // superAdminOnly: hanya super_admin & administrator yang bisa akses User Management
     if (item.superAdminOnly && !isSuperAdmin) return false;
-    // Check explicit RBAC
     const customAccess = item.serviceKey ? canSeeService(item.serviceKey) : true;
     if (customAccess === true) return true;
     if (customAccess === false) return false;
-
-    // customAccess === null means no explicit allowed_services defined (legacy user),
-    // so we fallback to the old role checks
     if (item.adminOnly && !isAdmin) return false;
     if (item.nocOnly && !isNOC) return false;
     if (item.billingOnly && !isBillingRole) return false;
-
     return true;
   });
+
   const closeMobile = () => setMobileOpen(false);
+
+  // Sidebar style
+  const sidebarClass = isCyber
+    ? "glass-panel border-r border-[var(--glass-border)]"
+    : "bg-card border-r border-border";
+
+  // Header style
+  const headerClass = isCyber
+    ? "glass-panel border-b border-[var(--glass-border)] sticky top-0 z-30"
+    : "h-14 bg-card border-b border-border sticky top-0 z-30";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background" data-testid="app-layout">
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={closeMobile} />
+        <div
+          className={`fixed inset-0 z-40 lg:hidden ${isCyber ? "bg-black/80 backdrop-blur-sm" : "bg-black/60"}`}
+          onClick={closeMobile}
+        />
       )}
 
       {/* Sidebar — Mobile */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-60 bg-card border-r border-border transform transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-60 transform transition-transform duration-300 lg:hidden ${sidebarClass} ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -257,12 +322,13 @@ export default function Layout() {
           user={user}
           edition={edition}
           onNavClick={closeMobile}
+          isCyber={isCyber}
         />
       </aside>
 
       {/* Sidebar — Desktop */}
       <aside
-        className={`hidden lg:flex flex-col border-r border-border bg-card transition-all duration-300 ${
+        className={`hidden lg:flex flex-col transition-all duration-300 ${sidebarClass} ${
           collapsed ? "w-14" : "w-60"
         }`}
       >
@@ -272,13 +338,14 @@ export default function Layout() {
           user={user}
           edition={edition}
           onNavClick={() => {}}
+          isCyber={isCyber}
         />
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-card sticky top-0 z-30">
+        <header className={`flex items-center justify-between px-4 lg:px-6 h-14 ${headerClass}`}>
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -303,28 +370,52 @@ export default function Layout() {
           <div className="flex items-center gap-3">
             {/* Live Clock */}
             <div className="flex flex-col items-end">
-              <span className="text-sm font-mono font-semibold text-foreground tabular-nums">{timeStr}</span>
-              <span className="text-[10px] text-muted-foreground">{dateStr}</span>
+              <span className={`text-sm font-semibold tabular-nums ${
+                isCyber ? "font-mono text-[hsl(162,100%,60%)] drop-shadow-[0_0_6px_rgba(0,230,118,0.5)]" : "font-mono text-foreground"
+              }`}>
+                {timeStr}
+              </span>
+              <span className={`text-[10px] ${isCyber ? "font-mono text-[hsl(185,100%,40%)]" : "text-muted-foreground"}`}>
+                {dateStr}
+              </span>
             </div>
 
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded border border-border bg-secondary text-xs">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-muted-foreground font-mono text-[11px]">System Online</span>
+            {/* System Status */}
+            <div className={`hidden sm:flex items-center gap-2 px-2.5 py-1 rounded text-xs ${
+              isCyber
+                ? "glass-card border border-[var(--glass-border)]"
+                : "border border-border bg-secondary"
+            }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${isCyber ? "glow-dot-green" : "bg-emerald-500"}`} />
+              <span className={`font-mono text-[11px] ${
+                isCyber ? "text-[hsl(162,100%,50%)]" : "text-muted-foreground"
+              }`}>
+                {isCyber ? "SYS::ONLINE" : "System Online"}
+              </span>
             </div>
 
+            {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2" data-testid="user-menu-btn">
-                  <div className="w-6 h-6 rounded-sm bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary">
+                  <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                    isCyber
+                      ? "glass-card border border-[var(--glass-border)] text-[hsl(162,100%,50%)] font-mono shadow-[0_0_6px_var(--glass-glow)]"
+                      : "rounded-sm bg-primary/20 text-primary"
+                  }`}>
                     {user?.full_name?.charAt(0)?.toUpperCase() || "A"}
                   </div>
                   <span className="hidden sm:inline text-sm">{user?.full_name}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className={`w-48 ${isCyber ? "glass-modal border-[var(--glass-border)]" : ""}`}>
                 <div className="px-2 py-1.5">
-                  <p className="text-sm font-medium">{user?.full_name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+                  <p className={`text-sm font-medium ${isCyber ? "text-[hsl(162,100%,70%)] font-mono" : ""}`}>
+                    {user?.full_name}
+                  </p>
+                  <p className={`text-xs capitalize ${isCyber ? "text-[hsl(185,100%,40%)] font-mono" : "text-muted-foreground"}`}>
+                    {user?.role}
+                  </p>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} data-testid="logout-btn" className="text-destructive">
@@ -344,4 +435,3 @@ export default function Layout() {
     </div>
   );
 }
-

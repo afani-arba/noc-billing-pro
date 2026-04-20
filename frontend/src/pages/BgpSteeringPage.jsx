@@ -6,8 +6,11 @@ import {
   Radar, Activity, Plus, Trash2, Power, Globe,
   ServerCrash, Shield, AlertTriangle, ArrowRight, Play, Eye, RefreshCw, Terminal, CheckCircle2, Edit2
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function BgpSteeringPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [activeTab, setActiveTab] = useState("app_traffic");
 
   return (
@@ -15,11 +18,11 @@ export default function BgpSteeringPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
-            <Radar className="w-7 h-7 text-indigo-500" />
-            BGP Steering & App Traffic
+          <h1 className={`text-2xl font-bold tracking-tight flex items-center gap-3 ${ isCyber ? "gradient-text font-mono" : "text-foreground" }`}>
+            <Radar className={`w-7 h-7 ${ isCyber ? "" : "text-indigo-500" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+            {isCyber ? "> BGP Steering & App Traffic" : "BGP Steering & App Traffic"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className={`text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>
             Pantau penggunaan Bandwidth per-Aplikasi dan belokkan traffic (BGP Policy Routing).
           </p>
         </div>
@@ -61,6 +64,8 @@ export default function BgpSteeringPage() {
  * App Traffic Monitor Tab
  * ───────────────────────────────────────────────────────────────────────────── */
 function AppTrafficMonitorTab() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -122,9 +127,9 @@ function AppTrafficMonitorTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
-          <Activity className="w-5 h-5 text-indigo-500" />
+      <div className={`p-5 shadow-sm rounded-xl ${ isCyber ? "glass-card border-none" : "bg-card border border-border" }`}>
+        <h3 className={`text-lg font-semibold flex items-center gap-2 mb-4 ${ isCyber ? "text-cyan-400 font-mono" : "" }`}>
+          <Activity className={`w-5 h-5 ${ isCyber ? "text-cyan-400" : "text-indigo-500" }`} />
           Bandwidth Usage per Application (24 Jam Terakhir)
         </h3>
         
@@ -142,7 +147,7 @@ function AppTrafficMonitorTab() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead>
-                <tr className="border-b border-border/50 text-muted-foreground">
+                <tr className={`border-b text-muted-foreground ${ isCyber ? "border-white/10" : "border-border/50" }`}>
                   <th className="pb-3 px-2 font-medium">Platform</th>
                   <th className="pb-3 px-2 font-medium text-right">Total Bandwidth</th>
                   <th className="pb-3 px-2 font-medium text-right">Download (Rx)</th>
@@ -203,6 +208,8 @@ function AppTrafficMonitorTab() {
  * BGP Steering Tab
  * ───────────────────────────────────────────────────────────────────────────── */
 function BgpSteeringTab() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [editData, setEditData] = useState(null);
@@ -253,7 +260,7 @@ function BgpSteeringTab() {
       {isLoading ? (
         <div className="text-center py-10"><RefreshCw className="w-6 h-6 animate-spin text-muted-foreground mx-auto" /></div>
       ) : policies.length === 0 ? (
-        <div className="bg-card border border-border border-dashed rounded-xl p-10 text-center flex flex-col items-center justify-center">
+        <div className={`border-dashed rounded-xl p-10 text-center flex flex-col items-center justify-center ${ isCyber ? "glass-card border-white/5" : "bg-card border border-border" }`}>
           <Globe className="w-12 h-12 text-muted-foreground/20 mb-3" />
           <h4 className="text-lg font-semibold text-muted-foreground mb-1">Tidak Ada BGP Policy</h4>
           <p className="text-sm text-muted-foreground/60 max-w-md">Belum ada aturan BGP Steering yang aktif. Buat policy baru untuk mulai mengatur arah routing ke Peering/IX Anda.</p>
@@ -261,7 +268,7 @@ function BgpSteeringTab() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {policies.map(p => (
-            <div key={p.id} className="bg-card border border-border rounded-xl p-5 shadow-sm relative group hover:border-emerald-500/30 transition-colors">
+            <div key={p.id} className={`p-5 shadow-sm relative group hover:border-emerald-500/30 transition-colors ${ isCyber ? "glass-card hover:bg-white/5 border-none" : "bg-card border border-border rounded-xl" }`}>
               <div className="flex justify-between items-start mb-3">
                  <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-xl shadow-inner">

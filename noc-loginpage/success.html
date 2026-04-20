@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title id="title"></title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0;"/>
+<link rel="stylesheet" href="style.css">
+<script type="text/javascript">
+    function getCookie(name) {
+        var nameEQ = name + "=";
+        var ca = document.cookie.split(';');
+        for(var i = 0; i < ca.length; i++) {
+            var c = ca[i];
+            while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+        }
+        return null;
+    }
+    function eraseCookie(name) {
+        document.cookie = name + '=; Max-Age=-99999999; path=/;';
+    }
+
+    var waUrl = getCookie("pend_wa");
+    if (waUrl) {
+        eraseCookie("pend_wa");
+        window.location.href = waUrl;
+        var meta = document.createElement('meta');
+        meta.httpEquiv = "refresh";
+        meta.content = "0; url=" + waUrl;
+        document.getElementsByTagName('head')[0].appendChild(meta);
+    }
+</script>
+$(if refresh-timeout)
+<script>
+	setTimeout(function(){
+	location.href = './status';
+	},4000)
+</script>
+$(endif)
+</head>
+<body>
+<div class="main">
+
+$(if login-by == 'trial')
+		<div style="margin-top:20px; text-align: center;"><h3>Welcome</h3><i style="font-size:150px;" class="icon icon-user-circle-o">&#xf2be;</i> <h3>trial user</h3></div><br>
+	$(elif login-by != 'mac')
+		<div style="margin-top:20px; text-align: center;"><h3>Welcome</h3><i style="font-size:150px;" class="icon icon-user-circle-o">&#xf2be;</i><br> <h3 id="user">$(username)</h3></div><br>
+$(endif)
+<h3>Anda telah terhubung di jaringan <br /><b id="dname"></b></h3>
+<button class="button" onclick="window.location='./status'"><i class="icon icon-check">&#xe807;</i> Check Status</button>
+
+<!-- Failsafe Button for WhatsApp -->
+<script>
+    if (typeof waUrl !== 'undefined' && waUrl) {
+        document.write(
+            '<div style="background:rgba(37,211,102,0.15); border:1px solid #25d366; border-radius:12px; padding:15px; margin-top:20px; text-align:center; animation: fadeIn 0.5s;">' +
+                '<p style="color:#25d366; font-size:13px; font-weight:700; margin-bottom:10px;">Sedang Membuka WhatsApp...</p>' +
+                '<a href="' + waUrl + '" style="display:inline-block; background:#25d366; color:#000; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:800; font-size:14px; box-shadow:0 4px 15px rgba(37,211,102,0.3);">KLIK DI SINI JIKA TIDAK TERBUKA</a>' +
+            '</div>'
+        );
+    }
+</script>
+
+</div>
+    <!-- Powered By Footer -->
+    <div id="pbaba" class="pb-branding">
+        Powered by <b>PT Arsya Barokah Abadi</b><br>
+        <a href="http://www.arbatraining.com" target="_blank">www.arbatraining.com</a>
+    </div>
+    
+    <div id="footerHost" style="margin-top:12px; text-align:center; font-size:10px; color:rgba(255,255,255,0.15);"></div>
+</div>
+
+<script type="text/javascript">
+    // Security Check for Footer (Anti-Tamper)
+    (function(){
+        var check = function() {
+            var f = document.getElementById('pbaba');
+            if (!f || f.innerHTML.indexOf("PT Arsya Barokah Abadi") === -1 || f.innerHTML.indexOf("www.arbatraining.com") === -1) {
+                document.body.innerHTML = '<div style="background:#020617;color:#ef4444;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:20px;"><div><h1>Sistem Terkunci</h1><p>Lisensi Halaman Login Tidak Valid atau Telah Dimodifikasi.<br>Silakan hubungi administrator PT Arsya Barokah Abadi.</p></div></div>';
+            }
+        };
+        setInterval(check, 3000);
+        setTimeout(check, 500);
+    })();
+
+    document.getElementById('title').innerHTML = window.location.hostname + " — Success";
+    document.getElementById('footerHost').innerHTML = "📶 " + window.location.hostname;
+    document.getElementById('dname').innerHTML = window.location.hostname;
+</script>
+</body>
+</html>

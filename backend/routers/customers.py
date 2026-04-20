@@ -78,7 +78,7 @@ import httpx
 import logging
 logger = logging.getLogger(__name__)
 
-async def _bg_send_customer_greeting(customer: dict):
+async def _bg_send_customer_greeting(customer: dict, invoice_total: int = 0, package_name: str = ""):
     db = get_db()
     # Gunakan setting dari billing untuk WA dengan dukungan multi-cabang
     dev_id = customer.get("device_id")
@@ -101,11 +101,28 @@ async def _bg_send_customer_greeting(customer: dict):
 
     name = customer.get("name", "")
     username = customer.get("username", "")
+    client_id = customer.get("client_id", "")
+    due_day = customer.get("due_day", 10)
     
+    if not package_name and customer.get("package_id"):
+        pkg = await db.billing_packages.find_one({"id": customer.get("package_id")})
+        if pkg:
+            package_name = pkg.get("name", "")
+            if not invoice_total:
+                invoice_total = pkg.get("price", 0)
+    
+    formatted_total = f"Rp {invoice_total:,}".replace(',', '.')
+
     # Ambil template kustom atau gunakan default
     template = settings.get("wa_template_new_customer", "")
     if template:
-        msg = template.replace("{customer_name}", name).replace("{username}", username)
+        msg = template.replace("{customer_name}", name)\
+                      .replace("{username}", username)\
+                      .replace("{client_id}", client_id)\
+                      .replace("{package_name}", package_name)\
+                      .replace("{total}", formatted_total)\
+                      .replace("{due_day}", str(due_day))\
+                      .replace("{phone}", phone)
     else:
         msg = f"Halo *{name}*,\n\nTerima kasih telah bergabung! Layanan internet Anda dengan username *{username}* telah AKTIF.\n\nSimpan pesan ini jika butuh bantuan teknis. Selamat menggunakan layanan dari kami."
     
@@ -308,7 +325,11 @@ async def create_customer(data: CustomerCreate, background_tasks: BackgroundTask
     
     # ── Kirim Pesan Sambutan ke WA pelanggan (jika ada nomor HP) ──
     if data.phone:
-        background_tasks.add_task(_bg_send_customer_greeting, doc)
+        # Calculate total if not set, or pass defaults
+        pkg_name = pkg.get("name", "") if pkg else ""
+        pkg_price = pkg.get("price", 0) if pkg else 0
+        total_amount = pkg_price + data.installation_fee
+        background_tasks.add_task(_bg_send_customer_greeting, doc, total_amount, pkg_name)
 
     return doc
 

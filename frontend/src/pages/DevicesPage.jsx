@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
 import { Plus, Trash2, Server, Wifi, WifiOff, Pencil, Zap, Monitor, Radio, AlertTriangle, Shield, Lock, Network, Tag, Globe, MapPin, Info, Cpu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 export default function DevicesPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,8 +116,10 @@ export default function DevicesPage() {
     <div className="space-y-4 pb-16" data-testid="devices-page">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Devices</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">Manage MikroTik devices — polling via REST API</p>
+          <h1 className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            {isCyber ? "> Devices" : "Devices"}
+          </h1>
+          <p className={`text-xs sm:text-sm ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Manage MikroTik devices — polling via REST API</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={openAdd} size="sm" className="rounded-sm gap-2" data-testid="add-device-btn"><Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add Device</span></Button>
@@ -130,7 +135,7 @@ export default function DevicesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
           {devices.map(d => (
-            <div key={d.id} className="bg-card border border-border rounded-sm p-3 sm:p-5 transition-all hover:border-border/80" data-testid={`device-card-${d.name}`}>
+            <div key={d.id} className={`p-3 sm:p-5 transition-all ${ isCyber ? "glass-card hover:border-[rgba(0,230,118,0.3)]" : "bg-card border border-border rounded-sm hover:border-border/80" }`} data-testid={`device-card-${d.name}`}>
               <div className="flex items-start justify-between mb-3 sm:mb-4">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-sm flex items-center justify-center ${d.status === "online" ? "bg-green-500/10" : "bg-red-500/10"}`}>

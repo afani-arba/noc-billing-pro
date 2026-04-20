@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <title id="title">Hotspot Error</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="main">
+        <!-- Logo -->
+        <div class="logo-wrap">
+            <img src="logo.png" alt="Logo">
+        </div>
+
+        <div class="expired-icon" style="color: #ef4444;">⚠️</div>
+        <div class="expired-title">Terjadi Kesalahan</div>
+
+        <div class="notice">
+            $(error)
+        </div>
+
+        <div class="expired-msg" style="margin-top: 16px;">
+            Silakan coba login kembali atau hubungi administrator jika masalah berlanjut.
+        </div>
+
+        <button class="button-big" onclick="window.location.href='login.html'">
+            <span>🔑</span> Kembali ke Login
+        </button>
+
+        <!-- Powered By Footer -->
+        <div id="pbaba" class="pb-branding">
+            Powered by <b>PT Arsya Barokah Abadi</b><br>
+            <a href="http://www.arbatraining.com" target="_blank">www.arbatraining.com</a>
+        </div>
+        
+        <div id="footerHost" style="margin-top:12px; text-align:center; font-size:10px; color:rgba(255,255,255,0.15);"></div>
+    </div>
+
+<script type="text/javascript">
+    // Security Check for Footer (Anti-Tamper)
+    (function(){
+        var check = function() {
+            var f = document.getElementById('pbaba');
+            if (!f || f.innerHTML.indexOf("PT Arsya Barokah Abadi") === -1 || f.innerHTML.indexOf("www.arbatraining.com") === -1) {
+                document.body.innerHTML = '<div style="background:#020617;color:#ef4444;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:20px;"><div><h1>Sistem Terkunci</h1><p>Lisensi Halaman Login Tidak Valid atau Telah Dimodifikasi.<br>Silakan hubungi administrator PT Arsya Barokah Abadi.</p></div></div>';
+            }
+        };
+        setInterval(check, 3000);
+        setTimeout(check, 500);
+    })();
+
+    document.getElementById('title').innerHTML = window.location.hostname + " — Error";
+    document.getElementById('footerHost').innerHTML = "📶 " + window.location.hostname;
+</script>
+</body>
+</html>

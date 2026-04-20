@@ -15,6 +15,7 @@ import {
   ListChecks, Check, Square, CheckSquare, Info, UserPlus, Loader2,
   ShieldCheck, Sparkles, Phone, MapPin, CalendarDays, Package
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,8 @@ function RxPowerBadge({ value }) {
 // ── Stats Bar ─────────────────────────────────────────────────────────────────
 
 function StatsBar({ stats, loading }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const items = [
     { label: "Total CPE", value: stats?.total ?? "—", color: "text-foreground" },
     { label: "Online", value: stats?.online ?? "—", color: "text-green-400" },
@@ -67,7 +70,7 @@ function StatsBar({ stats, loading }) {
   return (
     <div className="flex flex-wrap gap-3">
       {items.map((s) => (
-        <div key={s.label} className="bg-secondary/30 border border-border rounded-sm px-4 py-2 flex flex-col items-center min-w-[80px]">
+        <div key={s.label} className={`px-4 py-2 flex flex-col items-center min-w-[80px] rounded-sm ${ isCyber ? "glass-card border-none" : "bg-secondary/30 border border-border" }`}>
           <span className={`text-xl font-bold font-mono ${s.color} ${loading ? "animate-pulse" : ""}`}>{s.value}</span>
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</span>
         </div>
@@ -188,12 +191,12 @@ function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${ isCyber ? "bg-black/80 backdrop-blur-md" : "bg-black/60 backdrop-blur-sm" }`}
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div className="bg-card border border-border rounded-sm w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl rounded-sm ${ isCyber ? "glass-card border-white/10" : "bg-card border border-border" }`}>
         {/* Header */}
-        <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between z-10">
+        <div className={`sticky top-0 px-4 py-3 flex items-center justify-between z-10 border-b ${ isCyber ? "bg-[#0f172a]/50 border-white/5" : "bg-card border-border" }`}>
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${device.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
             <span className="font-semibold text-sm tracking-wide">
@@ -440,12 +443,12 @@ function ZTPModal({ device, onClose, onSuccess }) {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${ isCyber ? "bg-black/80 backdrop-blur-md" : "bg-black/70 backdrop-blur-sm" }`}
       onClick={(e) => { if (e.target === overlayRef.current && !submitting) onClose(); }}
     >
-      <div className="bg-card border border-border rounded-sm w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div className={`w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl rounded-sm ${ isCyber ? "glass-card border-white/10" : "bg-card border border-border" }`}>
         {/* Header */}
-        <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between z-10">
+        <div className={`sticky top-0 px-4 py-3 flex items-center justify-between z-10 border-b ${ isCyber ? "bg-[#0f172a]/50 border-white/5" : "bg-card border-border" }`}>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-sm bg-green-500/20 flex items-center justify-center flex-shrink-0">
               <UserPlus className="w-4 h-4 text-green-400" />
@@ -1457,8 +1460,8 @@ export default function GenieACSPage() {
     <div className="space-y-4 pb-16">
       {/* Confirm Bulk Reboot Dialog */}
       {confirmBulk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-sm w-full max-w-sm p-5 space-y-4 shadow-2xl">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${ isCyber ? "bg-black/80 backdrop-blur-md" : "bg-black/60 backdrop-blur-sm" }`}>
+          <div className={`w-full max-w-sm p-5 space-y-4 shadow-2xl rounded-sm ${ isCyber ? "glass-card border-white/10" : "bg-card border border-border" }`}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-sm bg-orange-500/20 flex items-center justify-center flex-shrink-0">
                 <RotateCcw className="w-5 h-5 text-orange-400" />
@@ -1528,10 +1531,11 @@ export default function GenieACSPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Cpu className="w-6 h-6 text-primary" /> GenieACS / TR-069
+          <h1 className={`text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2 ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            <Cpu className={`w-6 h-6 ${ isCyber ? "" : "text-primary" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+            {isCyber ? "> GenieACS / TR-069" : "GenieACS / TR-069"}
           </h1>
-          <p className="text-xs text-muted-foreground">Manajemen CPE (modem/router pelanggan) via protocol TR-069</p>
+          <p className={`text-xs mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Manajemen CPE (modem/router pelanggan) via protocol TR-069</p>
         </div>
         <div className="flex items-center gap-2 self-start">
           {connectionOk !== null && (

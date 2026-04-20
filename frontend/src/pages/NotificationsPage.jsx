@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import api from "@/lib/api";
+import { useTheme } from "@/context/ThemeContext";
 import { Bell, Plus, Trash2, Send, Save, Phone, Settings2, AlertTriangle, Info, Activity, Network, MessageSquare, Bot, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,8 @@ const DEFAULT_SETTINGS = {
 };
 
 export default function NotificationsPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -149,8 +152,10 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Notifikasi</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">Konfigurasi alert WhatsApp via Fonnte API</p>
+          <h1 className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            {isCyber ? "> Notifikasi" : "Notifikasi"}
+          </h1>
+          <p className={`text-xs sm:text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Konfigurasi alert WhatsApp via Fonnte API</p>
         </div>
         <Button onClick={handleSave} disabled={saving} size="sm" className="rounded-sm gap-2 w-full sm:w-auto">
           <Save className="w-4 h-4" /> {saving ? "Menyimpan..." : "Simpan Pengaturan"}
@@ -172,7 +177,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Enable Toggle */}
-      <div className="bg-card border border-border rounded-sm p-4">
+      <div className={`p-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-sm bg-primary/10 flex items-center justify-center">
@@ -193,7 +198,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Fonnte Token */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
+      <div className={`p-4 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Settings2 className="w-4 h-4 text-primary" /> Konfigurasi Fonnte API
         </h2>
@@ -228,7 +233,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Recipients */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-3">
+      <div className={`p-4 space-y-3 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold flex items-center gap-2">
             <Phone className="w-4 h-4 text-primary" /> Nomor Penerima Alert
@@ -249,7 +254,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Alert Types & Thresholds */}
-      <div className="bg-card border border-border rounded-sm p-4 space-y-4">
+      <div className={`p-4 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <h2 className="text-base font-semibold flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-yellow-500" /> Jenis Alert &amp; Threshold
         </h2>
@@ -448,7 +453,7 @@ function TelegramSection({ settings, setSettings }) {
   };
 
   return (
-    <div className="bg-card border border-border rounded-sm p-4 space-y-4">
+    <div className={`p-4 space-y-4 ${ true ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold flex items-center gap-2">
           <Bot className="w-4 h-4 text-blue-400" /> Telegram Bot

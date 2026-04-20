@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
+import { useTheme } from "@/context/ThemeContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,19 +58,25 @@ const BAR_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"];
 
 // ── Summary Card ─────────────────────────────────────────────────────────────
 
-function SummaryCard({ icon: Icon, label, value, sub, accent, iconColor }) {
+function SummaryCard({ icon: Icon, label, value, sub, accent, iconColor, isCyber }) {
+  const accentColor = accent.includes('green') ? 'green' : accent.includes('amber') ? 'amber' : accent.includes('red') ? 'red' : 'cyan';
   return (
     <div
-      className={`bg-card border border-border rounded-sm p-4 relative overflow-hidden border-l-2 ${accent}`}
+      className={isCyber
+        ? `glass-card p-4 relative overflow-hidden stat-accent-${accentColor}`
+        : `bg-card border border-border rounded-sm p-4 relative overflow-hidden border-l-2 ${accent}`
+      }
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+          <p className={`text-[10px] uppercase tracking-widest font-semibold ${
+            isCyber ? "font-mono text-[hsl(162,100%,35%)]" : "text-muted-foreground"
+          }`}>
             {label}
           </p>
-          <p className="text-2xl font-bold font-mono mt-1 truncate">{value}</p>
+          <p className={`text-2xl font-bold font-mono mt-1 truncate ${ isCyber ? "text-[hsl(162,100%,80%)]" : "" }`}>{value}</p>
           {sub && (
-            <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
+            <p className={`text-[10px] mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>{sub}</p>
           )}
         </div>
         <div
@@ -262,6 +269,8 @@ function exportCSV(report, period) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function FinanceReportPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
@@ -359,7 +368,7 @@ export default function FinanceReportPage() {
       </div>
 
       {/* ── Filter Bar ── */}
-      <div className="flex flex-wrap gap-3 items-center p-3 bg-card border border-border rounded-sm">
+      <div className={`flex flex-wrap gap-3 items-center p-3 rounded-sm ${ isCyber ? "glass-card" : "bg-card border border-border" }`}>
         <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 
         {/* Month */}
@@ -491,6 +500,7 @@ export default function FinanceReportPage() {
               sub={`Dari ${report.summary.active_customers_count ?? report.summary.total_invoices} pelanggan PPPoE aktif`}
               accent="border-l-primary"
               iconColor="bg-primary/10 text-primary"
+              isCyber={isCyber}
             />
             <SummaryCard
               icon={CheckCircle2}
@@ -499,6 +509,7 @@ export default function FinanceReportPage() {
               sub={`${report.summary.paid_count} invoice lunas bulan ini`}
               accent="border-l-green-500"
               iconColor="bg-green-500/10 text-green-400"
+              isCyber={isCyber}
             />
             <SummaryCard
               icon={Clock}
@@ -509,6 +520,7 @@ export default function FinanceReportPage() {
               } belum bayar`}
               accent="border-l-amber-500"
               iconColor="bg-amber-500/10 text-amber-400"
+              isCyber={isCyber}
             />
             <SummaryCard
               icon={Percent}
@@ -529,6 +541,7 @@ export default function FinanceReportPage() {
                   ? "bg-amber-500/10 text-amber-400"
                   : "bg-red-500/10 text-red-400"
               }
+              isCyber={isCyber}
             />
           </div>
 
@@ -563,7 +576,7 @@ export default function FinanceReportPage() {
               return (
                 <div
                   key={item.label}
-                  className="bg-card border border-border rounded-sm p-3"
+                  className={isCyber ? "glass-card p-3" : "bg-card border border-border rounded-sm p-3"}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -588,7 +601,7 @@ export default function FinanceReportPage() {
           {/* ── Data Tabel Section ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Detail Pembayaran Harian */}
-            <div className="bg-card border border-border rounded-sm flex flex-col h-[400px]">
+            <div className={`flex flex-col h-[400px] ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
               <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-400" />
@@ -641,7 +654,7 @@ export default function FinanceReportPage() {
             </div>
 
             {/* Daftar Tunggakan Ringkasan */}
-            <div className="bg-card border border-border rounded-sm flex flex-col h-[400px]">
+            <div className={`flex flex-col h-[400px] ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
               <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-500" />
@@ -760,7 +773,7 @@ export default function FinanceReportPage() {
                   />
                 </div>
 
-                <div className="bg-card border border-border rounded-sm p-4">
+                <div className={`p-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
                   <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-primary" />
                     Penjualan Harian Hotspot (Online & Offline)
@@ -788,7 +801,7 @@ export default function FinanceReportPage() {
                   )}
                 </div>
 
-                <div className="bg-card border border-border rounded-sm overflow-hidden">
+                <div className={`overflow-hidden ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
                   <div className="flex items-center justify-between p-4 border-b border-border">
                     <h3 className="text-sm font-semibold flex items-center gap-2">
                       <FileText className="w-4 h-4 text-primary" />

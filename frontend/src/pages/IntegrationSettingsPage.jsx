@@ -11,9 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
+import { useTheme } from "@/context/ThemeContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function IntegrationSection({ selectedDevice }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [cfg, setCfg] = useState({ n8n_webhook_url: "", wa_gateway_type: "fonnte", wa_api_url: "https://api.fonnte.com/send", wa_token: "", wa_delay_ms: 10000 });
   const [saving, setSaving] = useState(false);
   const [testMode, setTestMode] = useState(false);
@@ -23,7 +26,7 @@ function IntegrationSection({ selectedDevice }) {
   const handleTestWa = async () => { if (!testPhone) return toast.error("Masukkan nomor"); setTestMode(true); try { await api.post("/notifications/test", { phone: testPhone, fonnte_token: cfg.wa_token }); toast.success("Test terkirim!"); } catch { toast.error("Gagal"); } setTestMode(false); };
   return (
     <div className="space-y-6">
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-green-500/10 flex items-center justify-center"><MessageSquare className="w-4 h-4 text-green-500" /></div>
           <div><h2 className="text-base font-semibold">WhatsApp Gateway</h2><p className="text-[10px] text-muted-foreground">Konfigurasi gateway WA untuk notifikasi tagihan dan isolir</p></div>
@@ -47,6 +50,8 @@ function IntegrationSection({ selectedDevice }) {
 
 // ── Cloudflare Tunnel Section ──────────────────────────────────────────────
 function CloudflareSection() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [cfg, setCfg] = useState({ token: "", enabled: false, token_set: false });
   const [showToken, setShowToken] = useState(false);
   const [status, setStatus] = useState({ status: "unknown", enabled: false, has_token: false });
@@ -99,7 +104,7 @@ function CloudflareSection() {
   const statusLabel = { running: "🟢 Aktif", stopped: "🟡 Berhenti", error: "🔴 Error", unknown: "⚪ Tidak Diketahui" }[status.status] || status.status;
 
   return (
-    <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+    <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
       <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-sm bg-orange-500/10 flex items-center justify-center">
@@ -190,6 +195,8 @@ function CloudflareSection() {
 }
 
 function AIIntegrationSection() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [cfg, setCfg] = useState({ gemini_api_key: "", telegram_bot_token: "", telegram_chat_id_noc: "" });
   const [aiCfg, setAiCfg] = useState({ model: "gemini-1.5-flash", system_prompt: "", company_name: "", ai_name: "Asisten AI", payment_info: "", extra_context: "", temperature: 0.7, max_tokens: 1000, feature_modem_reprovision: true, feature_cable_alert: true, feature_needs_cs: true });
   const [saving, setSaving] = useState(false);
@@ -227,7 +234,7 @@ function AIIntegrationSection() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4 shadow-sm relative overflow-hidden">
+    <div className={`p-4 sm:p-6 space-y-4 shadow-sm relative overflow-hidden ${ isCyber ? "glass-card hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-shadow" : "bg-card border border-border rounded-sm" }`}>
       <div className="flex items-center gap-3 border-b border-border/50 pb-4">
         <div className="w-8 h-8 rounded-sm bg-violet-500/10 flex items-center justify-center">
           <Bot className="w-4 h-4 text-violet-400" />
@@ -360,6 +367,8 @@ function AIIntegrationSection() {
 
 // ── Billing Settings Section (WA Templates, Auto Isolir, FCM, Payment Gateway) ─
 function BillingSettingsSection({ selectedDevice }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [settings, setSettings] = useState({
     wa_template_unpaid: "", wa_template_paid: "", wa_template_h1: "", wa_template_isolir: "", wa_template_new_customer: "",
     fcm_template_h3: "", fcm_template_h2: "", fcm_template_h1: "", fcm_template_due: "",
@@ -397,7 +406,7 @@ function BillingSettingsSection({ selectedDevice }) {
     <div className="space-y-4">
 
       {/* WA Templates */}
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-green-500/10 flex items-center justify-center"><MessageCircle className="w-4 h-4 text-green-500" /></div>
           <div>
@@ -429,7 +438,7 @@ function BillingSettingsSection({ selectedDevice }) {
       </div>
 
       {/* Auto Isolir */}
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-orange-500/10 flex items-center justify-center"><WifiOff className="w-4 h-4 text-orange-400" /></div>
           <div><h2 className="text-base font-semibold">Auto Isolir</h2><p className="text-[10px] text-muted-foreground">Putus otomatis pelanggan overdue sesuai jadwal</p></div>
@@ -466,7 +475,7 @@ function BillingSettingsSection({ selectedDevice }) {
       </div>
 
       {/* FCM Templates */}
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-purple-500/10 flex items-center justify-center"><Smartphone className="w-4 h-4 text-purple-400" /></div>
           <div><h2 className="text-base font-semibold">Template Push Notification (FCM)</h2><p className="text-[10px] text-muted-foreground">Notifikasi aplikasi portal pelanggan Android</p></div>
@@ -516,7 +525,7 @@ function BillingSettingsSection({ selectedDevice }) {
       </div>
 
       {/* Payment Gateway & Moota */}
-      <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4">
+      <div className={`p-4 sm:p-6 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <div className="flex items-center gap-3 border-b border-border/50 pb-4">
           <div className="w-8 h-8 rounded-sm bg-emerald-500/10 flex items-center justify-center"><CreditCard className="w-4 h-4 text-emerald-400" /></div>
           <div><h2 className="text-base font-semibold">Payment Gateway & Moota Mutasi</h2><p className="text-[10px] text-muted-foreground">Gateway Otomatis, Xendit, BCA SNAP, BRI BRIVA</p></div>
@@ -614,6 +623,8 @@ function BillingSettingsSection({ selectedDevice }) {
 }
 
 export default function IntegrationSettingsPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { devices, isLocked, defaultDeviceId, loading: loadingDevices } = useAllowedDevices();
   const [selectedDevice, setSelectedDevice] = useState("GLOBAL");
 
@@ -626,7 +637,12 @@ export default function IntegrationSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-sm bg-orange-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-orange-400" /></div>
-          <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight">Integrasi & Otomasi</h1><p className="text-xs sm:text-sm text-muted-foreground">Webhook, WhatsApp, AI, Telegram NOC, Notifikasi Billing & Payment Gateway</p></div>
+          <div>
+            <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${ isCyber ? "gradient-text font-mono" : "" }`}>
+              {isCyber ? "> Integrasi & Otomasi" : "Integrasi & Otomasi"}
+            </h1>
+            <p className={`text-xs sm:text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Webhook, WhatsApp, AI, Telegram NOC, Notifikasi Billing & Payment Gateway</p>
+          </div>
         </div>
 
         {/* Global Filter */}
@@ -661,7 +677,7 @@ export default function IntegrationSettingsPage() {
           { icon: Bot, color: "text-violet-400", bg: "bg-violet-500/10", title: "AI Chat + Telegram", sub: "Gemini AI + NOC" },
           { icon: CreditCard, color: "text-emerald-400", bg: "bg-emerald-500/10", title: "Billing & PG", sub: "Template & Gateway" },
         ].map(s => (
-          <div key={s.title} className="bg-card border border-border rounded-sm p-3 flex items-center gap-3">
+          <div key={s.title} className={`p-3 flex items-center gap-3 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
             <div className={`w-8 h-8 rounded-sm ${s.bg} flex items-center justify-center flex-shrink-0`}><s.icon className={`w-4 h-4 ${s.color}`} /></div>
             <div><p className="text-xs font-semibold">{s.title}</p><p className="text-[10px] text-muted-foreground">{s.sub}</p></div>
           </div>

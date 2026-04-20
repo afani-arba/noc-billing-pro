@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useTheme } from "@/context/ThemeContext";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function tgl(iso) {
@@ -377,6 +378,8 @@ function StatusBadge({ status }) {
 
 // ─── MAIN ───────────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [period, setPeriod] = useState("daily");
   const [selectedDevice, setSelectedDevice] = useState("all");
   const [deviceList, setDeviceList] = useState([]);
@@ -415,12 +418,14 @@ export default function ReportsPage() {
     <div className="space-y-4 pb-16" data-testid="reports-page">
       {/* Page header */}
       <div>
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Laporan Monitoring</h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">Generate laporan harian dan export sebagai PDF</p>
+        <h1 className={`text-xl sm:text-2xl md:text-3xl font-bold tracking-tight ${ isCyber ? "gradient-text font-mono" : "" }`}>
+          {isCyber ? "> Laporan Monitoring" : "Laporan Monitoring"}
+        </h1>
+        <p className={`text-xs sm:text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Generate laporan harian dan export sebagai PDF</p>
       </div>
 
       {/* Config */}
-      <div className="bg-card border border-border rounded-sm p-4">
+      <div className={`p-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-sm" }`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-primary" /> Konfigurasi Laporan
         </h3>
@@ -499,10 +504,10 @@ export default function ReportsPage() {
 
       {/* ── LAPORAN PREVIEW ── */}
       {report && s && (
-        <div className="border border-border rounded-sm overflow-hidden shadow-lg">
+        <div className={`overflow-hidden shadow-lg ${ isCyber ? "glass-card" : "border border-border rounded-sm" }`}>
 
           {/* HEADER */}
-          <div className="bg-[#0f172a] flex items-start justify-between px-6 py-5">
+          <div className={`${ isCyber ? "bg-[#0f172a]/50" : "bg-[#0f172a]" } flex items-start justify-between px-6 py-5`}>
             <div>
               <h2 className="text-[22px] font-black text-white tracking-tight">{report.company_name}</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">Laporan Monitoring Harian – Managed Service Provider</p>

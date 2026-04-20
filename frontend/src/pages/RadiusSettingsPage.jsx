@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/App";
+import { useTheme } from "@/context/ThemeContext";
 
 // ─── RADIUS Status Badge ───────────────────────────────────────────────────────
 const RadiusBadge = ({ enabled, loading }) => {
@@ -24,6 +25,8 @@ const RadiusBadge = ({ enabled, loading }) => {
 };
 
 export default function RadiusSettingsPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { user } = useAuth();
   const isViewer = user?.role === "viewer" || user?.role === "helpdesk";
 
@@ -211,10 +214,11 @@ export default function RadiusSettingsPage() {
     <div className="space-y-6 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Radio className="w-7 h-7 text-primary" /> RADIUS Server
+          <h1 className={`text-2xl font-bold tracking-tight flex items-center gap-2 ${ isCyber ? "gradient-text font-mono" : "" }`}>
+            <Radio className={`w-7 h-7 ${ isCyber ? "" : "text-primary" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+            {isCyber ? "> RADIUS Server" : "RADIUS Server"}
           </h1>
-          <p className="text-sm text-muted-foreground">Setup and monitor Hotspot RADIUS connectivity across routers</p>
+          <p className={`text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Setup and monitor Hotspot RADIUS connectivity across routers</p>
         </div>
       </div>
 
@@ -235,7 +239,7 @@ export default function RadiusSettingsPage() {
               key={dev.id} 
               onClick={() => setSelectedDevice(dev.id)}
               className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 relative ${
-                isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/50'
+                isActive ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : (isCyber ? 'glass-card hover:bg-white/5' : 'border-border bg-card hover:bg-muted/50')
               }`}
             >
               <div className="flex justify-between items-start">
@@ -253,7 +257,7 @@ export default function RadiusSettingsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             
             {/* RADIUS Setup */}
-            <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+            <div className={`p-5 space-y-4 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-lg" }`}>
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold flex items-center gap-2">
@@ -323,7 +327,7 @@ export default function RadiusSettingsPage() {
             </div>
 
             {/* Guide Card */}
-            <div className="bg-card border border-border rounded-lg p-5">
+            <div className={`p-5 ${ isCyber ? "glass-card" : "bg-card border border-border rounded-lg" }`}>
               <h2 className="text-sm font-semibold flex items-center gap-2 mb-3"><List className="w-4 h-4 text-primary" /> Informasi Walled Garden & RADIUS</h2>
               <div className="text-xs text-muted-foreground space-y-3 leading-relaxed">
                 <p>NOC Sentinel Billing dan Voucher Online berintegrasi dengan router Anda menggunakan protokol RADIUS.</p>
@@ -338,7 +342,7 @@ export default function RadiusSettingsPage() {
             </div>
 
             {/* Walled Garden */}
-            <div className="lg:col-span-2 bg-card border border-border rounded-lg overflow-hidden">
+            <div className={`lg:col-span-2 overflow-hidden ${ isCyber ? "glass-card" : "bg-card border border-border rounded-lg" }`}>
               <div className="p-4 border-b border-border bg-muted/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-primary" /> Walled Garden</h2>

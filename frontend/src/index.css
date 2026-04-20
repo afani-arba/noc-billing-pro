@@ -1,69 +1,126 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=IBM+Plex+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Corporate/Enterprise Theme — Navy Blue Palette ──────────────────────── */
-/* Inspired by Grafana, Cisco DNA Center, and Zabbix                          */
-/* ─────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   TEMA CLASSIC — Corporate Navy (Legacy, dipertahankan)
+   Inspired by Grafana, Cisco DNA Center, Zabbix
+   ══════════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   :root {
-    /* Backgrounds — Navy blue depth, not pure black */
     --background: 220 35% 8%;
     --foreground: 210 20% 92%;
-
-    /* Cards — slightly lighter surface on dark navy */
     --card: 220 32% 11%;
     --card-foreground: 210 20% 92%;
-
-    /* Popover */
     --popover: 220 32% 11%;
     --popover-foreground: 210 20% 92%;
-
-    /* Primary — Cisco/IBM Blue, professional and trustworthy */
     --primary: 217 89% 56%;
     --primary-foreground: 0 0% 100%;
-
-    /* Secondary — dark navy surface for cards/sections */
     --secondary: 220 30% 16%;
     --secondary-foreground: 210 15% 80%;
-
-    /* Muted — subtle gray-navy for disabled/hint text */
     --muted: 220 28% 18%;
     --muted-foreground: 215 15% 58%;
-
-    /* Accent — slightly lighter navy for hover states */
     --accent: 220 28% 20%;
     --accent-foreground: 210 20% 92%;
-
-    /* Destructive — muted red, not neon warning */
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
-
-    /* Borders — subtle navy dividers */
     --border: 220 25% 20%;
     --input: 220 28% 16%;
     --ring: 217 89% 56%;
-
-    /* Chart colors — professional palette */
     --chart-1: 217 89% 56%;
     --chart-2: 142 60% 42%;
     --chart-3: 38 85% 52%;
     --chart-4: 262 72% 58%;
     --chart-5: 340 70% 50%;
-
-    /* Semantic colors */
     --success: 142 60% 42%;
     --warning: 38 85% 52%;
     --error: 0 70% 52%;
     --info: 217 89% 56%;
-
-    /* Border radius — slightly more rounded for modern enterprise look */
     --radius: 0.375rem;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TEMA CYBER — Glassmorphism Neon Green & Cyan (DEFAULT TEMA UTAMA)
+   Aesthetic: Hacker NOC / Network Engineer / Matrix-inspired
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  .theme-cyber {
+    /* ── Backgrounds ─────────────────────────────────────── */
+    --background: 210 20% 5%;          /* #0a0f14 — deep dark cyan-black */
+    --foreground: 160 80% 88%;         /* Soft neon green-white text */
+
+    /* ── Card / Glass Surfaces ───────────────────────────── */
+    --card: 210 25% 7%;                /* Slightly lighter dark surface */
+    --card-foreground: 160 80% 88%;
+
+    /* ── Popover ─────────────────────────────────────────── */
+    --popover: 210 25% 6%;
+    --popover-foreground: 160 80% 88%;
+
+    /* ── Primary — Neon Green/Cyan ───────────────────────── */
+    --primary: 162 100% 45%;           /* #00e676 — Neon Green */
+    --primary-foreground: 210 20% 5%;  /* Dark text on green */
+
+    /* ── Secondary surface ───────────────────────────────── */
+    --secondary: 210 20% 10%;
+    --secondary-foreground: 160 40% 70%;
+
+    /* ── Muted ───────────────────────────────────────────── */
+    --muted: 210 20% 12%;
+    --muted-foreground: 180 25% 45%;
+
+    /* ── Accent — Cyan ───────────────────────────────────── */
+    --accent: 185 100% 35%;            /* Cyan accent surface */
+    --accent-foreground: 210 20% 5%;
+
+    /* ── Destructive ─────────────────────────────────────── */
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* ── Borders & Inputs ────────────────────────────────── */
+    --border: 162 50% 18%;             /* Subtle neon green border */
+    --input: 210 22% 10%;
+    --ring: 162 100% 45%;
+
+    /* ── Charts ──────────────────────────────────────────── */
+    --chart-1: 162 100% 45%;           /* Neon Green */
+    --chart-2: 185 100% 50%;           /* Neon Cyan */
+    --chart-3: 38 90% 55%;             /* Amber warning */
+    --chart-4: 270 80% 65%;            /* Purple */
+    --chart-5: 0 80% 60%;              /* Red alert */
+
+    /* ── Semantic Colors ─────────────────────────────────── */
+    --success: 162 100% 45%;
+    --warning: 38 90% 55%;
+    --error: 0 80% 55%;
+    --info: 185 100% 50%;
+
+    /* ── Border Radius ───────────────────────────────────── */
+    --radius: 0.5rem;
+
+    /* ── Glass Surfaces (custom vars) ────────────────────── */
+    --glass-bg: rgba(0, 230, 118, 0.04);
+    --glass-bg-hover: rgba(0, 230, 118, 0.08);
+    --glass-bg-active: rgba(0, 230, 118, 0.12);
+    --glass-border: rgba(0, 230, 118, 0.15);
+    --glass-border-hover: rgba(0, 230, 118, 0.35);
+    --glass-glow: rgba(0, 230, 118, 0.2);
+
+    --glass-cyan-bg: rgba(0, 229, 255, 0.04);
+    --glass-cyan-border: rgba(0, 229, 255, 0.15);
+    --glass-cyan-glow: rgba(0, 229, 255, 0.2);
+
+    /* Grid pattern */
+    --grid-color: rgba(0, 230, 118, 0.04);
+  }
+}
+
+/* ── Base Styles Reset ─────────────────────────────────────────────────────── */
 
 @layer base {
   * {
@@ -75,7 +132,6 @@
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
   }
-  /* h1-h6 now use Inter (corporate) instead of Rajdhani (sci-fi) */
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 600;
@@ -83,6 +139,7 @@
   }
 }
 
+/* ── Debug wrapper fix ─────────────────────────────────────────────────────── */
 @layer base {
   [data-debug-wrapper="true"] {
     display: contents !important;
@@ -106,61 +163,229 @@
   }
 }
 
-/* Monospace font — IBM Plex Mono for technical data */
+/* ── Monospace font ────────────────────────────────────────────────────────── */
 .font-mono {
-  font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', monospace;
+}
+.theme-cyber .font-mono,
+.theme-cyber .font-jetbrains {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', 'Fira Code', monospace;
 }
 
-/* Scrollbar styling — corporate subtle */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: hsl(var(--background));
-}
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+/* ══════════════════════════════════════════════════════════════════════════════
+   CYBER THEME BACKGROUND — Animated Mesh Gradient + Circuit Grid
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.theme-cyber body {
+  background-color: hsl(210, 20%, 5%);
+  background-image:
+    linear-gradient(rgba(0, 230, 118, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 230, 118, 0.04) 1px, transparent 1px),
+    radial-gradient(ellipse at 20% 20%, rgba(0, 230, 118, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(0, 229, 255, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 60% 10%, rgba(0, 229, 255, 0.04) 0%, transparent 50%);
+  background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%, 100% 100%;
+  background-attachment: fixed;
 }
 
-/* ── Animation utilities — Subtle, professional transitions ──────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   GLASSMORPHISM UTILITY CLASSES — theme-cyber scoped
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Glass Card ──────────────────────────────────────────────────────────────── */
+.theme-cyber .glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.theme-cyber .glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+  box-shadow: 0 0 20px var(--glass-glow);
+}
+
+/* ── Glass Panel (sidebar, modals) ───────────────────────────────────────────── */
+.theme-cyber .glass-panel {
+  background: rgba(10, 15, 20, 0.85);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* ── Glass Input ─────────────────────────────────────────────────────────────── */
+.theme-cyber .glass-input {
+  background: rgba(0, 230, 118, 0.04) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(8px);
+  color: hsl(var(--foreground));
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.theme-cyber .glass-input:focus {
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 2px rgba(0, 230, 118, 0.15), 0 0 8px rgba(0, 230, 118, 0.2) !important;
+  outline: none;
+}
+
+/* ── Neon Glow Button ────────────────────────────────────────────────────────── */
+.theme-cyber .btn-cyber {
+  background: linear-gradient(135deg, hsl(162, 100%, 42%), hsl(185, 100%, 40%));
+  color: hsl(210, 20%, 5%);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid rgba(0, 230, 118, 0.4);
+  box-shadow: 0 0 16px rgba(0, 230, 118, 0.25), 0 0 4px rgba(0, 230, 118, 0.15) inset;
+  transition: all 0.2s ease;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+.theme-cyber .btn-cyber:hover {
+  box-shadow: 0 0 28px rgba(0, 230, 118, 0.5), 0 0 8px rgba(0, 230, 118, 0.2) inset;
+  transform: translateY(-1px);
+}
+.theme-cyber .btn-cyber:active {
+  transform: translateY(0);
+}
+
+/* ── Cyber Nav Active State ──────────────────────────────────────────────────── */
+.theme-cyber .nav-active {
+  background: var(--glass-bg-active);
+  border-left: 2px solid hsl(var(--primary));
+  color: hsl(var(--primary));
+  text-shadow: 0 0 8px rgba(0, 230, 118, 0.6);
+  box-shadow: inset 0 0 12px rgba(0, 230, 118, 0.08);
+}
+
+/* ── Gradient Text ───────────────────────────────────────────────────────────── */
+.theme-cyber .gradient-text {
+  background: linear-gradient(135deg, hsl(162, 100%, 50%), hsl(185, 100%, 55%));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Neon Border (glowing outline) ──────────────────────────────────────────── */
+.theme-cyber .neon-border {
+  border: 1px solid hsl(var(--primary));
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.3), inset 0 0 8px rgba(0, 230, 118, 0.05);
+}
+.theme-cyber .neon-border-cyan {
+  border: 1px solid hsl(185, 100%, 50%);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.3), inset 0 0 8px rgba(0, 229, 255, 0.05);
+}
+
+/* ── Glow Dot (status indicator) ────────────────────────────────────────────── */
+.theme-cyber .glow-dot-green {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(162, 100%, 50%);
+  box-shadow: 0 0 6px 2px rgba(0, 230, 118, 0.7);
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+.theme-cyber .glow-dot-cyan {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(185, 100%, 55%);
+  box-shadow: 0 0 6px 2px rgba(0, 229, 255, 0.7);
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+.theme-cyber .glow-dot-red {
+  background: hsl(0, 90%, 60%);
+  box-shadow: 0 0 6px 2px rgba(255, 50, 50, 0.7);
+}
+
+/* ── Stat Card accent left borders ──────────────────────────────────────────── */
+.theme-cyber .stat-accent-green { border-left: 2px solid hsl(162, 100%, 45%) !important; box-shadow: -4px 0 12px rgba(0, 230, 118, 0.2); }
+.theme-cyber .stat-accent-cyan  { border-left: 2px solid hsl(185, 100%, 50%) !important; box-shadow: -4px 0 12px rgba(0, 229, 255, 0.2); }
+.theme-cyber .stat-accent-amber { border-left: 2px solid hsl(38, 90%, 55%)   !important; box-shadow: -4px 0 12px rgba(251, 191, 36, 0.2); }
+.theme-cyber .stat-accent-red   { border-left: 2px solid hsl(0, 80%, 55%)    !important; box-shadow: -4px 0 12px rgba(239, 68, 68, 0.2); }
+.theme-cyber .stat-accent-purple{ border-left: 2px solid hsl(270, 80%, 60%)  !important; box-shadow: -4px 0 12px rgba(139, 92, 246, 0.2); }
+
+/* ── Modal Overlay ───────────────────────────────────────────────────────────── */
+.theme-cyber .glass-modal {
+  background: rgba(8, 12, 18, 0.92);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 0 40px rgba(0, 230, 118, 0.08), 0 25px 50px rgba(0, 0, 0, 0.8);
+}
+
+/* ── Badge / Chip ────────────────────────────────────────────────────────────── */
+.theme-cyber .badge-cyber {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: hsl(var(--primary));
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Section separator ───────────────────────────────────────────────────────── */
+.theme-cyber .nav-separator {
+  border-top: 1px solid rgba(0, 230, 118, 0.08);
+  margin: 4px 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ANIMATIONS — shared + cyber-specific
+   ══════════════════════════════════════════════════════════════════════════════ */
+
 @keyframes slideInUp {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-/* In-app push notification toast — slides down from top */
 @keyframes slideDownFadeIn {
   from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
-
-/* Client login background blob */
 @keyframes blob {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33%       { transform: translate(20px, -30px) scale(1.05); }
   66%       { transform: translate(-15px, 15px) scale(0.97); }
 }
-.animate-blob { animation: blob 8s infinite ease-in-out; }
-.animation-delay-2000 { animation-delay: 2s; }
-.animation-delay-4000 { animation-delay: 4s; }
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
-.animate-slide-up {
-  animation: slideInUp 0.2s ease-out forwards;
+@keyframes glow-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px currentColor; }
+  50%       { opacity: 0.6; box-shadow: 0 0 12px 4px currentColor; }
+}
+@keyframes cyber-scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.25s ease-out forwards;
-}
+/* ── Animation utility classes ─────────────────────────────────────────────── */
+.animate-blob { animation: blob 8s infinite ease-in-out; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+.animate-slide-up  { animation: slideInUp 0.2s ease-out forwards; }
+.animate-fade-in   { animation: fadeIn 0.25s ease-out forwards; }
+.animate-float     { animation: float 4s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 8s linear infinite; }
 
 .stagger-1 { animation-delay: 0.04s; }
 .stagger-2 { animation-delay: 0.08s; }
@@ -168,16 +393,16 @@
 .stagger-4 { animation-delay: 0.16s; }
 .stagger-5 { animation-delay: 0.20s; }
 
-/* ── Corporate sidebar active indicator ──────────────────────────────────── */
-/* A clean left blue border, not a glow — like Grafana/Cisco NOC tools      */
+/* ══════════════════════════════════════════════════════════════════════════════
+   CLASSIC THEME UTILITIES (unchanged legacy)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
 .sidebar-active {
   background-color: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
   border-left: 3px solid hsl(var(--primary));
   font-weight: 500;
 }
-
-/* ── Card hover — enterprise subtle, no glow ─────────────────────────────── */
 .card-hover {
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -185,38 +410,38 @@
   border-color: hsl(var(--primary) / 0.35);
 }
 
-/* ── Hide scrollbar but keep scrolling (for mobile horizontal bars) ──────── */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* ══════════════════════════════════════════════════════════════════════════════
+   SCROLLBAR STYLING — Adaptive per tema
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+.theme-cyber ::-webkit-scrollbar-thumb {
+  background: rgba(0, 230, 118, 0.2);
 }
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+.theme-cyber ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 230, 118, 0.4);
 }
 
-/* ── Minimal scrollbar for wallDisplay panel ─────────────────────────────── */
-.custom-scrollbar-minimal::-webkit-scrollbar {
-  width: 3px;
-}
-.custom-scrollbar-minimal::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar-minimal::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.15);
-  border-radius: 2px;
-}
+/* Hide scrollbar utilities */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* ── Custom scrollbar for sidebar ────────────────────────────────────────── */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+.custom-scrollbar-minimal::-webkit-scrollbar { width: 3px; }
+.custom-scrollbar-minimal::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar-minimal::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.15); border-radius: 2px; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.12); border-radius: 2px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.25); }
+
+.theme-cyber .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 230, 118, 0.12);
 }
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.12);
-  border-radius: 2px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.25);
+.theme-cyber .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 230, 118, 0.25);
 }

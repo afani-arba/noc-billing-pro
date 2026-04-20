@@ -8,6 +8,7 @@ import {
   ChevronRight, Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/context/ThemeContext";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -54,6 +55,8 @@ function threadStatus(c) {
 // WA CHAT TAB
 // ══════════════════════════════════════════════════════════════════════════════
 function WAChatTab() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [contacts, setContacts] = useState([]);
   const [selectedSender, setSelectedSender] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -115,9 +118,9 @@ function WAChatTab() {
   };
 
   return (
-    <div className="flex flex-1 min-h-0 gap-0 border border-border rounded-lg overflow-hidden bg-card" style={{ height: "calc(100vh - 300px)" }}>
+    <div className={`flex flex-1 min-h-0 gap-0 border rounded-lg overflow-hidden ${ isCyber ? "glass-card border-white/5" : "bg-card border-border" }`} style={{ height: "calc(100vh - 300px)" }}>
       {/* Left */}
-      <div className="w-72 flex-shrink-0 border-r border-border flex flex-col">
+      <div className={`w-72 flex-shrink-0 border-r flex flex-col ${ isCyber ? "border-white/5 bg-black/20" : "border-border" }`}>
         <div className="p-3 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
@@ -164,7 +167,7 @@ function WAChatTab() {
       {/* Right */}
       {selectedSender ? (
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${ isCyber ? "border-white/5 bg-black/20" : "border-border bg-card" }`}>
             <div className="flex items-center gap-3">
               <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold ${avatarColor(selectedSender)}`}>{avatarLetter(selectedContact?.sender_name)}</div>
               <div>
@@ -181,7 +184,7 @@ function WAChatTab() {
               ))}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ background: "hsl(var(--background))" }}>
+          <div className={`flex-1 overflow-y-auto p-4 space-y-4`} style={isCyber ? { background: "linear-gradient(to bottom, rgba(15,23,42,0.8), rgba(0,0,0,0.5))" } : { background: "hsl(var(--background))" }}>
             {msgLoading ? <div className="flex items-center justify-center h-32"><RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" /></div>
             : messages.map(msg => {
               const isAdminMsg = msg.message?.startsWith("[ADMIN REPLY]");
@@ -225,7 +228,7 @@ function WAChatTab() {
             })}
             <div ref={chatEndRef} />
           </div>
-          <div className="p-3 border-t border-border bg-card">
+          <div className={`p-3 border-t ${ isCyber ? "border-white/5 bg-black/20" : "border-border bg-card" }`}>
             <div className="flex gap-2">
               <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSendReply();} }}
@@ -252,6 +255,8 @@ function WAChatTab() {
 // IN-APP CHAT TAB
 // ══════════════════════════════════════════════════════════════════════════════
 function InAppChatTab() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [tickets, setTickets] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -330,16 +335,16 @@ function InAppChatTab() {
           { label: "Eskalasi", value: stats.escalated, color: "text-rose-400" },
           { label: "Dibalas AI/CS", value: stats.replied, color: "text-emerald-400" },
         ].map(s => (
-          <div key={s.label} className="bg-card border border-border rounded-lg p-3">
+          <div key={s.label} className={`p-3 rounded-lg ${ isCyber ? "glass-card border-none" : "bg-card border border-border" }`}>
             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
             <p className="text-[11px] text-muted-foreground">{s.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-1 min-h-0 gap-0 border border-border rounded-lg overflow-hidden bg-card" style={{ height: "calc(100vh - 380px)" }}>
+      <div className={`flex flex-1 min-h-0 gap-0 border rounded-lg overflow-hidden ${ isCyber ? "glass-card border-white/5" : "bg-card border-border" }`} style={{ height: "calc(100vh - 380px)" }}>
         {/* Left Panel */}
-        <div className="w-72 flex-shrink-0 border-r border-border flex flex-col">
+        <div className={`w-72 flex-shrink-0 border-r flex flex-col ${ isCyber ? "border-white/5 bg-black/20" : "border-border" }`}>
           <div className="p-3 border-b border-border space-y-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
@@ -402,7 +407,7 @@ function InAppChatTab() {
         {selectedTicket ? (
           <div className="flex-1 flex flex-col min-w-0">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${ isCyber ? "border-white/5 bg-black/20" : "border-border bg-card" }`}>
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold ${avatarColor(selectedTicket.customer_name)}`}>
                   {avatarLetter(selectedTicket.customer_name)}
@@ -432,7 +437,7 @@ function InAppChatTab() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ background: "hsl(var(--background))" }}>
+            <div className={`flex-1 overflow-y-auto p-4 space-y-3`} style={isCyber ? { background: "linear-gradient(to bottom, rgba(15,23,42,0.8), rgba(0,0,0,0.5))" } : { background: "hsl(var(--background))" }}>
               {(selectedTicket.messages || []).map((msg, i) => (
                 <div key={i}>
                   {/* Client message */}
@@ -507,7 +512,7 @@ function InAppChatTab() {
             </div>
 
             {/* Reply Box */}
-            <div className="p-3 border-t border-border bg-card">
+            <div className={`p-3 border-t ${ isCyber ? "border-white/5 bg-black/20" : "border-border bg-card" }`}>
               <div className="flex gap-2">
                 <textarea value={replyText} onChange={e => setReplyText(e.target.value)}
                   onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleReply();} }}
@@ -540,6 +545,8 @@ function InAppChatTab() {
 // MAIN PAGE: Tab Switcher
 // ══════════════════════════════════════════════════════════════════════════════
 export default function WACustomerServicePage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [activeTab, setActiveTab] = useState("inapp");
   const [inappUnread, setInappUnread] = useState(0);
 
@@ -561,11 +568,11 @@ export default function WACustomerServicePage() {
     <div className="flex flex-col h-full gap-4">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-emerald-400" />
-          Customer Service Command Center
+        <h1 className={`text-xl font-bold flex items-center gap-2 ${ isCyber ? "gradient-text font-mono" : "text-foreground" }`}>
+          <MessageCircle className={`w-5 h-5 ${ isCyber ? "" : "text-emerald-400" }`} style={isCyber ? { color: "hsl(162,100%,50%)" } : {}} />
+          {isCyber ? "> Customer Service Command Center" : "Customer Service Command Center"}
         </h1>
-        <p className="text-sm text-muted-foreground">Monitor dan balas percakapan pelanggan dari WhatsApp & Aplikasi Portal</p>
+        <p className={`text-sm mt-1 ${ isCyber ? "font-mono text-[hsl(185,100%,35%)]" : "text-muted-foreground" }`}>Monitor dan balas percakapan pelanggan dari WhatsApp & Aplikasi Portal</p>
       </div>
 
       {/* Tab Switcher */}

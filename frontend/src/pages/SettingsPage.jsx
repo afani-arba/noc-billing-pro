@@ -400,7 +400,7 @@ function L2tpSection() {
 
 // --- Theme Section ---
 function ThemeSection() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, themes } = useTheme();
   return (
     <div className="bg-card border border-border rounded-sm p-4 sm:p-6 space-y-4" data-testid="theme-section">
       <div className="flex items-center gap-3">
@@ -408,26 +408,76 @@ function ThemeSection() {
           <Palette className="w-4 h-4 text-blue-400" />
         </div>
         <div>
-          <h2 className="text-base sm:text-lg font-semibold ">Tampilan (Global Theme)</h2>
-          <p className="text-[10px] sm:text-xs text-muted-foreground">Pilih tema antarmuka NOC Sentinel Anda</p>
+          <h2 className="text-base sm:text-lg font-semibold">Tampilan (Global Theme)</h2>
+          <p className="text-[10px] sm:text-xs text-muted-foreground">Pilih tema antarmuka NOC Billing Pro Anda</p>
         </div>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 pt-2">
-        <button onClick={() => setTheme('classic')}
-          className={`flex-1 p-3 rounded-sm border text-left transition-all ${theme === 'classic' ? 'border-primary bg-primary/10' : 'border-border bg-secondary/30 hover:border-primary/50'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Tema Classic</h3>
-            {theme === 'classic' && <div className="w-2 h-2 rounded-full bg-primary" />}
+        {/* Cyber Glassmorphism */}
+        <button onClick={() => setTheme('cyber')}
+          className={`flex-1 p-4 rounded-sm border text-left transition-all relative overflow-hidden ${
+            theme === 'cyber'
+              ? 'border-[rgba(0,230,118,0.4)] bg-[rgba(0,230,118,0.06)]'
+              : 'border-border bg-secondary/30 hover:border-[rgba(0,230,118,0.3)]'
+          }`}>
+          {theme === 'cyber' && (
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[hsl(162,100%,50%)] to-[hsl(185,100%,50%)]" />
+          )}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-[hsl(162,100%,50%)] shadow-[0_0_6px_rgba(0,230,118,0.8)]" />
+                <div className="w-2.5 h-2.5 rounded-full bg-[hsl(185,100%,55%)] shadow-[0_0_6px_rgba(0,229,255,0.8)]" />
+              </div>
+              <h3 className="text-sm font-bold font-mono" style={{ color: "hsl(162,100%,60%)" }}>
+                Cyber Glassmorphism
+              </h3>
+            </div>
+            {theme === 'cyber' && (
+              <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style={{ background: "rgba(0,230,118,0.1)", border: "1px solid rgba(0,230,118,0.3)", color: "hsl(162,100%,50%)" }}>
+                AKTIF
+              </span>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Tampilan clean dark dan profesional (Bawaan).</p>
+          <p className="text-xs text-muted-foreground">Neon Green &amp; Cyan — NOC / Network Engineer aesthetic dengan glass effect.</p>
+          <div className="mt-3 flex gap-1.5">
+            {["hsl(162,100%,50%)", "hsl(185,100%,50%)", "hsl(270,70%,60%)", "hsl(38,90%,55%)", "hsl(0,80%,55%)"].map((c, i) => (
+              <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: c, boxShadow: `0 0 4px ${c}` }} />
+            ))}
+          </div>
         </button>
-        <button onClick={() => setTheme('neon')}
-          className={`flex-1 p-3 rounded-sm border text-left transition-all ${theme === 'neon' ? 'border-cyan-500 bg-cyan-500/10' : 'border-border bg-secondary/30 hover:border-cyan-500/50'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-cyan-400">Tema Neon v4</h3>
-            {theme === 'neon' && <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />}
+
+        {/* Classic Navy */}
+        <button onClick={() => setTheme('classic')}
+          className={`flex-1 p-4 rounded-sm border text-left transition-all relative overflow-hidden ${
+            theme === 'classic'
+              ? 'border-primary bg-primary/10'
+              : 'border-border bg-secondary/30 hover:border-primary/50'
+          }`}>
+          {theme === 'classic' && (
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary" />
+          )}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-400/60" />
+              </div>
+              <h3 className="text-sm font-semibold">Classic Navy</h3>
+            </div>
+            {theme === 'classic' && (
+              <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-primary">
+                AKTIF
+              </span>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Dark mode dengan warna neon cyber futuristik.</p>
+          <p className="text-xs text-muted-foreground">Corporate dark navy — tampilan clean dan profesional.</p>
+          <div className="mt-3 flex gap-1.5">
+            {["hsl(217,89%,56%)", "hsl(142,60%,42%)", "hsl(38,85%,52%)", "hsl(262,72%,58%)", "hsl(0,70%,52%)"].map((c, i) => (
+              <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: c }} />
+            ))}
+          </div>
         </button>
       </div>
     </div>

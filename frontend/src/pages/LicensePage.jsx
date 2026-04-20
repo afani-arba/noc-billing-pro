@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useEdition } from "@/App";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function LicensePage() {
-
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { edition, edition_name, features } = useEdition();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,7 +99,9 @@ export default function LicensePage() {
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Manajemen Lisensi</h1>
+        <h1 className={`text-3xl font-bold tracking-tight ${ isCyber ? "gradient-text font-mono" : "" }`}>
+          {isCyber ? "> Manajemen Lisensi" : "Manajemen Lisensi"}
+        </h1>
         <p className="text-muted-foreground">
           Kelola lisensi NOC Billing Pro untuk memastikan fitur aplikasi berjalan maksimal.
         </p>

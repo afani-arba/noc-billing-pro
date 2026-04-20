@@ -83,11 +83,24 @@ const EditionContext = createContext({
 });
 export const useEdition = () => useContext(EditionContext);
 
-// ─── Loading spinner ──────────────────────────────────────────────────────────
+// ─── Loading spinner (theme-aware) ──────────────────────────────────────────
 function PageFallback() {
   return (
     <div className="flex items-center justify-center h-screen w-full bg-background">
-      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary" />
+      <div className="flex flex-col items-center gap-3">
+        {/* Outer glow ring */}
+        <div className="relative w-10 h-10">
+          <div className="absolute inset-0 rounded-full border-2 border-transparent
+            border-t-[hsl(var(--primary))] border-r-[hsl(var(--primary))]
+            animate-spin
+            shadow-[0_0_12px_rgba(0,230,118,0.4)]
+          " />
+          <div className="absolute inset-1.5 rounded-full border border-[hsl(var(--primary)/0.2)]" />
+        </div>
+        <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest animate-pulse">
+          Loading...
+        </span>
+      </div>
     </div>
   );
 }
