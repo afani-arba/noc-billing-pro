@@ -634,6 +634,16 @@ export default function HotspotBillingPage() {
                 <SelectItem value="transfer"><div className="flex items-center gap-1.5"><Landmark className="w-4 h-4"/> Transfer Bank</div></SelectItem>
                 <SelectItem value="qris"><div className="flex items-center gap-1.5"><QrCode className="w-4 h-4"/> QRIS</div></SelectItem>
                 <SelectItem value="transfer_moota"><div className="flex items-center gap-1.5"><Bot className="w-4 h-4"/> Auto-Moota</div></SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWaPayModal(null)}>Batal</Button>
+            <Button onClick={handleWaPaySubmit}>Proses Pembayaran</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
               <div className="relative">
                 <Input placeholder="Cari username voucher..."
