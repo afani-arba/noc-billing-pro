@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
-import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot } from "lucide-react";
+import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot, Upload, MapPin, FileUp, FileDown, PieChart, DollarSign, ToggleLeft, ToggleRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,12 +109,29 @@ export default function HotspotBillingPage() {
   const [packagesLoading, setPackagesLoading] = useState(false);
   const [waOrders, setWaOrders]         = useState([]);
   const [waOrdersLoading, setWaOrdersLoading] = useState(false);
-  const [waOrdersFilter, setWaOrdersFilter] = useState(""); // "" | "unpaid" | "paid"
-  const [waSearch, setWaSearch]             = useState("");  // search query for pembelian online
-  
+  const [waOrdersFilter, setWaOrdersFilter] = useState("");
+  const [waSearch, setWaSearch]             = useState("");
+
   const [editVoucher, setEditVoucher] = useState(null);
   const [transferVoucher, setTransferVoucher] = useState(null);
   const [transferTarget, setTransferTarget] = useState("");
+
+  // ── Analytics
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // ── Import Modal
+  const [importModal, setImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  // ── Payment Settings (Hotspot)
+  const [hsPaySettings, setHsPaySettings] = useState({});
+  const [hsPayLoading, setHsPayLoading] = useState(false);
+  const [savingHsPay, setSavingHsPay] = useState(false);
+  const [showXenditKey, setShowXenditKey] = useState(false);
+  const [showMidtransKey, setShowMidtransKey] = useState(false);
   
   // Real-time counter
   const lastFetchTime = useRef(Date.now());
@@ -220,6 +237,77 @@ export default function HotspotBillingPage() {
     finally { setSalesLoading(false); }
   }, []);
 
+  const fetchAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const params = selectedDevice ? { device_id: selectedDevice } : {};
+      const r = await api.get("/hotspot-analytics", { params });
+      setAnalytics(r.data);
+    } catch { toast.error("Gagal memuat analytics"); }
+    finally { setAnalyticsLoading(false); }
+  }, [selectedDevice]);
+
+  const handleExportCSV = async () => {
+    try {
+      toast.info("Menyiapkan file export...");
+      const params = {};
+      if (selectedDevice) params.device_id = selectedDevice;
+      // Gunakan axios agar Authorization header ikut terkirim
+      const r = await api.get("/hotspot-vouchers/export", {
+        params,
+        responseType: "blob",
+      });
+      const blob = new Blob([r.data], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const ts = new Date().toISOString().slice(0,10).replace(/-/g,"");
+      link.href = url;
+      link.download = `vouchers_${ts}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("Export berhasil!");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Gagal export voucher");
+    }
+  };
+
+
+  const handleImportSubmit = async () => {
+    if (!importFile || !selectedDevice) return toast.error("Pilih file dan router");
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", importFile);
+      const r = await api.post(`/hotspot-vouchers/import?device_id=${selectedDevice}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setImportResult(r.data);
+      toast.success(r.data.message);
+      fetchVouchers();
+    } catch (e) { toast.error(e.response?.data?.detail || "Gagal import"); }
+    finally { setImporting(false); }
+  };
+
+  const loadHsPaySettings = useCallback(async () => {
+    setHsPayLoading(true);
+    try {
+      const r = await api.get("/hotspot-settings");
+      setHsPaySettings(r.data || {});
+    } catch {}
+    finally { setHsPayLoading(false); }
+  }, []);
+
+  const saveHsPaySettings = async () => {
+    setSavingHsPay(true);
+    try {
+      await api.post("/hotspot-settings", hsPaySettings);
+      toast.success("Payment settings disimpan!");
+    } catch (e) { toast.error(e.response?.data?.detail || "Gagal simpan"); }
+    finally { setSavingHsPay(false); }
+  };
+
   const fetchWaOrders = useCallback(async (silent = false) => {
     if (!silent) setWaOrdersLoading(true);
     try {
@@ -296,10 +384,12 @@ export default function HotspotBillingPage() {
   }, [selectedDevice]);
 
   useEffect(() => {
-    if (activeTab === "vouchers") fetchVouchers();
-    if (activeTab === "sales")    fetchSales();
-    if (activeTab === "wa_orders") fetchWaOrders();
-  }, [activeTab, fetchVouchers, fetchSales, fetchWaOrders]);
+    if (activeTab === "vouchers")         fetchVouchers();
+    if (activeTab === "sales")            fetchSales();
+    if (activeTab === "wa_orders")        fetchWaOrders();
+    if (activeTab === "analytics")        fetchAnalytics();
+    if (activeTab === "payment_settings") loadHsPaySettings();
+  }, [activeTab, fetchVouchers, fetchSales, fetchWaOrders, fetchAnalytics, loadHsPaySettings]);
 
   // FIX: Satu interval yang menggabungkan ticker 1s (UI) dan refresh 10s (data)
   // Sebelumnya ada 2 interval terpisah — mubazir dan bisa bentrok
@@ -483,11 +573,13 @@ export default function HotspotBillingPage() {
     return res;
   };
   const tabs = [
-    { id: "wa_orders", label: "Pembelian Online", icon: ShoppingCart },
-    { id: "vouchers", label: "Voucher History", icon: RpIcon },
-    { id: "sales", label: "Laporan penjualan", icon: TrendingUp },
-    { id: "packages", label: "Paket Layanan", icon: Package },
-    { id: "generator", label: "Generator", icon: Zap },
+    { id: "analytics",       label: "Analytics",       icon: BarChart2 },
+    { id: "wa_orders",       label: "Pembelian Online", icon: ShoppingCart },
+    { id: "vouchers",        label: "Voucher History",  icon: RpIcon },
+    { id: "sales",           label: "Lap. Penjualan",   icon: TrendingUp },
+    { id: "packages",        label: "Paket Layanan",    icon: Package },
+    { id: "generator",       label: "Generator",        icon: Zap },
+    { id: "payment_settings",label: "Payment Gateway",  icon: CreditCard },
   ];
 
   return (
@@ -634,6 +726,39 @@ export default function HotspotBillingPage() {
             <Button onClick={() => markWaOrderPaid(waPayModal.id, waPayMethod)}
               className="bg-green-600 hover:bg-green-700 text-white">
               <CheckCircle2 className="w-4 h-4 mr-1.5" /> Konfirmasi Lunas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Import Voucher */}
+      <Dialog open={importModal} onOpenChange={(o) => { setImportModal(o); if (!o) { setImportFile(null); setImportResult(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileUp className="w-5 h-5 text-primary" /> Import Voucher CSV</DialogTitle>
+            <DialogDescription>
+              Upload file CSV. Kolom: <code className="text-xs bg-muted px-1 rounded">username, password, profile, price, uptime_limit, validity, comment</code>.<br/>
+              Voucher yang username-nya sudah ada akan di-skip (tidak ditimpa).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">File CSV</Label>
+              <input type="file" accept=".csv" onChange={e => { setImportFile(e.target.files[0]); setImportResult(null); }}
+                className="block w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer" />
+            </div>
+            {importResult && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs space-y-1">
+                <p className="font-semibold text-foreground">{importResult.message}</p>
+                {importResult.skipped?.length > 0 && <p className="text-amber-400">⚠ Dilewati ({importResult.skipped.length}): {importResult.skipped.slice(0,5).join(", ")}{importResult.skipped.length > 5 ? "..." : ""}</p>}
+                {importResult.failed?.length > 0 && <p className="text-red-400">✕ Gagal ({importResult.failed.length})</p>}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportModal(false); setImportFile(null); setImportResult(null); }}>Tutup</Button>
+            <Button onClick={handleImportSubmit} disabled={!importFile || importing || !selectedDevice} className="gap-2">
+              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -801,10 +926,19 @@ export default function HotspotBillingPage() {
                   </button>
                 )}
               </div>
-              <Button variant="outline" size="sm" className="gap-2 rounded-sm" onClick={() => fetchVouchers()} disabled={vLoading}>
-                <RefreshCw className={`w-4 h-4 ${vLoading ? "animate-spin" : ""}`} /> Refresh
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-2 rounded-sm" onClick={() => fetchVouchers()} disabled={vLoading}>
+                  <RefreshCw className={`w-4 h-4 ${vLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-green-400 border-green-500/30 hover:bg-green-500/10" onClick={() => setImportModal(true)}>
+                  <FileUp className="w-4 h-4" /> Import
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-blue-400 border-blue-500/30 hover:bg-blue-500/10" onClick={handleExportCSV}>
+                  <FileDown className="w-4 h-4" /> Export CSV
+                </Button>
+              </div>
             </div>
+
 
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
@@ -1101,6 +1235,215 @@ export default function HotspotBillingPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ───── TAB: ANALYTICS ───── */}
+        {activeTab === "analytics" && (
+          <div className="space-y-5">
+            {analyticsLoading ? (
+              <div className="flex items-center justify-center py-20 text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" /> Memuat analytics...
+              </div>
+            ) : !analytics ? (
+              <div className="text-center py-20 text-muted-foreground"><BarChart2 className="w-10 h-10 mx-auto mb-2 opacity-20" /><p>Tidak ada data</p></div>
+            ) : (<>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                  { label: "Voucher Total", value: analytics.vouchers.total, color: "bg-blue-500/20 text-blue-400" },
+                  { label: "Aktif", value: analytics.vouchers.active, color: "bg-green-500/20 text-green-400" },
+                  { label: "Expired", value: analytics.vouchers.expired, color: "bg-red-500/20 text-red-400" },
+                  { label: "Baru", value: analytics.vouchers.new, color: "bg-sky-500/20 text-sky-400" },
+                  { label: "Nonaktif", value: analytics.vouchers.disabled, color: "bg-orange-500/20 text-orange-400" },
+                  { label: "Transaksi Bulan Ini", value: analytics.revenue.month_count, color: "bg-purple-500/20 text-purple-400" },
+                ].map(c => (
+                  <div key={c.label} className="bg-card border border-border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">{c.label}</p>
+                    <p className={`text-2xl font-bold ${c.color.split(" ")[1]}`}>{c.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Revenue Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Revenue Hari Ini", value: analytics.revenue.today, sub: `${analytics.revenue.today_count} transaksi`, color: "text-green-400" },
+                  { label: "Revenue Bulan Ini", value: analytics.revenue.month, sub: `${analytics.revenue.month_count} transaksi`, color: "text-primary" },
+                  { label: "Total Revenue", value: analytics.revenue.total, sub: `${analytics.revenue.total_count} transaksi`, color: "text-yellow-400" },
+                ].map(c => (
+                  <div key={c.label} className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-1">{c.label}</p>
+                    <p className={`text-2xl font-bold ${c.color}`}>Rp {parseInt(c.value || 0).toLocaleString("id-ID")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{c.sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Trend Chart 7 Hari */}
+              {analytics.trend?.length > 0 && (
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" /> Trend Penjualan 7 Hari</h3>
+                  <div className="flex items-end gap-2 h-28">
+                    {(() => {
+                      const maxRev = Math.max(...analytics.trend.map(d => d.revenue), 1);
+                      return analytics.trend.map((d, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[9px] text-muted-foreground">{d.count > 0 ? d.count : ""}</span>
+                          <div className="w-full rounded-t transition-all" title={`Rp ${parseInt(d.revenue).toLocaleString("id-ID")}`}
+                            style={{ height: `${Math.max(4, (d.revenue / maxRev) * 88)}px`, background: d.revenue > 0 ? "hsl(var(--primary))" : "hsl(var(--muted))", opacity: 0.85 }} />
+                          <span className="text-[9px] text-muted-foreground">{d.label}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Top Paket */}
+                {analytics.top_packages?.length > 0 && (
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Package className="w-4 h-4 text-primary" /> Top Paket Terlaris</h3>
+                    <div className="space-y-2">
+                      {analytics.top_packages.map((p, i) => (
+                        <div key={p.name} className="flex items-center gap-3">
+                          <span className="text-xs font-bold w-5 text-muted-foreground">{i + 1}.</span>
+                          <span className="text-xs flex-1 truncate font-medium">{p.name}</span>
+                          <span className="text-xs font-semibold text-primary">{p.count} voucher</span>
+                          <div className="w-20 bg-muted rounded-full h-1.5">
+                            <div className="h-1.5 rounded-full bg-primary" style={{ width: `${(p.count / (analytics.top_packages[0]?.count || 1)) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Multi-Location Stats */}
+                {analytics.locations?.length > 0 && (
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> Per Lokasi (Bulan Ini)</h3>
+                    <div className="space-y-2">
+                      {analytics.locations.map(loc => (
+                        <div key={loc.device_id} className="flex items-center justify-between border border-border rounded-lg px-3 py-2 bg-muted/20">
+                          <div>
+                            <p className="text-xs font-semibold">{loc.device_name}</p>
+                            <p className="text-[10px] text-muted-foreground">Aktif: {loc.active} | Expired: {loc.expired} | Total: {loc.total}</p>
+                          </div>
+                          <span className="text-xs font-bold text-green-400">Rp {parseInt(loc.revenue_month || 0).toLocaleString("id-ID")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" className="gap-2 rounded-sm" onClick={fetchAnalytics} disabled={analyticsLoading}>
+                  <RefreshCw className={`w-4 h-4 ${analyticsLoading ? "animate-spin" : ""}`} /> Refresh
+                </Button>
+              </div>
+            </>)}
+          </div>
+        )}
+
+        {/* ───── TAB: PAYMENT GATEWAY HOTSPOT ───── */}
+        {activeTab === "payment_settings" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" /> Payment Gateway Hotspot</h2>
+                <p className="text-xs text-muted-foreground">Konfigurasi payment provider khusus portal hotspot.</p>
+              </div>
+              <Button size="sm" className="gap-2" onClick={saveHsPaySettings} disabled={savingHsPay || hsPayLoading}>
+                {savingHsPay ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
+              </Button>
+            </div>
+
+            {hsPayLoading ? (
+              <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Memuat...</div>
+            ) : (<>
+              {/* Xendit */}
+              <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center"><CreditCard className="w-5 h-5 text-blue-400" /></div>
+                    <div><p className="text-sm font-semibold">Xendit</p><p className="text-xs text-muted-foreground">VA, QRIS, E-Wallet</p></div>
+                  </div>
+                  <button onClick={() => setHsPaySettings(p => ({ ...p, xendit_enabled: !p.xendit_enabled }))}
+                    className={`text-xs px-3 py-1 rounded-full border font-semibold transition-all ${hsPaySettings.xendit_enabled ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-muted text-muted-foreground border-border"}`}>
+                    {hsPaySettings.xendit_enabled ? "Aktif" : "Nonaktif"}
+                  </button>
+                </div>
+                {hsPaySettings.xendit_enabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Secret Key</Label>
+                      <div className="relative">
+                        <Input type={showXenditKey ? "text" : "password"} value={hsPaySettings.xendit_secret_key || ""} onChange={e => setHsPaySettings(p => ({ ...p, xendit_secret_key: e.target.value }))} placeholder="xnd_production_..." className="h-9 text-sm pr-8" />
+                        <button onClick={() => setShowXenditKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">{showXenditKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}</button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Webhook Token</Label>
+                      <Input value={hsPaySettings.xendit_webhook_token || ""} onChange={e => setHsPaySettings(p => ({ ...p, xendit_webhook_token: e.target.value }))} placeholder="token webhook" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">VA Bank Default</Label>
+                      <Select value={hsPaySettings.xendit_va_bank || "BNI"} onValueChange={v => setHsPaySettings(p => ({ ...p, xendit_va_bank: v }))}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["BNI","BCA","BRI","MANDIRI","PERMATA","BSI"].map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Midtrans */}
+              <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-red-500/20 flex items-center justify-center"><QrCode className="w-5 h-5 text-red-400" /></div>
+                    <div><p className="text-sm font-semibold">Midtrans</p><p className="text-xs text-muted-foreground">SNAP Payment</p></div>
+                  </div>
+                  <button onClick={() => setHsPaySettings(p => ({ ...p, midtrans_enabled: !p.midtrans_enabled }))}
+                    className={`text-xs px-3 py-1 rounded-full border font-semibold transition-all ${hsPaySettings.midtrans_enabled ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-muted text-muted-foreground border-border"}`}>
+                    {hsPaySettings.midtrans_enabled ? "Aktif" : "Nonaktif"}
+                  </button>
+                </div>
+                {hsPaySettings.midtrans_enabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Server Key</Label>
+                      <div className="relative">
+                        <Input type={showMidtransKey ? "text" : "password"} value={hsPaySettings.midtrans_server_key || ""} onChange={e => setHsPaySettings(p => ({ ...p, midtrans_server_key: e.target.value }))} placeholder="SB-Mid-server-..." className="h-9 text-sm pr-8" />
+                        <button onClick={() => setShowMidtransKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">{showMidtransKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}</button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Client Key</Label>
+                      <Input value={hsPaySettings.midtrans_client_key || ""} onChange={e => setHsPaySettings(p => ({ ...p, midtrans_client_key: e.target.value }))} placeholder="SB-Mid-client-..." className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={!!hsPaySettings.midtrans_is_production} onChange={e => setHsPaySettings(p => ({ ...p, midtrans_is_production: e.target.checked }))} className="rounded" />
+                        <span className="text-xs text-muted-foreground">Mode Production (hilangkan centang untuk Sandbox)</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Manual / Transfer */}
+              <div className="bg-card border border-border rounded-lg p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center"><Banknote className="w-5 h-5 text-green-400" /></div>
+                  <div><p className="text-sm font-semibold">Transfer Manual / Cash</p><p className="text-xs text-muted-foreground">Dikelola oleh operator — konfigurasi di tab Pengaturan Hotspot</p></div>
+                  <span className="ml-auto text-xs px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/30 font-semibold">Selalu Aktif</span>
+                </div>
+              </div>
+            </>)}
           </div>
         )}
 

@@ -4,9 +4,12 @@ Endpoint prefix: /hotspot-*  (langsung di root /api)
 """
 import uuid
 import logging
-from datetime import datetime, timezone
+import csv
+import io
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from core.db import get_db
 from core.auth import (
@@ -39,6 +42,16 @@ class HotspotSettingsUpdate(BaseModel):
     portal_logo_url: Optional[str] = None
     portal_title: Optional[str] = None
     auto_wa_enabled: Optional[bool] = None
+    # ── Payment Gateway Hotspot ──────────────────────────────────────────
+    xendit_enabled: Optional[bool] = None
+    xendit_secret_key: Optional[str] = None
+    xendit_webhook_token: Optional[str] = None
+    xendit_va_bank: Optional[str] = None
+    midtrans_enabled: Optional[bool] = None
+    midtrans_server_key: Optional[str] = None
+    midtrans_client_key: Optional[str] = None
+    midtrans_is_production: Optional[bool] = None
+    active_payment_providers: Optional[list] = None  # ["xendit", "midtrans", "manual"]
 
 
 @router.get("/hotspot-settings", dependencies=[Depends(require_enterprise)])
@@ -550,3 +563,262 @@ def _parse_uptime_to_secs(uptime_str: str) -> int:
         multipliers = {"w": 604800, "d": 86400, "h": 3600, "m": 60, "s": 1}
         total += v * multipliers.get(unit, 0)
     return total
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HOTSPOT ANALYTICS — Dashboard agregasi revenue & voucher stats
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/hotspot-analytics", dependencies=[Depends(require_enterprise)])
+async def get_hotspot_analytics(
+    device_id: str = Query(""),
+    user=Depends(get_current_user),
+):
+    """Aggregasi analytics: revenue hari ini/bulan/total, trend 7 hari, top paket, per-lokasi."""
+    db = get_db()
+    now_utc = datetime.now(timezone.utc)
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    voucher_q: dict = {}
+    sales_q: dict = {}
+    scope = get_user_allowed_devices(user)
+    if scope is None:
+        if device_id:
+            voucher_q["device_id"] = device_id
+            sales_q["device_id"] = device_id
+    else:
+        allowed = [d for d in scope if d == device_id] if device_id else scope
+        if not allowed:
+            return _empty_analytics()
+        voucher_q["device_id"] = {"$in": allowed}
+        sales_q["device_id"] = {"$in": allowed}
+
+    all_vouchers = await db.hotspot_vouchers.find(
+        voucher_q, {"_id": 0, "status": 1, "price": 1, "profile": 1, "device_id": 1}
+    ).to_list(20000)
+
+    all_sales = await db.hotspot_sales.find(
+        sales_q, {"_id": 0, "price": 1, "created_at": 1, "device_id": 1}
+    ).to_list(20000)
+
+    today_sales = [s for s in all_sales if (s.get("created_at") or "") >= today_start]
+    month_sales = [s for s in all_sales if (s.get("created_at") or "") >= month_start]
+    rev_today   = sum(float(s.get("price", 0)) for s in today_sales)
+    rev_month   = sum(float(s.get("price", 0)) for s in month_sales)
+    rev_total   = sum(float(s.get("price", 0)) for s in all_sales)
+
+    trend = []
+    for i in range(6, -1, -1):
+        day = now_utc - timedelta(days=i)
+        day_str = day.strftime("%Y-%m-%d")
+        day_s = [s for s in all_sales if (s.get("created_at") or "")[:10] == day_str]
+        trend.append({
+            "date": day_str, "label": day.strftime("%d/%m"),
+            "count": len(day_s), "revenue": sum(float(s.get("price", 0)) for s in day_s),
+        })
+
+    from collections import Counter
+    top_packages = [
+        {"name": p, "count": c}
+        for p, c in Counter(v.get("profile", "unknown") for v in all_vouchers if v.get("profile")).most_common(5)
+    ]
+
+    device_ids = list({v.get("device_id") for v in all_vouchers if v.get("device_id")})
+    devices_map: dict = {}
+    if device_ids:
+        devs = await db.devices.find({"id": {"$in": device_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        devices_map = {d["id"]: d.get("name", d["id"]) for d in devs}
+
+    loc: dict = {}
+    for v in all_vouchers:
+        did = v.get("device_id", "unknown")
+        if did not in loc:
+            loc[did] = {"device_id": did, "device_name": devices_map.get(did, did),
+                        "total": 0, "active": 0, "expired": 0, "new": 0, "disabled": 0, "revenue_month": 0.0}
+        loc[did]["total"] += 1
+        st = v.get("status", "new")
+        if st in loc[did]:
+            loc[did][st] += 1
+    for s in month_sales:
+        did = s.get("device_id", "unknown")
+        if did in loc:
+            loc[did]["revenue_month"] += float(s.get("price", 0))
+
+    return {
+        "vouchers": {
+            "total": len(all_vouchers),
+            "active":   sum(1 for v in all_vouchers if v.get("status") == "active"),
+            "expired":  sum(1 for v in all_vouchers if v.get("status") == "expired"),
+            "new":      sum(1 for v in all_vouchers if v.get("status") == "new"),
+            "disabled": sum(1 for v in all_vouchers if v.get("status") == "disabled"),
+        },
+        "revenue": {
+            "today": rev_today, "month": rev_month, "total": rev_total,
+            "today_count": len(today_sales), "month_count": len(month_sales), "total_count": len(all_sales),
+        },
+        "trend": trend,
+        "top_packages": top_packages,
+        "locations": list(loc.values()),
+    }
+
+
+def _empty_analytics() -> dict:
+    return {
+        "vouchers": {"total": 0, "active": 0, "expired": 0, "new": 0, "disabled": 0},
+        "revenue": {"today": 0, "month": 0, "total": 0, "today_count": 0, "month_count": 0, "total_count": 0},
+        "trend": [], "top_packages": [], "locations": [],
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BANDWIDTH PER VOUCHER — dari radius_accounting / hotspot_sessions di DB
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/hotspot-vouchers/{voucher_id}/bandwidth", dependencies=[Depends(require_enterprise)])
+async def get_voucher_bandwidth(voucher_id: str, user=Depends(get_current_user)):
+    """Ambil data bandwidth dari DB. Return {available:false} jika tidak ada data."""
+    db = get_db()
+    voucher = await db.hotspot_vouchers.find_one({"id": voucher_id}, {"_id": 0, "username": 1})
+    if not voucher:
+        raise HTTPException(404, "Voucher tidak ditemukan")
+    username = voucher.get("username", "")
+
+    acct = None
+    for col in ["radius_accounting", "hotspot_sessions"]:
+        try:
+            acct = await db[col].find_one({"username": username}, {"_id": 0}, sort=[("created_at", -1)])
+            if acct:
+                break
+        except Exception:
+            pass
+
+    if not acct:
+        return {"available": False, "username": username}
+
+    bytes_in  = int(acct.get("acct_input_octets")  or acct.get("Acct-Input-Octets")  or acct.get("bytes_in",  0))
+    bytes_out = int(acct.get("acct_output_octets") or acct.get("Acct-Output-Octets") or acct.get("bytes_out", 0))
+    sess_time = int(acct.get("acct_session_time")  or acct.get("Acct-Session-Time")  or acct.get("session_time", 0))
+
+    return {
+        "available": True, "username": username,
+        "bytes_in": bytes_in, "bytes_out": bytes_out,
+        "total_bytes": bytes_in + bytes_out,
+        "mb_in": round(bytes_in / 1024 / 1024, 2),
+        "mb_out": round(bytes_out / 1024 / 1024, 2),
+        "session_time": sess_time,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EXPORT VOUCHER — streaming CSV
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/hotspot-vouchers/export", dependencies=[Depends(require_enterprise)])
+async def export_hotspot_vouchers(
+    device_id: str = Query(""),
+    status: str = Query(""),
+    user=Depends(get_current_user),
+):
+    """Export semua voucher ke file CSV."""
+    db = get_db()
+    q: dict = {}
+    scope = get_user_allowed_devices(user)
+    if scope is None:
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        allowed = [d for d in scope if d == device_id] if device_id else scope
+        if not allowed:
+            q["device_id"] = {"$in": []}
+        else:
+            q["device_id"] = {"$in": allowed}
+    if status:
+        q["status"] = status
+
+    vouchers = await db.hotspot_vouchers.find(q, {"_id": 0}).sort("created_at", -1).to_list(20000)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["username", "password", "profile", "price", "uptime_limit", "validity", "status", "router_name", "comment", "created_at"])
+    for v in vouchers:
+        writer.writerow([
+            v.get("username", ""), v.get("password", ""), v.get("profile", ""),
+            v.get("price", 0), v.get("uptime_limit", ""), v.get("validity", ""),
+            v.get("status", ""), v.get("router_name", ""), v.get("comment", ""), v.get("created_at", ""),
+        ])
+    buf.seek(0)
+    fname = f"vouchers_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# IMPORT VOUCHER — dari file CSV (skip duplikat username per device)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/hotspot-vouchers/import", dependencies=[Depends(require_enterprise)])
+async def import_hotspot_vouchers(
+    device_id: str = Query(...),
+    file: UploadFile = File(...),
+    user=Depends(require_write),
+):
+    """
+    Import voucher dari CSV. Kolom wajib: username.
+    Opsional: password, profile, price, uptime_limit, validity, comment.
+    Skip jika username sudah ada di device yang sama (tidak overwrite).
+    """
+    if not check_device_access(user, device_id):
+        raise HTTPException(403, "Tidak memiliki akses ke router ini")
+    db = get_db()
+    device = await db.devices.find_one({"id": device_id})
+    if not device:
+        raise HTTPException(404, "Device tidak ditemukan")
+    device_name = device.get("name", device_id)
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    created, skipped, failed = [], [], []
+
+    for row in reader:
+        username = (row.get("username") or row.get("name") or "").strip()
+        if not username:
+            failed.append({"row": str(row)[:80], "error": "Username kosong"})
+            continue
+        existing = await db.hotspot_vouchers.find_one({"username": username, "device_id": device_id})
+        if existing:
+            skipped.append(username)
+            continue
+        try:
+            password     = (row.get("password") or username).strip()
+            profile      = (row.get("profile")  or "default").strip()
+            price        = float(row.get("price") or 0)
+            uptime_limit = (row.get("uptime_limit") or "").strip()
+            validity     = (row.get("validity") or "").strip()
+            comment      = (row.get("comment") or "").strip()
+            doc = {
+                "id": str(uuid.uuid4()), "username": username, "password": password,
+                "profile": profile, "device_id": device_id, "router_name": device_name,
+                "status": "new", "price": price, "uptime_limit": uptime_limit, "validity": validity,
+                "comment": comment, "session_start_time": None, "used_uptime_secs": 0,
+                "limit_uptime_secs": _parse_uptime_to_secs(uptime_limit),
+                "validity_secs": _parse_uptime_to_secs(validity),
+                "created_at": _now(), "updated_at": _now(),
+            }
+            await db.hotspot_vouchers.insert_one(doc)
+            created.append(username)
+        except Exception as e:
+            failed.append({"username": username, "error": str(e)})
+
+    return {
+        "message": f"{len(created)} diimpor, {len(skipped)} dilewati (duplikat), {len(failed)} gagal",
+        "created": created, "skipped": skipped, "failed": failed,
+        "total": len(created) + len(skipped) + len(failed),
+    }
