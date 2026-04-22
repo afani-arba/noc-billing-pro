@@ -57,6 +57,7 @@ const RadiusSettingsPage      = lazy(() => import("@/pages/RadiusSettingsPage"))
 const IntegrationSettingsPage = lazy(() => import("@/pages/IntegrationSettingsPage"));
 const ClientLogin             = lazy(() => import("@/pages/ClientPortal/ClientLogin"));
 const ClientDashboard         = lazy(() => import("@/pages/ClientPortal/ClientDashboard"));
+const ServerSetup             = lazy(() => import("@/pages/ClientPortal/ServerSetup"));
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
@@ -184,6 +185,7 @@ export default function App() {
                 <Route path="/login" element={<LoginPage />} />
 
                 {/* ── Client Self-Service Portal (public) ───────────────── */}
+                <Route path="/portal/setup"     element={<ServerSetup />} />
                 <Route path="/portal/login"     element={<ClientLogin />} />
                 <Route path="/portal/dashboard" element={<ClientDashboard />} />
                 <Route path="/portal"           element={<Navigate to="/portal/login" replace />} />

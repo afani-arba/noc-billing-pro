@@ -356,7 +356,15 @@ export default function ClientDashboard() {
   const navigate = useNavigate();
   const [token, setToken] = useState(null);
   const [tokenLoaded, setTokenLoaded] = useState(false);
-  const baseUrl = '/api';
+
+  let dynamicBaseUrl = '/api';
+  if (Capacitor.isNativePlatform()) {
+    const serverUrl = localStorage.getItem('clientServerUrl');
+    if (serverUrl) {
+      dynamicBaseUrl = `${serverUrl}/api`;
+    }
+  }
+  const baseUrl = dynamicBaseUrl;
 
   const fetchInvoiceHistory = async (tok) => {
     try {

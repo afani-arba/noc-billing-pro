@@ -1,10 +1,18 @@
-﻿import axios from 'axios';
+import axios from 'axios';
+
+import { Capacitor } from '@capacitor/core';
 
 // Use relative URL so Nginx proxies /api/ to backend automatically.
-// Works regardless of IP/domain — no need for REACT_APP_BACKEND_URL.
-const API_BASE = '/api';
+// If running natively via Capacitor, read the user-configured server URL.
+const getBaseUrl = () => {
+  if (Capacitor.isNativePlatform()) {
+    const saved = localStorage.getItem('clientServerUrl');
+    return saved ? `${saved}/api` : '/api';
+  }
+  return '/api';
+};
 
-const api = axios.create({ baseURL: API_BASE });
+const api = axios.create({ baseURL: getBaseUrl() });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('noc_token');

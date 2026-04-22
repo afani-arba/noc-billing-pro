@@ -23,7 +23,18 @@ export default function ClientLogin() {
       }
     }).catch(() => {});
 
-    const baseUrl = '/api';
+    // Check if running on native app and missing server URL
+    let dynamicBaseUrl = '/api';
+    if (Capacitor.isNativePlatform()) {
+      const serverUrl = localStorage.getItem('clientServerUrl');
+      if (!serverUrl) {
+        navigate('/portal/setup', { replace: true });
+        return;
+      }
+      dynamicBaseUrl = `${serverUrl}/api`;
+    }
+
+    const baseUrl = dynamicBaseUrl;
     axios.get(`${baseUrl}/system/company-profile`)
       .then(res => setProfile(res.data))
       .catch(e => console.error("Failed to load company profile", e));
@@ -42,7 +53,14 @@ export default function ClientLogin() {
       // Login to backend directly
       // Note: we can't use the standard api.js if it intercepts 401s to Admin login.
       // So we use standard axios or careful fetch.
-      const baseUrl = '/api';
+      let dynamicBaseUrl = '/api';
+      if (Capacitor.isNativePlatform()) {
+        const serverUrl = localStorage.getItem('clientServerUrl');
+        if (serverUrl) {
+          dynamicBaseUrl = `${serverUrl}/api`;
+        }
+      }
+      const baseUrl = dynamicBaseUrl;
       const res = await axios.post(`${baseUrl}/client-portal/login`, {
         customer_id: customerId,
         phone: phone
@@ -156,6 +174,20 @@ export default function ClientLogin() {
                   www.arbatraining.com
                 </a>
               </p>
+              {Capacitor.isNativePlatform() && (
+                <div className="pt-2">
+                  <button 
+                    onClick={() => {
+                      localStorage.removeItem('clientServerUrl');
+                      Preferences.remove({ key: 'clientServerUrl' });
+                      navigate('/portal/setup');
+                    }}
+                    className="text-[10px] text-gray-500 hover:text-white transition-colors underline"
+                  >
+                    Ganti Domain Provider
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </Card>
