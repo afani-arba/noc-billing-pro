@@ -248,6 +248,21 @@ async def update_wifi(device_id: str, body: dict, user=Depends(require_admin)):
     except Exception as e:
         _err(e, "Failed to update WiFi settings")
 
+class MultiSsidRequest(BaseModel):
+    ssids: list[dict] # list of dict: { "ssid_index": "1", "mode": "internet", "ssid_name": "", "wifi_pass": "", "vlan_id": "", "max_clients": 32 }
+
+@router.post("/devices/{device_id:path}/multi-ssid-bridge")
+async def multi_ssid_bridge(device_id: str, req: MultiSsidRequest, user=Depends(require_admin)):
+    """Update Multi-SSID configurations including Bridge setup."""
+    try:
+        result = await asyncio.to_thread(svc.setup_multi_ssid, device_id, req.ssids)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        _err(e, "Failed to setup multi-SSID bridge")
+
+
 
 @router.post("/devices/{device_id:path}/hard-isolate")
 async def hard_isolate_device(device_id: str, body: dict, user=Depends(require_admin)):
@@ -1169,6 +1184,37 @@ def _normalize_devices(devices: list) -> list:
                     uptime = str(int(base_uptime) + elapsed)
             except Exception:
                 pass
+        # Parse raw WiFi SSIDs for Multi-SSID Edit Form
+        raw_wifi_ssids = {}
+        for root in [d_igd, d_dev]:
+            ld_obj = root.get("LANDevice", {})
+            if isinstance(ld_obj, dict):
+                for ld in ld_obj.values():
+                    if isinstance(ld, dict):
+                        wlan_obj = ld.get("WLANConfiguration", {})
+                        if isinstance(wlan_obj, dict):
+                            for idx, wlan in wlan_obj.items():
+                                if isinstance(wlan, dict):
+                                    w_ssid = _val(wlan, "SSID")
+                                    w_enable = _val(wlan, "Enable")
+                                    w_max = _val(wlan, "MaxAssociatedDevices")
+                                    
+                                    w_pass = ""
+                                    psk_obj = wlan.get("PreSharedKey", {})
+                                    if isinstance(psk_obj, dict):
+                                        for psk in psk_obj.values():
+                                            if isinstance(psk, dict):
+                                                p = _val(psk, "PreSharedKey")
+                                                if p: w_pass = p
+                                    
+                                    if w_ssid or w_enable:
+                                        raw_wifi_ssids[idx] = {
+                                            "ssid": w_ssid,
+                                            "enable": str(w_enable).lower() in ("1", "true"),
+                                            "password": w_pass,
+                                            "max_clients": w_max
+                                        }
+
         result.append({
             "id": device_id,
             "manufacturer": _val(dev_info, "Manufacturer"),
@@ -1184,11 +1230,13 @@ def _normalize_devices(devices: list) -> list:
             "pppoe_ip": pppoe_ip,
             "ssid": ssid,
             "wifi_password": wifi_password,
+            "wifi_ssids": raw_wifi_ssids,  # Full Multi-SSID state
             "active_devices": active_devices,
             "rx_power": rx_power,   # redaman ONT
             "last_inform": last_inform,
             "online": is_online,
             "registered": d.get("_registered", ""),
+            "_raw": d if limit == 1 else None # Raw cuma disertakan kalau get by id
         })
     return result
 

@@ -758,6 +758,51 @@ def set_wifi_settings(device_id: str, ssid: str, password: str) -> dict:
     )
     return {"success": True, "message": "Perintah ubah WiFi dikirim", "result": res}
 
+def setup_multi_ssid(device_id: str, ssids: list) -> dict:
+    """Mengubah konfigurasi Multi-SSID dan mode Bridge untuk ONT (Edit Mode)."""
+    params = []
+    for bs in ssids:
+        b_idx = str(bs.get("ssid_index", "")).strip()
+        mode = bs.get("mode", "off") # internet, bridge, off
+        b_name = bs.get("ssid_name", "").strip()
+        b_pass = bs.get("wifi_pass", "").strip()
+        b_max = bs.get("max_clients", 32)
+        if not b_idx:
+            continue
+
+        wlan_base = f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{b_idx}"
+
+        if mode == "off":
+            params.append([f"{wlan_base}.Enable", "0", "xsd:boolean"])
+        else:
+            params.append([f"{wlan_base}.Enable", "1", "xsd:boolean"])
+            if b_name:
+                params.append([f"{wlan_base}.SSID", b_name, "xsd:string"])
+            if b_pass:
+                if len(b_pass) < 8:
+                    from fastapi import HTTPException
+                    raise HTTPException(400, f"Password SSID {b_idx} minimal 8 karakter")
+                params.extend([
+                    [f"{wlan_base}.PreSharedKey.1.PreSharedKey", b_pass, "xsd:string"],
+                    [f"{wlan_base}.PreSharedKey.1.KeyPassphrase", b_pass, "xsd:string"],
+                ])
+            if b_max and int(b_max) > 0:
+                params.append([f"{wlan_base}.MaxAssociatedDevices", str(b_max), "xsd:unsignedInt"])
+
+    if not params:
+        from fastapi import HTTPException
+        raise HTTPException(400, "Tidak ada data Multi-SSID yang diubah")
+
+    res = _post(
+        f"/devices/{requests.utils.quote(device_id, safe='')}/tasks?timeout=30000&connection_request",
+        {
+            "name": "setParameterValues",
+            "parameterValues": params
+        }
+    )
+    logger.info(f"Multi-SSID edit sent to {device_id}: {len(ssids)} SSIDs configured")
+    return {"success": True, "message": "Konfigurasi Multi-SSID berhasil dikirim ke ONT", "result": res}
+
 
 def set_hard_isolation(device_id: str, enable: bool) -> dict:
     """Isolasi Hardcore: Menonaktifkan/Mengaktifkan pemancaran sinyal WiFi (WLAN Enable)."""

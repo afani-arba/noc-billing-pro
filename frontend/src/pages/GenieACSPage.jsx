@@ -84,13 +84,34 @@ function StatsBar({ stats, loading }) {
 function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
   const { theme } = useTheme();
   const isCyber = theme === "cyber";
-  const [form, setForm] = useState({
-    ssid: device.ssid || "",
-    wpa_key: "",
-    pppoe_username: device.pppoe_username || "",
-    pppoe_password: "",
+  const [form, setForm] = useState(() => {
+    // Inisialisasi state dari device.wifi_ssids yang didapat dari _normalize_devices
+    const rawSsids = device.wifi_ssids || {};
+    const getMode = (idx) => {
+      const s = rawSsids[idx];
+      if (!s || !s.enable) return "off";
+      // Asumsi: jika ada password atau nama, kita anggap internet. 
+      // (Bridge mode sejati perlu cek WANIPConnection, tapi dari sisi WLAN kita hanya bisa on/off)
+      return "internet"; 
+    };
+
+    return {
+      pppoe_username: device.pppoe_username || "",
+      pppoe_password: "",
+      ssid_modes: {
+        "1": getMode("1") === "off" && rawSsids["1"]?.ssid ? "internet" : "internet", // SSID 1 selalu internet by default
+        "2": getMode("2"),
+        "3": getMode("3"),
+        "4": getMode("4"),
+      },
+      bridge_configs: {
+        "1": { ssid_name: rawSsids["1"]?.ssid || device.ssid || "", wifi_pass: rawSsids["1"]?.password || "", max_clients: rawSsids["1"]?.max_clients || 32 },
+        "2": { ssid_name: rawSsids["2"]?.ssid || "", wifi_pass: rawSsids["2"]?.password || "", max_clients: rawSsids["2"]?.max_clients || 32 },
+        "3": { ssid_name: rawSsids["3"]?.ssid || "", wifi_pass: rawSsids["3"]?.password || "", max_clients: rawSsids["3"]?.max_clients || 32 },
+        "4": { ssid_name: rawSsids["4"]?.ssid || "", wifi_pass: rawSsids["4"]?.password || "", max_clients: rawSsids["4"]?.max_clients || 32 },
+      }
+    };
   });
-  const [showWpa, setShowWpa] = useState(false);
   const [showPppPwd, setShowPppPwd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [summoning, setSummoning] = useState(false);
@@ -108,25 +129,9 @@ function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (form.wpa_key && form.wpa_key.length < 8) {
-        toast.error("Password WiFi (WPA Key) minimal 8 karakter!");
-        setSaving(false);
-        return;
-      }
-
       const tasks = [];
-      if (form.ssid && form.ssid !== device.ssid) {
-        tasks.push(setParam(
-          "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID",
-          form.ssid
-        ));
-      }
-      if (form.wpa_key) {
-        tasks.push(setParam(
-          "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase",
-          form.wpa_key
-        ));
-      }
+
+      // PPPoE Tasks
       if (form.pppoe_username && form.pppoe_username !== device.pppoe_username) {
         tasks.push(setParam(
           "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username",
@@ -139,9 +144,30 @@ function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
           form.pppoe_password
         ));
       }
-      if (tasks.length === 0) { toast.info("Tidak ada perubahan yang disimpan"); setSaving(false); return; }
+
+      // Multi-SSID Tasks
+      const multiSsidPayload = [];
+      for (const idx of ["1", "2", "3", "4"]) {
+        const mode = form.ssid_modes[idx];
+        const cfg = form.bridge_configs[idx];
+        if (mode !== "off" && cfg.wifi_pass && cfg.wifi_pass.length < 8) {
+          toast.error(`Password SSID ${idx} minimal 8 karakter!`);
+          setSaving(false);
+          return;
+        }
+        multiSsidPayload.push({
+          ssid_index: idx,
+          mode: mode,
+          ssid_name: cfg.ssid_name,
+          wifi_pass: cfg.wifi_pass,
+          max_clients: parseInt(cfg.max_clients) || 32,
+        });
+      }
+
+      tasks.push(api.post(`/genieacs/devices/${encId}/multi-ssid-bridge`, { ssids: multiSsidPayload }));
+
       await Promise.all(tasks);
-      toast.success(`${tasks.length} parameter berhasil diset ke ${device.model || device.id}`);
+      toast.success(`Konfigurasi berhasil diset ke ${device.model || device.id}`);
       onRefreshed?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Gagal menyimpan parameter");
@@ -276,29 +302,106 @@ function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
             <div>
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3 font-medium">Edit Parameter</p>
               <div className="space-y-3">
-                {/* WiFi */}
+                {/* Multi-SSID */}
                 <div className="p-3 bg-secondary/20 border border-border/50 rounded-sm space-y-3">
-                  <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 text-primary" /> WiFi
+                  <p className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
+                    <Network className="w-3.5 h-3.5 text-primary" /> Multi-SSID Configuration
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">SSID</Label>
-                      <Input value={form.ssid} onChange={e => setForm(f => ({ ...f, ssid: e.target.value }))}
-                        placeholder="Nama WiFi" className="rounded-sm text-xs h-8" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">WPA Key / Password</Label>
-                      <div className="relative">
-                        <Input value={form.wpa_key} onChange={e => setForm(f => ({ ...f, wpa_key: e.target.value }))}
-                          type={showWpa ? "text" : "password"}
-                          placeholder="(kosong = tidak diganti)" className="rounded-sm text-xs h-8 pr-8" />
-                        <button type="button" onClick={() => setShowWpa(v => !v)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                          {showWpa ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </button>
-                      </div>
-                    </div>
+                  <div className="space-y-2">
+                    {["1", "2", "3", "4"].map(idx => {
+                      const mode = form.ssid_modes[idx] || "off";
+                      const isFixed = idx === "1"; // SSID1 selalu Internet
+                      const bridgeCfg = form.bridge_configs[idx] || {};
+
+                      return (
+                        <div key={idx} className={`rounded-sm border transition-all ${
+                          mode === "bridge"
+                            ? "border-orange-500/30 bg-orange-500/5"
+                            : mode === "internet"
+                              ? "border-green-500/20 bg-green-500/5"
+                              : "border-border bg-secondary/10"
+                        }`}>
+                          <div className="flex items-center gap-3 px-3 py-2">
+                            <div className={`w-6 h-6 rounded-sm flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                              mode === "bridge" ? "bg-orange-500/20 text-orange-400"
+                                : mode === "internet" ? "bg-green-500/20 text-green-400"
+                                : "bg-secondary/40 text-muted-foreground"
+                            }`}>{idx}</div>
+                            <span className="text-xs font-medium flex-shrink-0 w-12">SSID {idx}</span>
+                            <select
+                              value={mode}
+                              disabled={isFixed}
+                              onChange={e => setForm(f => ({
+                                ...f,
+                                ssid_modes: { ...f.ssid_modes, [idx]: e.target.value }
+                              }))}
+                              className={`flex-1 h-7 text-[11px] rounded-sm border border-input bg-background px-2 text-foreground ${
+                                isFixed ? "opacity-60 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              {!isFixed && <option value="off">Nonaktif</option>}
+                              <option value="internet">Internet (PPPoE / Routed)</option>
+                              {!isFixed && <option value="bridge">Bridge (Hotspot)</option>}
+                            </select>
+                            {mode === "internet" && <Wifi className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                            {mode === "bridge" && <Network className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />}
+                            {mode === "off" && <WifiOff className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />}
+                          </div>
+
+                          {mode !== "off" && (
+                            <div className="px-3 pb-3 pt-1 border-t border-border/50">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-[9px] text-muted-foreground uppercase">Nama WiFi</Label>
+                                  <Input
+                                    value={bridgeCfg.ssid_name || ""}
+                                    onChange={e => setForm(f => ({
+                                      ...f,
+                                      bridge_configs: {
+                                        ...f.bridge_configs,
+                                        [idx]: { ...f.bridge_configs[idx], ssid_name: e.target.value }
+                                      }
+                                    }))}
+                                    placeholder={`SSID${idx}`}
+                                    className="rounded-sm text-xs h-7"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[9px] text-muted-foreground uppercase">Password</Label>
+                                  <Input
+                                    value={bridgeCfg.wifi_pass || ""}
+                                    onChange={e => setForm(f => ({
+                                      ...f,
+                                      bridge_configs: {
+                                        ...f.bridge_configs,
+                                        [idx]: { ...f.bridge_configs[idx], wifi_pass: e.target.value }
+                                      }
+                                    }))}
+                                    placeholder="(kosong = tidak diganti)"
+                                    className="rounded-sm text-xs h-7 font-mono"
+                                  />
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                  <Label className="text-[9px] text-muted-foreground uppercase">Maks Perangkat</Label>
+                                  <Input
+                                    type="number" min={1} max={128}
+                                    value={bridgeCfg.max_clients || 32}
+                                    onChange={e => setForm(f => ({
+                                      ...f,
+                                      bridge_configs: {
+                                        ...f.bridge_configs,
+                                        [idx]: { ...f.bridge_configs[idx], max_clients: parseInt(e.target.value) || 32 }
+                                      }
+                                    }))}
+                                    className="rounded-sm text-xs h-7 font-mono w-24"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1542,9 +1645,9 @@ export default function GenieACSPage() {
   }, [devices]);
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const fetchDevices = useCallback(async () => {
-    setLoading(true);
-    setPage(1); // reset halaman saat fetch ulang
+  const fetchDevices = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    setPage(1); // reset halaman saat fetch ulang (opsional, bisa dibuang jika mengganggu polling)
     try {
       const [devRes, statsRes] = await Promise.all([
         api.get("/genieacs/devices", { params: { limit: 1500, search } }),
@@ -1556,13 +1659,20 @@ export default function GenieACSPage() {
     } catch (e) {
       let msg = e.response?.data?.detail || "Gagal terhubung ke GenieACS";
       if (typeof msg === 'object') msg = "Parameter API tidak valid atau error server.";
-      if (connectionOk !== false) toast.error(msg);
+      if (connectionOk !== false && !isSilent) toast.error(msg);
       setConnectionOk(false);
     }
-    setLoading(false);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isSilent) setLoading(false);
+  }, [search, connectionOk]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetchDevices(); }, [fetchDevices]);
+  useEffect(() => { 
+    fetchDevices(); 
+    // Auto-polling tiap 15 detik untuk realtime ONT data
+    const interval = setInterval(() => {
+      fetchDevices(true);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchDevices]);
 
   const handleSearch = (e) => {
     e.preventDefault();
