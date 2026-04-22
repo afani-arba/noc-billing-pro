@@ -3448,3 +3448,256 @@ async def push_to_customer(
         "customer": customer.get("name"),
         "message": f"Push notification test sedang dikirim ke '{customer.get('name')}'."
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FEATURE: PPPoE Analytics Dashboard
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/pppoe-analytics")
+async def get_pppoe_analytics(
+    device_id: str = Query(""),
+    user=Depends(get_current_user),
+):
+    """
+    Agregasi data analytics untuk dashboard Billing PPPoE.
+    Revenue trend 12 bulan, kolektabilitas, aging, churn, per-router.
+    """
+    db = get_db()
+    today = date.today()
+
+    scope = get_user_allowed_devices(user)
+    allowed_devices = None
+    if scope is None:
+        allowed_devices = [device_id] if device_id else None
+    else:
+        allowed_devices = scope
+        if device_id:
+            allowed_devices = [d for d in scope if d == device_id]
+        if not allowed_devices:
+            return {"ok": False, "error": "Tidak ada akses ke router manapun"}
+
+    cust_q = {}
+    if allowed_devices:
+        cust_q["device_id"] = {"$in": allowed_devices}
+
+    all_customers = await db.customers.find(cust_q, {"id": 1, "active": 1, "device_id": 1}).to_list(5000)
+    cust_ids = [c["id"] for c in all_customers]
+    active_count = sum(1 for c in all_customers if c.get("active", True))
+
+    trend = []
+    for i in range(11, -1, -1):
+        mn = today.month - i
+        yr = today.year
+        while mn <= 0:
+            mn += 12
+            yr -= 1
+        period_prefix = f"{yr}-{mn:02d}"
+        month_label = datetime(yr, mn, 1).strftime("%b %Y")
+        period_invoices = await db.invoices.find(
+            {"customer_id": {"$in": cust_ids}, "period_start": {"$regex": f"^{period_prefix}"}},
+            {"status": 1, "total": 1, "amount": 1, "_id": 0}
+        ).to_list(5000)
+        total_inv = len(period_invoices)
+        paid_inv = sum(1 for inv in period_invoices if inv.get("status") == "paid")
+        revenue = sum(inv.get("total", inv.get("amount", 0)) for inv in period_invoices if inv.get("status") == "paid")
+        collectability = round((paid_inv / total_inv * 100), 1) if total_inv > 0 else 0
+        trend.append({
+            "period": period_prefix, "label": month_label,
+            "revenue": revenue, "total_invoices": total_inv,
+            "paid_invoices": paid_inv, "collectability": collectability,
+        })
+
+    this_period = f"{today.year}-{today.month:02d}"
+    this_month_invs = await db.invoices.find(
+        {"customer_id": {"$in": cust_ids}, "period_start": {"$regex": f"^{this_period}"}},
+        {"status": 1, "total": 1, "amount": 1, "_id": 0}
+    ).to_list(5000)
+    revenue_this_month = sum(inv.get("total", inv.get("amount", 0)) for inv in this_month_invs if inv.get("status") == "paid")
+    unpaid_this_month = sum(inv.get("total", inv.get("amount", 0)) for inv in this_month_invs if inv.get("status") in ("unpaid", "overdue", "partial"))
+    paid_count = sum(1 for inv in this_month_invs if inv.get("status") == "paid")
+    total_count = len(this_month_invs)
+    collectability_this_month = round((paid_count / total_count * 100), 1) if total_count > 0 else 0
+
+    all_unpaid = await db.invoices.find(
+        {"customer_id": {"$in": cust_ids}, "status": {"$in": ["unpaid", "overdue", "partial"]}},
+        {"total": 1, "amount": 1, "amount_remaining": 1, "due_date": 1, "_id": 0}
+    ).to_list(5000)
+    aging_count = {"0_30": 0, "31_60": 0, "61_90": 0, "90_plus": 0}
+    aging_amount = {"0_30": 0, "31_60": 0, "61_90": 0, "90_plus": 0}
+    for inv in all_unpaid:
+        due = inv.get("due_date", "")
+        remaining = inv.get("amount_remaining", inv.get("total", inv.get("amount", 0)))
+        if due:
+            try:
+                due_date = date.fromisoformat(due[:10])
+                days_overdue = max(0, (today - due_date).days)
+                bucket = "0_30" if days_overdue <= 30 else ("31_60" if days_overdue <= 60 else ("61_90" if days_overdue <= 90 else "90_plus"))
+                aging_count[bucket] += 1
+                aging_amount[bucket] += remaining
+            except Exception:
+                pass
+
+    churn_data = []
+    for i in range(5, -1, -1):
+        mn = today.month - i
+        yr = today.year
+        while mn <= 0:
+            mn += 12
+            yr -= 1
+        month_start = datetime(yr, mn, 1, tzinfo=timezone.utc).isoformat()
+        next_mn = mn + 1 if mn < 12 else 1
+        next_yr = yr if mn < 12 else yr + 1
+        month_end = datetime(next_yr, next_mn, 1, tzinfo=timezone.utc).isoformat()
+        q_churn = {"active": False, "updated_at": {"$gte": month_start, "$lt": month_end}}
+        if allowed_devices:
+            q_churn["device_id"] = {"$in": allowed_devices}
+        churned = await db.customers.count_documents(q_churn)
+        churn_data.append({"label": datetime(yr, mn, 1).strftime("%b %Y"), "churned": churned})
+
+    device_ids_to_check = allowed_devices or list({c.get("device_id") for c in all_customers if c.get("device_id")})
+    devices_list = await db.devices.find({"id": {"$in": device_ids_to_check}}, {"id": 1, "name": 1, "_id": 0}).to_list(100)
+    device_map = {d["id"]: d["name"] for d in devices_list}
+    per_router = []
+    for did in device_ids_to_check:
+        rc = [c for c in all_customers if c.get("device_id") == did]
+        rc_ids = [c["id"] for c in rc]
+        ri = await db.invoices.find(
+            {"customer_id": {"$in": rc_ids}, "period_start": {"$regex": f"^{this_period}"}},
+            {"status": 1, "total": 1, "amount": 1, "_id": 0}
+        ).to_list(1000)
+        rr = sum(inv.get("total", inv.get("amount", 0)) for inv in ri if inv.get("status") == "paid")
+        rp = sum(1 for inv in ri if inv.get("status") == "paid")
+        rt = len(ri)
+        per_router.append({
+            "device_id": did, "name": device_map.get(did, did),
+            "total_customers": len(rc), "active_customers": sum(1 for c in rc if c.get("active", True)),
+            "revenue_this_month": rr, "collectability": round((rp/rt*100),1) if rt > 0 else 0,
+        })
+    per_router.sort(key=lambda x: x["revenue_this_month"], reverse=True)
+
+    return {
+        "ok": True,
+        "summary": {
+            "active_customers": active_count, "total_customers": len(all_customers),
+            "revenue_this_month": revenue_this_month, "unpaid_this_month": unpaid_this_month,
+            "collectability_this_month": collectability_this_month,
+            "paid_invoices": paid_count, "total_invoices": total_count,
+        },
+        "trend_12_months": trend,
+        "aging": {"count": aging_count, "amount": aging_amount},
+        "churn_6_months": churn_data,
+        "per_router": per_router,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FEATURE: Partial Payment / Cicilan
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PartialPaymentRequest(BaseModel):
+    amount: float
+    payment_method: str = "cash"
+    notes: str = ""
+
+@router.post("/invoices/{invoice_id}/partial-payment")
+async def add_partial_payment(
+    invoice_id: str,
+    data: PartialPaymentRequest,
+    user=Depends(require_write),
+):
+    """Catat pembayaran sebagian. Status -> partial atau paid."""
+    db = get_db()
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice tidak ditemukan")
+    if inv.get("status") == "paid":
+        raise HTTPException(400, "Invoice sudah lunas")
+
+    total = float(inv.get("total", inv.get("amount", 0)))
+    amount_paid_before = float(inv.get("amount_paid", 0))
+    amount_remaining_before = float(inv.get("amount_remaining", total))
+
+    if data.amount <= 0:
+        raise HTTPException(400, "Jumlah harus lebih dari 0")
+    if data.amount > amount_remaining_before + 1:
+        raise HTTPException(400, f"Melebihi sisa tagihan Rp {amount_remaining_before:,.0f}")
+
+    new_paid = amount_paid_before + data.amount
+    new_remaining = max(0.0, total - new_paid)
+    new_status = "paid" if new_remaining < 1 else "partial"
+
+    payment_rec = {
+        "id": str(uuid.uuid4()), "amount": data.amount,
+        "payment_method": data.payment_method, "notes": data.notes,
+        "paid_at": _now(),
+        "recorded_by": user.get("username", "") if isinstance(user, dict) else getattr(user, "username", ""),
+    }
+
+    upd = {"amount_paid": new_paid, "amount_remaining": new_remaining, "status": new_status, "updated_at": _now()}
+    if new_status == "paid":
+        upd["paid_at"] = _now()
+        upd["payment_method"] = data.payment_method
+
+    await db.invoices.update_one({"id": invoice_id}, {"$set": upd, "$push": {"payments": payment_rec}})
+    return {
+        "ok": True, "invoice_id": invoice_id,
+        "amount_paid": new_paid, "amount_remaining": new_remaining, "status": new_status,
+        "message": f"Pembayaran Rp {data.amount:,.0f} dicatat. Status: {new_status.upper()}"
+    }
+
+
+@router.get("/invoices/{invoice_id}/payments")
+async def get_invoice_payments(invoice_id: str, user=Depends(get_current_user)):
+    """Riwayat cicilan untuk satu invoice."""
+    db = get_db()
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice tidak ditemukan")
+    total = inv.get("total", inv.get("amount", 0))
+    return {
+        "ok": True, "invoice_id": invoice_id, "total": total,
+        "amount_paid": inv.get("amount_paid", 0),
+        "amount_remaining": inv.get("amount_remaining", total),
+        "status": inv.get("status"), "payments": inv.get("payments", []),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FEATURE: Prorate Billing Helper
+# ══════════════════════════════════════════════════════════════════════════════
+
+def calculate_prorate(package_price: float, activation_date: date) -> dict:
+    """Hitung tagihan proporsional berdasarkan tanggal aktivasi."""
+    from calendar import monthrange
+    _, days_in_month = monthrange(activation_date.year, activation_date.month)
+    days_active = days_in_month - activation_date.day + 1
+    if activation_date.day == 1:
+        return {"is_prorated": False, "prorate_amount": package_price, "prorate_note": "",
+                "days_active": days_in_month, "days_in_month": days_in_month}
+    prorate_amount = round((days_active / days_in_month) * package_price)
+    prorate_note = (f"Tagihan proporsional: {days_active} dari {days_in_month} hari "
+                    f"({round(days_active/days_in_month*100)}%) x Rp {package_price:,.0f}")
+    return {"is_prorated": True, "prorate_amount": prorate_amount, "prorate_note": prorate_note,
+            "days_active": days_active, "days_in_month": days_in_month}
+
+
+@router.post("/invoices/prorate-preview")
+async def preview_prorate(
+    package_id: str = Query(...),
+    activation_date: str = Query(...),
+    user=Depends(get_current_user),
+):
+    """Preview kalkulasi prorate untuk UI form tambah pelanggan."""
+    db = get_db()
+    pkg = await db.billing_packages.find_one({"id": package_id}, {"_id": 0})
+    if not pkg:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    try:
+        act_date = date.fromisoformat(activation_date[:10])
+    except Exception:
+        act_date = date.today()
+    result = calculate_prorate(float(pkg.get("price", 0)), act_date)
+    result["package_name"] = pkg.get("name", "")
+    result["package_price"] = pkg.get("price", 0)
+    return {"ok": True, **result}

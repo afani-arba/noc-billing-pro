@@ -160,15 +160,34 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
   const [mtDisabled, setMtDisabled] = useState(invoice.mt_disabled || false);
   const [showJanji, setShowJanji] = useState(false);
   const [promiseDate, setPromiseDate] = useState(invoice.promise_date || null);
+  const [showPartial, setShowPartial] = useState(false);
+  const [partialAmount, setPartialAmount] = useState("");
+  const [partialPaying, setPartialPaying] = useState(false);
+  const [localInv, setLocalInv] = useState(invoice);
 
   const handlePay = async () => {
     setPaying(true);
     try {
-      const r = await api.patch(`/billing/invoices/${invoice.id}/pay`, { payment_method: method });
+      const r = await api.patch(`/billing/invoices/${localInv.id}/pay`, { payment_method: method });
       toast.success(r.data.message || "Invoice ditandai lunas!");
       onPaid();
     } catch (e) { toast.error(e.response?.data?.detail || "Gagal"); }
     setPaying(false);
+  };
+
+  const handlePartialPay = async () => {
+    const amt = parseFloat(partialAmount);
+    if (!amt || amt <= 0) return toast.error("Masukkan jumlah yang valid");
+    setPartialPaying(true);
+    try {
+      const r = await api.post(`/billing/invoices/${localInv.id}/partial-payment`, { amount: amt, payment_method: method, notes: "" });
+      toast.success(r.data.message);
+      setLocalInv(prev => ({ ...prev, status: r.data.status, amount_paid: r.data.amount_paid, amount_remaining: r.data.amount_remaining }));
+      setPartialAmount("");
+      setShowPartial(false);
+      if (r.data.status === "paid") onPaid();
+    } catch (e) { toast.error(e.response?.data?.detail || "Gagal"); }
+    setPartialPaying(false);
   };
 
   const sendWa = async () => {
@@ -258,14 +277,14 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
           </div>
 
           {/* Prorata info */}
-          {invoice.is_prorata && (
+          {localInv.is_prorata && (
             <div className="flex items-start gap-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded-sm text-xs text-blue-300">
               <CalendarCheck className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              <span><strong>Tagihan Prorata:</strong> {invoice.prorata_description}</span>
+              <span><strong>Tagihan Prorata:</strong> {localInv.prorata_description}</span>
             </div>
           )}
 
-          {invoice.status !== "paid" && (
+          {localInv.status !== "paid" && (
             <div className="space-y-2 pt-1">
               <Label className="text-xs text-muted-foreground">Metode Pembayaran</Label>
               <div className="flex gap-2">
@@ -275,15 +294,21 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
                       }`}>{m}</button>
                 ))}
               </div>
-              <Button onClick={handlePay} disabled={paying} className="w-full rounded-sm gap-2">
-                <CheckCircle2 className="w-4 h-4" />{paying ? "Memproses..." : "Tandai Lunas"}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={handlePay} disabled={paying} className="flex-1 rounded-sm gap-2">
+                  <CheckCircle2 className="w-4 h-4" />{paying ? "Memproses..." : "Tandai Lunas"}
+                </Button>
+                <Button onClick={() => setShowPartial(true)} variant="outline"
+                  className="flex-shrink-0 rounded-sm gap-1 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+                  <CreditCard className="w-3.5 h-3.5" /> Cicilan
+                </Button>
+              </div>
             </div>
           )}
 
-          {invoice.status === "paid" && (
+          {localInv.status === "paid" && (
             <div className="p-2 bg-green-500/10 border border-green-500/20 rounded-sm text-xs text-green-400">
-              (v) Lunas via <strong>{invoice.payment_method}</strong> - {invoice.paid_at?.slice(0, 10)}
+              {"\u2713"} Lunas via <strong>{localInv.payment_method}</strong> - {localInv.paid_at?.slice(0, 10)}
             </div>
           )}
         </div>
@@ -299,7 +324,7 @@ function InvoiceModal({ invoice, packages, onClose, onPaid, onDelete }) {
             onClick={handlePrint}>
             <Printer className="w-3.5 h-3.5 text-blue-400" /> Cetak
           </Button>
-          {invoice.status !== "paid" && (
+          {localInv.status !== "paid" && (
             <Button variant="outline" size="sm"
               className="rounded-sm gap-1 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
               onClick={() => setShowJanji(true)}>
@@ -475,6 +500,7 @@ export default function BillingPage() {
 
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "analytics", label: "Analytics PPPoE", icon: BarChart3 },
     { id: "invoices", label: "Tagihan", icon: RpIcon },
     { id: "customers", label: "Pelanggan", icon: Users },
     { id: "packages", label: "Paket", icon: Package },
@@ -552,11 +578,11 @@ export default function BillingPage() {
       {/* Content */}
       <div className="bg-card border border-border rounded-sm p-4">
         {tab === "dashboard" && <DashboardTab month={month} year={year} deviceId={globalDeviceId} />}
+        {tab === "analytics" && <PPPoEAnalyticsTab deviceId={globalDeviceId} />}
         {tab === "invoices" && <InvoicesTab month={month} year={year} packages={packages} customers={customers} deviceId={globalDeviceId} />}
         {tab === "customers" && <CustomersTab packages={packages} devices={devices} onRefresh={loadCustomers} deviceId={globalDeviceId} isLocked={isLocked} />}
         {tab === "packages" && <PackagesTab packages={packages} onRefresh={loadPackages} deviceId={globalDeviceId} defaultServiceType="pppoe" />}
         {tab === "monitoring" && <PpoeMonitoringTab deviceId={globalDeviceId} />}
-
       </div>
     </div>
   );
@@ -2653,4 +2679,214 @@ function PpoeMonitoringTab({ deviceId }) {
   );
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PPPoE Analytics Tab — Revenue Trend, Aging, Churn, Per-Router
+// ══════════════════════════════════════════════════════════════════════════════
+function PPPoEAnalyticsTab({ deviceId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    api.get("/billing/pppoe-analytics", { params: { device_id: deviceId } })
+      .then(r => setData(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [deviceId]); // eslint-disable-line
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+      <RefreshCw className="w-4 h-4 animate-spin" /> Memuat data analytics...
+    </div>
+  );
+  if (!data?.ok) return (
+    <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+      <AlertTriangle className="w-4 h-4 text-amber-400" /> Gagal memuat data analytics.
+    </div>
+  );
+
+  const { summary, trend_12_months, aging, churn_6_months, per_router } = data;
+  const maxRevenue = Math.max(...(trend_12_months || []).map(t => t.revenue), 1);
+
+  const agingItems = [
+    { key: "0_30", label: "0–30 hari", color: "bg-amber-400", textColor: "text-amber-400" },
+    { key: "31_60", label: "31–60 hari", color: "bg-orange-400", textColor: "text-orange-400" },
+    { key: "61_90", label: "61–90 hari", color: "bg-red-400", textColor: "text-red-400" },
+    { key: "90_plus", label: "> 90 hari", color: "bg-red-700", textColor: "text-red-700" },
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" /> Analytics PPPoE
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Revenue, kolektabilitas, aging tunggakan & churn pelanggan</p>
+        </div>
+        <button onClick={load} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-sm px-2 py-1.5 transition-colors">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Pelanggan Aktif", value: summary.active_customers, sub: `dari ${summary.total_customers} total`, color: "border-l-blue-500", icon: Users },
+          { label: "Revenue Bulan Ini", value: fmtRpShort(summary.revenue_this_month), sub: `${summary.paid_invoices} invoice lunas`, color: "border-l-emerald-500", icon: TrendingUp },
+          { label: "Tunggakan", value: fmtRpShort(summary.unpaid_this_month), sub: `${summary.total_invoices - summary.paid_invoices} belum lunas`, color: "border-l-amber-500", icon: AlertTriangle },
+          { label: "Kolektabilitas", value: `${summary.collectability_this_month}%`, sub: "bulan berjalan", color: "border-l-purple-500", icon: Percent },
+        ].map(c => (
+          <div key={c.label} className={`bg-card border border-border rounded-sm p-4 border-l-2 ${c.color}`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{c.label}</p>
+                <p className="text-xl font-bold font-mono mt-1">{c.value}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{c.sub}</p>
+              </div>
+              <div className="w-8 h-8 rounded-sm bg-secondary flex items-center justify-center">
+                <c.icon className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Revenue Trend 12 Bulan */}
+      <div className="bg-card border border-border rounded-sm p-4">
+        <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
+          <BarChart3 className="w-4 h-4 text-primary" /> Trend Revenue 12 Bulan Terakhir
+        </h3>
+        <div className="space-y-2">
+          {(trend_12_months || []).map(t => (
+            <div key={t.period} className="flex items-center gap-3">
+              <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0 text-right font-mono">{t.label}</span>
+              <div className="flex-1 flex items-center gap-2">
+                <div className="flex-1 h-5 bg-secondary/40 rounded-sm overflow-hidden relative">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-sm transition-all duration-500"
+                    style={{ width: `${(t.revenue / maxRevenue) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-semibold w-20 text-right flex-shrink-0">{fmtRpShort(t.revenue)}</span>
+                <span className="text-[10px] text-muted-foreground w-12 text-right flex-shrink-0">{t.collectability}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-4 mt-3 pt-3 border-t border-border/50 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /> Revenue</span>
+          <span>% = Kolektabilitas bulan tersebut</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Aging Analysis */}
+        <div className="bg-card border border-border rounded-sm p-4">
+          <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
+            <AlertTriangle className="w-4 h-4 text-amber-400" /> Aging Tunggakan (Saat Ini)
+          </h3>
+          {aging && Object.values(aging.count).every(v => v === 0) ? (
+            <p className="text-[10px] text-center py-8 text-muted-foreground italic">Tidak ada tunggakan. Bagus!</p>
+          ) : (
+            <div className="space-y-3">
+              {agingItems.map(a => (
+                <div key={a.key} className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className={`font-semibold ${a.textColor}`}>{a.label}</span>
+                    <span className="font-mono">{aging.count[a.key]} invoice · {fmtRpShort(aging.amount[a.key])}</span>
+                  </div>
+                  <div className="h-2 bg-secondary/40 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${a.color} rounded-full transition-all duration-500`}
+                      style={{
+                        width: `${Math.min(100, (aging.count[a.key] / (Object.values(aging.count).reduce((a,b) => a+b, 0) || 1)) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-border/50">
+                <div className="flex justify-between text-[11px] font-bold">
+                  <span>Total Tunggakan</span>
+                  <span className="text-amber-400 font-mono">
+                    {fmtRpShort(Object.values(aging.amount).reduce((a,b) => a+b, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Churn 6 Bulan */}
+        <div className="bg-card border border-border rounded-sm p-4">
+          <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
+            <UserX className="w-4 h-4 text-red-400" /> Churn Pelanggan (6 Bulan)
+          </h3>
+          <div className="space-y-2">
+            {(churn_6_months || []).map(c => (
+              <div key={c.label} className="flex items-center gap-3">
+                <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0 text-right font-mono">{c.label}</span>
+                <div className="flex-1 h-5 bg-secondary/40 rounded-sm overflow-hidden relative">
+                  <div
+                    className="h-full bg-red-500/70 rounded-sm"
+                    style={{ width: `${Math.min(100, (c.churned / Math.max(...(churn_6_months || []).map(x => x.churned), 1)) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono font-semibold w-8 text-right flex-shrink-0 text-red-400">{c.churned}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-3 pt-3 border-t border-border/50">
+            Total churn: <span className="font-semibold text-red-400">{(churn_6_months || []).reduce((a, c) => a + c.churned, 0)} pelanggan</span> dalam 6 bulan terakhir
+          </p>
+        </div>
+      </div>
+
+      {/* Per-Router Stats */}
+      {per_router && per_router.length > 0 && (
+        <div className="bg-card border border-border rounded-sm p-4">
+          <h3 className="text-xs font-bold flex items-center gap-2 mb-4">
+            <MapPin className="w-4 h-4 text-blue-400" /> Statistik Per-Router Bulan Ini
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border/50 text-muted-foreground">
+                  <th className="text-left py-2 font-semibold">Router</th>
+                  <th className="text-right py-2 font-semibold">Pelanggan</th>
+                  <th className="text-right py-2 font-semibold">Aktif</th>
+                  <th className="text-right py-2 font-semibold">Revenue</th>
+                  <th className="text-right py-2 font-semibold">Kolektabilitas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {per_router.map(r => (
+                  <tr key={r.device_id} className="border-b border-border/30 last:border-0 hover:bg-secondary/20 transition-colors">
+                    <td className="py-2 font-semibold">{r.name}</td>
+                    <td className="py-2 text-right font-mono">{r.total_customers}</td>
+                    <td className="py-2 text-right">
+                      <span className="text-emerald-400 font-mono">{r.active_customers}</span>
+                    </td>
+                    <td className="py-2 text-right font-mono font-semibold text-primary">{fmtRpShort(r.revenue_this_month)}</td>
+                    <td className="py-2 text-right">
+                      <span className={`font-mono font-semibold ${r.collectability >= 80 ? "text-emerald-400" : r.collectability >= 50 ? "text-amber-400" : "text-red-400"}`}>
+                        {r.collectability}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
