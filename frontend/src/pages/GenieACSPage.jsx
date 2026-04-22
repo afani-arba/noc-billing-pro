@@ -388,6 +388,14 @@ function ZTPModal({ device, onClose, onSuccess }) {
     bind_lan: ["LAN1"],
     bind_ssid: ["SSID1"],
     wifi_max_clients: 32,
+    // Multi-SSID: mode per SSID ("off" | "internet" | "bridge")
+    ssid_modes: { "1": "internet", "2": "off", "3": "off", "4": "off" },
+    // Bridge SSID configs
+    bridge_configs: {
+      "2": { ssid_name: "", wifi_pass: generatePassword(12), vlan_id: "", max_clients: 32 },
+      "3": { ssid_name: "", wifi_pass: generatePassword(12), vlan_id: "", max_clients: 32 },
+      "4": { ssid_name: "", wifi_pass: generatePassword(12), vlan_id: "", max_clients: 32 },
+    },
   });
 
 
@@ -413,12 +421,33 @@ function ZTPModal({ device, onClose, onSuccess }) {
       .finally(() => setLoadingOptions(false));
   }, []);
 
+  // Derive bind_ssid and bridge_ssids from ssid_modes
+  const derivedBindSsid = Object.entries(form.ssid_modes)
+    .filter(([, mode]) => mode === "internet")
+    .map(([idx]) => `SSID${idx}`);
+
+  const derivedBridgeSsids = Object.entries(form.ssid_modes)
+    .filter(([, mode]) => mode === "bridge")
+    .map(([idx]) => ({
+      ssid_index: idx,
+      ssid_name: form.bridge_configs[idx]?.ssid_name || "",
+      wifi_pass: form.bridge_configs[idx]?.wifi_pass || "",
+      vlan_id: form.bridge_configs[idx]?.vlan_id || "",
+      max_clients: form.bridge_configs[idx]?.max_clients || 32,
+    }));
+
   const handleSubmit = async () => {
     if (!form.customer_name.trim()) return toast.error("Nama pelanggan wajib diisi");
     if (!form.pppoe_username.trim()) return toast.error("Username PPPoE wajib diisi");
     if (!form.pppoe_password.trim()) return toast.error("Password PPPoE wajib diisi");
     if (!form.mikrotik_device_id) return toast.error("Pilih router MikroTik terlebih dahulu");
     if (!form.package_id) return toast.error("Pilih Paket Layanan NOC terlebih dahulu");
+
+    // Validasi bridge SSIDs
+    for (const bs of derivedBridgeSsids) {
+      if (!bs.ssid_name.trim()) return toast.error(`Nama WiFi Bridge SSID${bs.ssid_index} wajib diisi`);
+      if (!bs.wifi_pass.trim()) return toast.error(`Password WiFi Bridge SSID${bs.ssid_index} wajib diisi`);
+    }
 
     setSubmitting(true);
     setSteps([
@@ -428,7 +457,15 @@ function ZTPModal({ device, onClose, onSuccess }) {
     ]);
     try {
       const encId = encodeURIComponent(device.id);
-      const payload = { ...form, installation_fee: Number(form.installation_fee) || 0 };
+      const payload = {
+        ...form,
+        installation_fee: Number(form.installation_fee) || 0,
+        bind_ssid: derivedBindSsid,
+        bridge_ssids: derivedBridgeSsids,
+      };
+      // Hapus field internal yang tidak dikenal backend
+      delete payload.ssid_modes;
+      delete payload.bridge_configs;
       const r = await api.post(`/genieacs/devices/${encId}/activate-customer`, payload);
       setSteps(r.data.steps);
       setResult(r.data);
@@ -652,60 +689,154 @@ function ZTPModal({ device, onClose, onSuccess }) {
                       placeholder="Budi Home" className="rounded-sm text-xs h-8" />
                   </div>
 
-                  {/* Binding Port LAN & SSID */}
+                  {/* Binding Port LAN */}
                   <div className="space-y-2 sm:col-span-2 p-3 bg-secondary/10 border border-border rounded-sm mt-1">
-                    <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1 font-semibold">Binding Port TR-069 <span className="font-normal text-muted-foreground/60">(Huawei, ZTE, C-DATA, Fiberhome)</span></Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* LAN Binding */}
-                      <div>
-                        <p className="text-[9px] text-muted-foreground mb-1.5 font-medium">LAN Ports</p>
-                        <div className="flex flex-wrap gap-3">
-                          {["LAN1", "LAN2", "LAN3", "LAN4"].map(lan => (
-                            <label key={lan} className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:text-foreground">
-                              <input
-                                type="checkbox"
-                                checked={form.bind_lan.includes(lan)}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  setForm(f => ({
-                                    ...f,
-                                    bind_lan: checked 
-                                      ? [...f.bind_lan, lan] 
-                                      : f.bind_lan.filter(l => l !== lan)
-                                  }));
-                                }}
-                                className="w-3 h-3 text-primary bg-background border-border rounded-sm focus:ring-primary/50"
-                              />
-                              {lan.replace("LAN", "LAN ")}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      {/* SSID Binding */}
-                      <div>
-                        <p className="text-[9px] text-muted-foreground mb-1.5 font-medium">SSID (WLAN) Ports</p>
-                        <div className="flex flex-wrap gap-3">
-                          {["SSID1", "SSID2", "SSID3", "SSID4"].map(ssid => (
-                            <label key={ssid} className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:text-foreground">
-                              <input
-                                type="checkbox"
-                                checked={form.bind_ssid.includes(ssid)}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  setForm(f => ({
-                                    ...f,
-                                    bind_ssid: checked 
-                                      ? [...f.bind_ssid, ssid] 
-                                      : f.bind_ssid.filter(s => s !== ssid)
-                                  }));
-                                }}
-                                className="w-3 h-3 text-primary bg-background border-border rounded-sm focus:ring-primary/50"
-                              />
-                              {ssid.replace("SSID", "SSID ")}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
+                    <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1 font-semibold">Binding Port LAN <span className="font-normal text-muted-foreground/60">(Huawei, ZTE, C-DATA, Fiberhome)</span></Label>
+                    <div className="flex flex-wrap gap-3">
+                      {["LAN1", "LAN2", "LAN3", "LAN4"].map(lan => (
+                        <label key={lan} className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={form.bind_lan.includes(lan)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setForm(f => ({
+                                ...f,
+                                bind_lan: checked
+                                  ? [...f.bind_lan, lan]
+                                  : f.bind_lan.filter(l => l !== lan)
+                              }));
+                            }}
+                            className="w-3 h-3 text-primary bg-background border-border rounded-sm focus:ring-primary/50"
+                          />
+                          {lan.replace("LAN", "LAN ")}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Multi-SSID Configuration */}
+                  <div className="space-y-3 sm:col-span-2 p-3 bg-cyan-500/5 border border-cyan-500/20 rounded-sm mt-1">
+                    <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1.5 font-semibold">
+                      <Radio className="w-3.5 h-3.5 text-cyan-400" /> Multi-SSID Configuration
+                    </Label>
+                    <p className="text-[9px] text-muted-foreground leading-relaxed">
+                      Atur mode setiap SSID: <strong>Internet</strong> (PPPoE/Routed) atau <strong>Bridge</strong> (untuk Hotspot MikroTik).
+                      SSID Bridge akan mendapat nama WiFi dan password terpisah.
+                    </p>
+
+                    <div className="space-y-2">
+                      {["1", "2", "3", "4"].map(idx => {
+                        const mode = form.ssid_modes[idx] || "off";
+                        const isFixed = idx === "1"; // SSID1 selalu Internet
+                        const bridgeCfg = form.bridge_configs[idx] || {};
+
+                        return (
+                          <div key={idx} className={`rounded-sm border transition-all ${
+                            mode === "bridge"
+                              ? "border-orange-500/30 bg-orange-500/5"
+                              : mode === "internet"
+                                ? "border-green-500/20 bg-green-500/5"
+                                : "border-border bg-secondary/10"
+                          }`}>
+                            {/* SSID Header Row */}
+                            <div className="flex items-center gap-3 px-3 py-2">
+                              <div className={`w-6 h-6 rounded-sm flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                mode === "bridge" ? "bg-orange-500/20 text-orange-400"
+                                  : mode === "internet" ? "bg-green-500/20 text-green-400"
+                                  : "bg-secondary/40 text-muted-foreground"
+                              }`}>{idx}</div>
+                              <span className="text-xs font-medium flex-shrink-0 w-12">SSID {idx}</span>
+                              <select
+                                value={mode}
+                                disabled={isFixed}
+                                onChange={e => setForm(f => ({
+                                  ...f,
+                                  ssid_modes: { ...f.ssid_modes, [idx]: e.target.value }
+                                }))}
+                                className={`flex-1 h-7 text-[11px] rounded-sm border border-input bg-background px-2 text-foreground ${
+                                  isFixed ? "opacity-60 cursor-not-allowed" : ""
+                                }`}
+                              >
+                                {!isFixed && <option value="off">Nonaktif</option>}
+                                <option value="internet">Internet (PPPoE / Routed)</option>
+                                {!isFixed && <option value="bridge">Bridge (Hotspot)</option>}
+                              </select>
+                              {mode === "internet" && <Wifi className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />}
+                              {mode === "bridge" && <Network className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />}
+                              {mode === "off" && <WifiOff className="w-3.5 h-3.5 text-muted-foreground/40 flex-shrink-0" />}
+                            </div>
+
+                            {/* Bridge Config Fields — hanya tampil jika mode = bridge */}
+                            {mode === "bridge" && (
+                              <div className="px-3 pb-3 pt-1 border-t border-orange-500/10">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <Label className="text-[9px] text-orange-400/80 uppercase">Nama WiFi Bridge *</Label>
+                                    <Input
+                                      value={bridgeCfg.ssid_name || ""}
+                                      onChange={e => setForm(f => ({
+                                        ...f,
+                                        bridge_configs: {
+                                          ...f.bridge_configs,
+                                          [idx]: { ...f.bridge_configs[idx], ssid_name: e.target.value }
+                                        }
+                                      }))}
+                                      placeholder={`Hotspot-SSID${idx}`}
+                                      className="rounded-sm text-xs h-7"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[9px] text-orange-400/80 uppercase">Password WiFi Bridge *</Label>
+                                    <Input
+                                      value={bridgeCfg.wifi_pass || ""}
+                                      onChange={e => setForm(f => ({
+                                        ...f,
+                                        bridge_configs: {
+                                          ...f.bridge_configs,
+                                          [idx]: { ...f.bridge_configs[idx], wifi_pass: e.target.value }
+                                        }
+                                      }))}
+                                      placeholder="password123"
+                                      className="rounded-sm text-xs h-7 font-mono"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[9px] text-muted-foreground uppercase">VLAN ID Bridge</Label>
+                                    <Input
+                                      value={bridgeCfg.vlan_id || ""}
+                                      onChange={e => setForm(f => ({
+                                        ...f,
+                                        bridge_configs: {
+                                          ...f.bridge_configs,
+                                          [idx]: { ...f.bridge_configs[idx], vlan_id: e.target.value }
+                                        }
+                                      }))}
+                                      placeholder="Kosongkan jika sama"
+                                      className="rounded-sm text-xs h-7 font-mono"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[9px] text-muted-foreground uppercase">Maks Perangkat</Label>
+                                    <Input
+                                      type="number" min={1} max={128}
+                                      value={bridgeCfg.max_clients || 32}
+                                      onChange={e => setForm(f => ({
+                                        ...f,
+                                        bridge_configs: {
+                                          ...f.bridge_configs,
+                                          [idx]: { ...f.bridge_configs[idx], max_clients: parseInt(e.target.value) || 32 }
+                                        }
+                                      }))}
+                                      className="rounded-sm text-xs h-7 font-mono"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

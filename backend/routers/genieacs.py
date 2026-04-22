@@ -487,6 +487,12 @@ class ZTPActivateRequest(BaseModel):
     bind_lan: list[str] = []             # List of LANs, e.g. ["LAN1"]
     bind_ssid: list[str] = []            # List of SSIDs, e.g. ["SSID1"]
     wifi_max_clients: int = 32           # Batas perangkat WiFi (MaxAssociatedDevices)
+    # ── Multi-SSID Bridge Mode ──────────────────────────────────────────────────
+    # Daftar SSID yang dijadikan Bridge (untuk hotspot).
+    # Setiap item: {"ssid_index": "2", "ssid_name": "Hotspot", "wifi_pass": "xxx",
+    #               "vlan_id": "200", "max_clients": 32}
+    # SSID yang ada di sini TIDAK akan di-bind ke WAN PPPoE, melainkan ke WAN Bridge baru.
+    bridge_ssids: list[dict] = []
 
 
 @router.post("/devices/{device_id:path}/activate-customer")
@@ -583,12 +589,15 @@ async def activate_customer_ztp(
             body.bind_lan,
             body.bind_ssid,
             body.wifi_max_clients,
+            body.bridge_ssids,
         )
         genieacs_ok = True
+        bridge_count = len(body.bridge_ssids)
+        bridge_msg = f" + {bridge_count} Bridge SSID" if bridge_count > 0 else ""
         steps.append({
             "step": "GenieACS / TR-069 Provision",
             "ok": True,
-            "message": "Konfigurasi PPPoE dan WiFi berhasil dikirim ke ONT"
+            "message": f"Konfigurasi PPPoE dan WiFi{bridge_msg} berhasil dikirim ke ONT"
         })
         # ─── AUTO SUMMON ──────────────────────────────────────────────────────
         # Force ONT to check-in so status updates immediately

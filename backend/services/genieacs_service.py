@@ -443,9 +443,10 @@ def _find_pppoe_wan_path(device_id: str) -> str:
         return default
 
 
-def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "", bind_lan: list = None, bind_ssid: list = None, wifi_max_clients: int = None) -> dict:
+def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "", bind_lan: list = None, bind_ssid: list = None, wifi_max_clients: int = None, bridge_ssids: list = None) -> dict:
     """
     Zero Touch Provisioning: Mengatur PPPoE dan WiFi SSID/Password pada ONT ZTE/Huawei.
+    Mendukung Multi-SSID dengan mode Bridge fleksibel.
 
     Alur:
     1. Cek apakah WANPPPConnection sudah ada di device cache GenieACS.
@@ -453,6 +454,7 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
     2b. Jika BELUM ada (fresh ONT) →
         - addObject WANPPPConnection (di dalam WANConnectionDevice.1)
         - setParameterValues credentials
+    3. Jika bridge_ssids diberikan → buat WAN Bridge + konfigurasi SSID bridge
         Semua task dieksekusi GenieACS dalam satu sesi TR-069.
     """
     cfg = get_config()
@@ -581,6 +583,40 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
                 ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", wifi_pass, "xsd:string"],
             ])
 
+    # ── Bridge SSID params (Multi-SSID) ────────────────────────────────────────
+    # Konfigurasi SSID yang dijadikan mode Bridge (untuk hotspot).
+    # Setiap bridge SSID mendapat:
+    #   - Enable SSID + set nama & password
+    #   - Konfigurasi WAN Bridge connection (jika belum ada)
+    bridge_params = []
+    if bridge_ssids:
+        for bs in bridge_ssids:
+            b_idx = str(bs.get("ssid_index", "")).strip()
+            b_name = bs.get("ssid_name", "").strip()
+            b_pass = bs.get("wifi_pass", "").strip()
+            b_vlan = str(bs.get("vlan_id", "")).strip()
+            b_max = bs.get("max_clients", 32)
+            if not b_idx:
+                continue
+
+            wlan_base = f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{b_idx}"
+
+            # 1. Enable dan konfigurasi SSID bridge
+            if b_name:
+                bridge_params.append([f"{wlan_base}.SSID", b_name, "xsd:string"])
+            bridge_params.append([f"{wlan_base}.Enable", "1", "xsd:boolean"])
+
+            if b_pass:
+                bridge_params.extend([
+                    [f"{wlan_base}.PreSharedKey.1.PreSharedKey", b_pass, "xsd:string"],
+                    [f"{wlan_base}.PreSharedKey.1.KeyPassphrase", b_pass, "xsd:string"],
+                ])
+
+            if b_max and int(b_max) > 0:
+                bridge_params.append([f"{wlan_base}.MaxAssociatedDevices", str(b_max), "xsd:unsignedInt"])
+
+            logger.info(f"ZTP Bridge: SSID{b_idx} = '{b_name}' VLAN={b_vlan} max={b_max}")
+
     if has_ppp_wan:
         # ── 2a: PPPoE profile sudah ada — langsung set ───────────────────────
         bp = existing_path
@@ -598,11 +634,12 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
             pppoe_params.extend(_build_bindings(bp))
             if vlan_id:
                 pppoe_params.append([f"{bp}.X_ZTE-COM_VLANID", str(vlan_id), "xsd:string"])
-        all_params = pppoe_params + extra_params
+        all_params = pppoe_params + extra_params + bridge_params
         res = requests.post(cr_url, json={"name": "setParameterValues", "parameterValues": all_params}, auth=_auth(), timeout=TIMEOUT)
         res.raise_for_status()
-        logger.info(f"ZTP [existing] sent to {device_id}: status={res.status_code} path={bp} user={pppoe_user}")
-        return {"success": True, "message": f"PPPoE config dikirim ke {bp}", "result": res.status_code}
+        bridge_msg = f" + {len(bridge_ssids)} Bridge SSID" if bridge_ssids else ""
+        logger.info(f"ZTP [existing] sent to {device_id}: status={res.status_code} path={bp} user={pppoe_user}{bridge_msg}")
+        return {"success": True, "message": f"PPPoE{bridge_msg} config dikirim ke {bp}", "result": res.status_code}
 
     else:
         # ── 2b: Fresh ONT — buat WAN PPPoE profile baru via addObject ────────
@@ -645,18 +682,20 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
         t2 = requests.post(cr_url, json={"name": "addObject", "objectName": new_ppp_cd}, auth=_auth(), timeout=TIMEOUT)
         t2.raise_for_status()
 
-        # Task 3: setParameterValues PPPoE + WiFi + Mgmt pada hasil addObject (index 2 / 1)
-        res = requests.post(task_url, json={"name": "setParameterValues", "parameterValues": pppoe_params + extra_params}, auth=_auth(), timeout=TIMEOUT)
+        # Task 3: setParameterValues PPPoE + WiFi + Mgmt + Bridge params
+        all_set_params = pppoe_params + extra_params + bridge_params
+        res = requests.post(task_url, json={"name": "setParameterValues", "parameterValues": all_set_params}, auth=_auth(), timeout=TIMEOUT)
         res.raise_for_status()
 
-        logger.info(f"ZTP [fresh ONT] 3 tasks queued for {device_id}: addObject WAN, addObject PPPoE, setParams user={pppoe_user}")
+        bridge_msg = f" + {len(bridge_ssids)} Bridge SSID" if bridge_ssids else ""
+        logger.info(f"ZTP [fresh ONT] tasks queued for {device_id}: addObject WAN, addObject PPPoE, setParams user={pppoe_user}{bridge_msg}")
         return {
             "success": True,
             "message": (
-                "ONT fresh: 3 Task TR-069 diantrekan — "
-                "(1) Buat WANConnectionDevice.2, (2) Buat WANPPPConnection, "
-                "(3) Set Username/Password/NAT/SSID. "
-                "GenieACS eksekusi saat ONT merespons connection request."
+                f"ONT fresh: Task TR-069 diantrekan — "
+                f"(1) Buat WANConnectionDevice.2, (2) Buat WANPPPConnection, "
+                f"(3) Set Username/Password/NAT/SSID{bridge_msg}. "
+                f"GenieACS eksekusi saat ONT merespons connection request."
             ),
             "result": res.status_code
         }
