@@ -486,6 +486,7 @@ class ZTPActivateRequest(BaseModel):
     use_radius: bool = True              # Gunakan RADIUS sebagai default
     bind_lan: list[str] = []             # List of LANs, e.g. ["LAN1"]
     bind_ssid: list[str] = []            # List of SSIDs, e.g. ["SSID1"]
+    wifi_max_clients: int = 32           # Batas perangkat WiFi (MaxAssociatedDevices)
 
 
 @router.post("/devices/{device_id:path}/activate-customer")
@@ -581,6 +582,7 @@ async def activate_customer_ztp(
             body.vlan_id,
             body.bind_lan,
             body.bind_ssid,
+            body.wifi_max_clients,
         )
         genieacs_ok = True
         steps.append({

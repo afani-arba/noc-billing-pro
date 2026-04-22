@@ -14,13 +14,12 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import PeeringPlatformModal from "@/components/PeeringPlatformModal";
+import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import highcharts3d from 'highcharts/highcharts-3d';
 import { useTheme } from "@/context/ThemeContext";
 
-if (typeof Highcharts === 'object') {
-  highcharts3d(Highcharts);
-}
+highcharts3d(Highcharts);
 // ── Error Boundary ──────────────────────────────────────────────────────────
 class ErrorBoundary extends Component {
   constructor(props) {

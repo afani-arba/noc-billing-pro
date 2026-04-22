@@ -1661,6 +1661,9 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
   });
   const [devices, setDevices] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [activationDate, setActivationDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [proratePreview, setProratePreview] = useState(null);
+  const [prorateLoading, setProrateLoading] = useState(false);
 
   useEffect(() => { 
     api.get("/devices")
@@ -1678,6 +1681,21 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
   const handleDeviceChange = (deviceId) => {
     setForm(f => ({ ...f, device_id: deviceId, package_id: "" }));
   };
+
+  // Fetch prorate preview saat package atau tanggal aktivasi berubah
+  const fetchProratePreview = async (packageId, date) => {
+    if (!packageId || isEdit) { setProratePreview(null); return; }
+    setProrateLoading(true);
+    try {
+      const r = await api.post("/billing/invoices/prorate-preview", { package_id: packageId, activation_date: date });
+      setProratePreview(r.data);
+    } catch { setProratePreview(null); }
+    setProrateLoading(false);
+  };
+
+  useEffect(() => {
+    if (!isEdit) fetchProratePreview(form.package_id, activationDate);
+  }, [form.package_id, activationDate]); // eslint-disable-line
 
   const genPass = () => set("pppoe_password", Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4));
 
@@ -1922,6 +1940,77 @@ function CustomerForm({ packages, initial, onClose, onSaved }) {
                     );
                   })()}
                 </div>
+
+                {/* Tanggal Aktivasi + Prorate Preview — hanya saat tambah baru */}
+                {!isEdit && (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium flex items-center gap-1.5">
+                        <CalendarCheck className="w-3 h-3 text-muted-foreground" />
+                        Tanggal Aktivasi
+                        <span className="text-[10px] text-muted-foreground font-normal">(untuk kalkulasi tagihan pertama)</span>
+                      </Label>
+                      <Input
+                        type="date"
+                        value={activationDate}
+                        onChange={e => setActivationDate(e.target.value)}
+                        className="h-9 rounded-sm text-xs bg-background border-border/50"
+                      />
+                    </div>
+
+                    {/* Prorate Preview Card */}
+                    {form.package_id && (
+                      <div className={`rounded-sm border p-3 transition-all duration-200 ${
+                        proratePreview?.is_prorated
+                          ? "bg-blue-500/5 border-blue-500/30"
+                          : "bg-secondary/30 border-border/50"
+                      }`}>
+                        {prorateLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                            <RefreshCw className="w-3 h-3 animate-spin" /> Menghitung tagihan pertama...
+                          </div>
+                        ) : proratePreview ? (
+                          <>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                                <CalendarCheck className="w-3 h-3 text-blue-400" />
+                                {proratePreview.is_prorated ? "Tagihan Pertama (Prorate)" : "Tagihan Pertama (Full)"}
+                              </span>
+                              {proratePreview.is_prorated && (
+                                <span className="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-bold">PRORATE</span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {proratePreview.is_prorated && (
+                                <>
+                                  <div>
+                                    <p className="text-muted-foreground text-[10px]">Harga Paket</p>
+                                    <p className="font-mono font-semibold">{Rp(proratePreview.full_price)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground text-[10px]">Sisa Hari Bulan Ini</p>
+                                    <p className="font-mono font-semibold">{proratePreview.days_remaining} / {proratePreview.days_in_month} hari</p>
+                                  </div>
+                                </>
+                              )}
+                              <div>
+                                <p className="text-muted-foreground text-[10px]">Tagihan Pertama</p>
+                                <p className="text-lg font-bold text-primary font-mono">{Rp(proratePreview.prorated_amount)}</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground text-[10px]">Periode Berlaku</p>
+                                <p className="font-mono text-[11px]">{proratePreview.period_start?.slice(0,10)} s/d {proratePreview.period_end?.slice(0,10)}</p>
+                              </div>
+                            </div>
+                            {proratePreview.is_prorated && (
+                              <p className="text-[10px] text-blue-400/80 mt-2 italic">{proratePreview.note}</p>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">

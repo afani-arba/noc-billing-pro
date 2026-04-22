@@ -443,7 +443,7 @@ def _find_pppoe_wan_path(device_id: str) -> str:
         return default
 
 
-def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "", bind_lan: list = None, bind_ssid: list = None) -> dict:
+def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, wifi_pass: str, vlan_id: str = "", bind_lan: list = None, bind_ssid: list = None, wifi_max_clients: int = None) -> dict:
     """
     Zero Touch Provisioning: Mengatur PPPoE dan WiFi SSID/Password pada ONT ZTE/Huawei.
 
@@ -532,13 +532,54 @@ def provision_cpe(device_id: str, pppoe_user: str, pppoe_pass: str, ssid: str, w
         ["InternetGatewayDevice.ManagementServer.ConnectionRequestUsername", "admin",    "xsd:string"],
         ["InternetGatewayDevice.ManagementServer.ConnectionRequestPassword", mgmt_pass, "xsd:string"],
     ]
+
+    # Push SSID ke semua WLANConfiguration yang dipilih (bind_ssid) ATAU default ke index 1
+    # Bug fix: sebelumnya hanya push ke WLANConfiguration.1 sehingga jika SSID2/3 di-bind
+    # tapi nama WiFinya tidak terconfigurasi di index tersebut.
     if ssid:
-        extra_params.append(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string"])
+        if bind_ssid:
+            # Push nama SSID ke setiap index SSID yang di-bind
+            for ssid_tag in bind_ssid:
+                # SSID1 -> index 1, SSID2 -> index 2, dst
+                idx = ssid_tag.replace("SSID", "").strip() or "1"
+                extra_params.append([
+                    f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{idx}.SSID",
+                    ssid, "xsd:string"
+                ])
+                # Juga push Enable=1 agar SSID benar-benar aktif
+                extra_params.append([
+                    f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{idx}.Enable",
+                    "1", "xsd:boolean"
+                ])
+                # MaxAssociatedDevices (batas perangkat WiFi)
+                if wifi_max_clients and wifi_max_clients > 0:
+                    extra_params.append([
+                        f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{idx}.MaxAssociatedDevices",
+                        str(wifi_max_clients), "xsd:unsignedInt"
+                    ])
+        else:
+            # Default: hanya SSID1
+            extra_params.append(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", ssid, "xsd:string"])
+            extra_params.append(["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable", "1", "xsd:boolean"])
+            if wifi_max_clients and wifi_max_clients > 0:
+                extra_params.append([
+                    "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.MaxAssociatedDevices",
+                    str(wifi_max_clients), "xsd:unsignedInt"
+                ])
+
     if wifi_pass:
-        extra_params.extend([
-            ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.PreSharedKey", wifi_pass, "xsd:string"],
-            ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", wifi_pass, "xsd:string"],
-        ])
+        if bind_ssid:
+            for ssid_tag in bind_ssid:
+                idx = ssid_tag.replace("SSID", "").strip() or "1"
+                extra_params.extend([
+                    [f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{idx}.PreSharedKey.1.PreSharedKey", wifi_pass, "xsd:string"],
+                    [f"InternetGatewayDevice.LANDevice.1.WLANConfiguration.{idx}.PreSharedKey.1.KeyPassphrase", wifi_pass, "xsd:string"],
+                ])
+        else:
+            extra_params.extend([
+                ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.PreSharedKey", wifi_pass, "xsd:string"],
+                ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", wifi_pass, "xsd:string"],
+            ])
 
     if has_ppp_wan:
         # ── 2a: PPPoE profile sudah ada — langsung set ───────────────────────

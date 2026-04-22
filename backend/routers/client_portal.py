@@ -959,3 +959,353 @@ async def send_chat_message(data: ChatMessageRequest, customer=Depends(get_curre
         "action_taken": action_taken,
         "message": "Pesan terkirim"
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FEATURE: PDF Invoice — Download dari Portal Pelanggan
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/invoices")
+async def get_client_invoices(customer=Depends(get_current_client)):
+    """Ambil daftar invoice pelanggan (semua status, 24 bulan terakhir)."""
+    db = get_db()
+    from datetime import date
+    cutoff = (date.today().replace(day=1)).isoformat()
+    # Ambil 24 bulan terakhir
+    from datetime import timedelta
+    cutoff_date = (date.today() - timedelta(days=730)).isoformat()
+    invoices = await db.invoices.find(
+        {"customer_id": customer.get("id"), "created_at": {"$gte": cutoff_date}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(48)
+    return {"ok": True, "invoices": invoices}
+
+
+@router.get("/invoices/{invoice_id}/pdf")
+async def download_invoice_pdf(invoice_id: str, customer=Depends(get_current_client)):
+    """
+    Generate dan download PDF invoice untuk pelanggan.
+    Menggunakan reportlab untuk generate PDF sederhana yang profesional.
+    """
+    db = get_db()
+    from fastapi.responses import Response
+
+    # Verifikasi invoice milik pelanggan ini
+    inv = await db.invoices.find_one({"id": invoice_id, "customer_id": customer.get("id")}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice tidak ditemukan")
+
+    # Ambil data pendukung
+    pkg = await db.billing_packages.find_one({"id": inv.get("package_id")}, {"_id": 0}) or {}
+    company = await db.system_settings.find_one({"_id": "company_profile"}) or {}
+
+    # Generate PDF
+    try:
+        pdf_bytes = _generate_invoice_pdf(inv, pkg, company, customer)
+    except Exception as e:
+        raise HTTPException(500, f"Gagal generate PDF: {str(e)}")
+
+    inv_num = inv.get("invoice_number", invoice_id).replace("/", "-")
+    filename = f"Invoice-{inv_num}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+def _generate_invoice_pdf(inv: dict, pkg: dict, company: dict, customer: dict) -> bytes:
+    """Generate PDF invoice menggunakan reportlab."""
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=20*mm, rightMargin=20*mm,
+        topMargin=15*mm, bottomMargin=15*mm
+    )
+
+    styles = getSampleStyleSheet()
+    W = A4[0] - 40*mm  # usable width
+
+    # Color palette
+    PRIMARY = colors.HexColor("#1e40af")
+    ACCENT  = colors.HexColor("#3b82f6")
+    MUTED   = colors.HexColor("#64748b")
+    SUCCESS = colors.HexColor("#16a34a")
+    DANGER  = colors.HexColor("#dc2626")
+    BG_LIGHT= colors.HexColor("#f8fafc")
+    BORDER  = colors.HexColor("#e2e8f0")
+    WHITE   = colors.white
+    DARK    = colors.HexColor("#0f172a")
+
+    # Styles
+    h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=22, textColor=PRIMARY, leading=26)
+    h2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=11, textColor=DARK, leading=14)
+    h3 = ParagraphStyle("h3", fontName="Helvetica-Bold", fontSize=9, textColor=MUTED, leading=12)
+    body = ParagraphStyle("body", fontName="Helvetica", fontSize=9, textColor=DARK, leading=13)
+    small = ParagraphStyle("small", fontName="Helvetica", fontSize=8, textColor=MUTED, leading=11)
+    bold = ParagraphStyle("bold", fontName="Helvetica-Bold", fontSize=9, textColor=DARK, leading=13)
+    right_bold = ParagraphStyle("right_bold", fontName="Helvetica-Bold", fontSize=10, textColor=DARK, leading=14, alignment=TA_RIGHT)
+    right_big = ParagraphStyle("right_big", fontName="Helvetica-Bold", fontSize=16, textColor=PRIMARY, leading=20, alignment=TA_RIGHT)
+    center = ParagraphStyle("center", fontName="Helvetica", fontSize=9, textColor=DARK, leading=13, alignment=TA_CENTER)
+    center_bold = ParagraphStyle("center_bold", fontName="Helvetica-Bold", fontSize=10, textColor=WHITE, leading=14, alignment=TA_CENTER)
+
+    def rp(n):
+        return f"Rp {int(n or 0):,}".replace(",", ".")
+
+    def fmt_date(d):
+        if not d: return "-"
+        try:
+            from datetime import date
+            dt = date.fromisoformat(str(d)[:10])
+            months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des"]
+            return f"{dt.day} {months[dt.month-1]} {dt.year}"
+        except Exception:
+            return str(d)[:10]
+
+    story = []
+
+    # ── HEADER ─────────────────────────────────────────────────────────────────
+    company_name = company.get("company_name") or "ISP Provider"
+    company_addr = company.get("address") or ""
+    company_phone = company.get("phone") or ""
+    company_email = company.get("email") or ""
+
+    header_data = [
+        [
+            Paragraph(f"<b>{company_name}</b>", h1),
+            Paragraph("INVOICE", ParagraphStyle("inv_title", fontName="Helvetica-Bold", fontSize=28,
+                      textColor=ACCENT, alignment=TA_RIGHT, leading=34))
+        ],
+        [
+            Paragraph(f"{company_addr}<br/>{company_phone}{' | ' + company_email if company_email else ''}",
+                      ParagraphStyle("sub", fontName="Helvetica", fontSize=8, textColor=MUTED, leading=11)),
+            Paragraph(f"<font color='#64748b' size='8'>No. Invoice</font><br/><b>{inv.get('invoice_number', '-')}</b>",
+                      ParagraphStyle("inv_num", fontName="Helvetica-Bold", fontSize=10, textColor=DARK,
+                                     alignment=TA_RIGHT, leading=14))
+        ]
+    ]
+    header_table = Table(header_data, colWidths=[W*0.6, W*0.4])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("ALIGN",  (1,0), (1,-1), "RIGHT"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(header_table)
+    story.append(HRFlowable(width=W, thickness=2, color=PRIMARY, spaceAfter=8))
+
+    # ── STATUS BADGE + META ────────────────────────────────────────────────────
+    status = inv.get("status", "unpaid")
+    status_color = SUCCESS if status == "paid" else (DANGER if status == "overdue" else colors.HexColor("#d97706"))
+    status_label = {"paid": "LUNAS", "overdue": "JATUH TEMPO", "partial": "SEBAGIAN", "unpaid": "BELUM DIBAYAR"}.get(status, status.upper())
+
+    meta_data = [
+        [
+            Table([[Paragraph(status_label, ParagraphStyle("badge", fontName="Helvetica-Bold", fontSize=9,
+                   textColor=WHITE, alignment=TA_CENTER))]],
+                   colWidths=[35*mm],
+                   style=TableStyle([
+                       ("BACKGROUND", (0,0), (-1,-1), status_color),
+                       ("ROUNDEDCORNERS", [3,3,3,3]),
+                       ("TOPPADDING", (0,0), (-1,-1), 5),
+                       ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                   ])),
+            Paragraph(f"Periode: <b>{fmt_date(inv.get('period_start'))} — {fmt_date(inv.get('period_end'))}</b>", small),
+            Paragraph(f"Jatuh Tempo: <b>{fmt_date(inv.get('due_date'))}</b>", small),
+        ]
+    ]
+    meta_table = Table(meta_data, colWidths=[40*mm, W*0.4, W*0.25])
+    meta_table.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",  (0,0), (0,-1), "LEFT"),
+        ("ALIGN",  (1,0), (-1,-1), "RIGHT"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+    ]))
+    story.append(Spacer(1, 4))
+    story.append(meta_table)
+    story.append(Spacer(1, 10))
+
+    # ── BILLING TO + FROM ────────────────────────────────────────────────────
+    cust_name = customer.get("name") or inv.get("customer_name", "-")
+    cust_user = customer.get("username") or inv.get("customer_username", "-")
+    cust_phone = customer.get("phone") or inv.get("customer_phone", "-")
+    cust_addr = customer.get("address") or inv.get("customer_address", "-")
+    pkg_name = pkg.get("name") or inv.get("package_name", "-")
+
+    info_data = [
+        [
+            [
+                Paragraph("TAGIHAN KEPADA", h3),
+                Spacer(1, 4),
+                Paragraph(f"<b>{cust_name}</b>", h2),
+                Paragraph(f"Username: {cust_user}", small),
+                Paragraph(f"Telp: {cust_phone}", small),
+                Paragraph(cust_addr, small),
+            ],
+            [
+                Paragraph("DETAIL TAGIHAN", h3),
+                Spacer(1, 4),
+                Paragraph(f"Paket: <b>{pkg_name}</b>", body),
+                Paragraph(f"Tanggal Terbit: {fmt_date(inv.get('created_at', inv.get('period_start', '')))}", small),
+                Paragraph(f"ID Pelanggan: {customer.get('client_id') or customer.get('id', '-')}", small),
+            ]
+        ]
+    ]
+    info_table = Table([[info_data[0][0], info_data[0][1]]], colWidths=[W*0.52, W*0.45])
+    info_table.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("BACKGROUND", (0,0), (-1,-1), BG_LIGHT),
+        ("ROUNDEDCORNERS", [4,4,4,4]),
+        ("BOX", (0,0), (-1,-1), 0.5, BORDER),
+        ("TOPPADDING", (0,0), (-1,-1), 10),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+        ("LEFTPADDING", (0,0), (-1,-1), 12),
+        ("RIGHTPADDING", (0,0), (-1,-1), 12),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 14))
+
+    # ── ITEM TABLE ─────────────────────────────────────────────────────────────
+    total = inv.get("total", inv.get("amount", 0))
+    discount = inv.get("discount", 0)
+    installation = inv.get("installation_fee", 0)
+
+    item_rows = [
+        [Paragraph("Keterangan", ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE)),
+         Paragraph("Periode", ParagraphStyle("th_c", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE, alignment=TA_CENTER)),
+         Paragraph("Jumlah", ParagraphStyle("th_r", fontName="Helvetica-Bold", fontSize=9, textColor=WHITE, alignment=TA_RIGHT))],
+
+        [Paragraph(f"Layanan Internet — {pkg_name}", body),
+         Paragraph(f"{fmt_date(inv.get('period_start'))} – {fmt_date(inv.get('period_end'))}", center),
+         Paragraph(rp(pkg.get("price", total)), right_bold)],
+    ]
+
+    if installation and installation > 0:
+        item_rows.append([
+            Paragraph("Biaya Instalasi / Pemasangan", body),
+            Paragraph("-", center),
+            Paragraph(rp(installation), right_bold)
+        ])
+
+    if discount and discount > 0:
+        item_rows.append([
+            Paragraph("Diskon", ParagraphStyle("disc", fontName="Helvetica", fontSize=9, textColor=SUCCESS)),
+            Paragraph("-", center),
+            Paragraph(f"- {rp(discount)}", ParagraphStyle("disc_r", fontName="Helvetica-Bold", fontSize=9, textColor=SUCCESS, alignment=TA_RIGHT))
+        ])
+
+    if inv.get("is_prorated") or inv.get("is_prorata"):
+        note = inv.get("prorate_note") or inv.get("prorata_description", "")
+        item_rows.append([
+            Paragraph(f"<i>Catatan Prorate: {note}</i>",
+                      ParagraphStyle("prorate_note", fontName="Helvetica-Oblique", fontSize=7.5, textColor=MUTED)),
+            Paragraph("", center),
+            Paragraph("", right_bold)
+        ])
+
+    # Total row
+    item_rows.append([
+        Table([[Paragraph("TOTAL TAGIHAN", ParagraphStyle("total_label", fontName="Helvetica-Bold", fontSize=11, textColor=WHITE))]],
+              colWidths=[W*0.5], style=TableStyle([("BACKGROUND",(0,0),(-1,-1),PRIMARY),
+                                                   ("TOPPADDING",(0,0),(-1,-1),8), ("BOTTOMPADDING",(0,0),(-1,-1),8),
+                                                   ("LEFTPADDING",(0,0),(-1,-1),12)])),
+        Paragraph("", center),
+        Paragraph(rp(total), right_big)
+    ])
+
+    item_col_widths = [W*0.52, W*0.2, W*0.25]
+    item_table = Table(item_rows, colWidths=item_col_widths)
+    item_table.setStyle(TableStyle([
+        # Header row
+        ("BACKGROUND", (0,0), (-1,0), PRIMARY),
+        ("TOPPADDING", (0,0), (-1,0), 8), ("BOTTOMPADDING", (0,0), (-1,0), 8),
+        ("LEFTPADDING", (0,0), (-1,0), 10), ("RIGHTPADDING", (0,0), (-1,0), 10),
+        # Data rows
+        ("BACKGROUND", (0,1), (-1,-2), WHITE),
+        ("ROWBACKGROUNDS", (0,1), (-1,-2), [WHITE, BG_LIGHT]),
+        ("TOPPADDING", (0,1), (-1,-2), 8), ("BOTTOMPADDING", (0,1), (-1,-2), 8),
+        ("LEFTPADDING", (0,1), (-1,-2), 10), ("RIGHTPADDING", (0,1), (-1,-2), 10),
+        ("ALIGN", (2,0), (2,-1), "RIGHT"),
+        ("ALIGN", (1,0), (1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        # Total row (last)
+        ("BACKGROUND", (0,-1), (-1,-1), BG_LIGHT),
+        ("TOPPADDING", (0,-1), (-1,-1), 6), ("BOTTOMPADDING", (0,-1), (-1,-1), 6),
+        # Box
+        ("BOX", (0,0), (-1,-1), 0.5, BORDER),
+        ("LINEBELOW", (0,0), (-1,0), 0.5, BORDER),
+        ("LINEABOVE", (0,-1), (-1,-1), 1, BORDER),
+    ]))
+    story.append(item_table)
+    story.append(Spacer(1, 14))
+
+    # ── PARTIAL PAYMENT INFO ───────────────────────────────────────────────────
+    if inv.get("payments") and len(inv["payments"]) > 0:
+        story.append(Paragraph("Riwayat Pembayaran", h2))
+        story.append(Spacer(1, 4))
+        pay_rows = [[
+            Paragraph("Tanggal", ParagraphStyle("ph", fontName="Helvetica-Bold", fontSize=8, textColor=WHITE)),
+            Paragraph("Metode", ParagraphStyle("ph", fontName="Helvetica-Bold", fontSize=8, textColor=WHITE)),
+            Paragraph("Jumlah", ParagraphStyle("ph_r", fontName="Helvetica-Bold", fontSize=8, textColor=WHITE, alignment=TA_RIGHT)),
+        ]]
+        for pay in inv["payments"]:
+            pay_rows.append([
+                Paragraph(fmt_date(pay.get("paid_at", "")), small),
+                Paragraph(pay.get("payment_method", "-").title(), small),
+                Paragraph(rp(pay.get("amount", 0)), ParagraphStyle("pr", fontName="Helvetica-Bold", fontSize=8, textColor=SUCCESS, alignment=TA_RIGHT)),
+            ])
+        amount_remaining = inv.get("amount_remaining", 0)
+        if amount_remaining > 0:
+            pay_rows.append([
+                Paragraph("Sisa Tagihan", ParagraphStyle("pr2", fontName="Helvetica-Bold", fontSize=8, textColor=DANGER)),
+                Paragraph("", small),
+                Paragraph(rp(amount_remaining), ParagraphStyle("pr_r", fontName="Helvetica-Bold", fontSize=8, textColor=DANGER, alignment=TA_RIGHT)),
+            ])
+
+        pay_table = Table(pay_rows, colWidths=[W*0.35, W*0.3, W*0.3])
+        pay_table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), ACCENT),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, BG_LIGHT]),
+            ("TOPPADDING", (0,0), (-1,-1), 5), ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("LEFTPADDING", (0,0), (-1,-1), 8), ("RIGHTPADDING", (0,0), (-1,-1), 8),
+            ("BOX", (0,0), (-1,-1), 0.5, BORDER),
+            ("ALIGN", (2,0), (2,-1), "RIGHT"),
+        ]))
+        story.append(pay_table)
+        story.append(Spacer(1, 14))
+
+    # ── BANK INFO + FOOTER ────────────────────────────────────────────────────
+    bank_info = company.get("bank_account", "")
+    if bank_info:
+        bank_data = [[
+            Paragraph("INFO PEMBAYARAN", h3),
+        ], [
+            Paragraph(f"{bank_info}", body),
+        ]]
+        bank_table = Table(bank_data, colWidths=[W])
+        bank_table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), BG_LIGHT),
+            ("BACKGROUND", (0,1), (-1,1), WHITE),
+            ("BOX", (0,0), (-1,-1), 0.5, BORDER),
+            ("TOPPADDING", (0,0), (-1,-1), 8), ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ("LEFTPADDING", (0,0), (-1,-1), 12), ("RIGHTPADDING", (0,0), (-1,-1), 12),
+        ]))
+        story.append(bank_table)
+        story.append(Spacer(1, 10))
+
+    story.append(HRFlowable(width=W, thickness=0.5, color=BORDER, spaceBefore=6, spaceAfter=8))
+    story.append(Paragraph(
+        "Terima kasih telah menggunakan layanan kami. Dokumen ini dibuat secara otomatis oleh sistem.",
+        ParagraphStyle("footer", fontName="Helvetica-Oblique", fontSize=7.5, textColor=MUTED, alignment=TA_CENTER)
+    ))
+
+    doc.build(story)
+    return buf.getvalue()

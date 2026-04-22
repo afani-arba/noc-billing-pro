@@ -82,6 +82,8 @@ function StatsBar({ stats, loading }) {
 // ── Device Detail / Edit Modal ────────────────────────────────────────────────
 
 function DeviceModal({ device, onClose, isAdmin, onRefreshed }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const [form, setForm] = useState({
     ssid: device.ssid || "",
     wpa_key: "",
@@ -355,6 +357,8 @@ function toSlug(name) {
 }
 
 function ZTPModal({ device, onClose, onSuccess }) {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const overlayRef = useRef(null);
   const [options, setOptions] = useState({ mikrotik_devices: [], billing_packages: [] });
   const [loadingOptions, setLoadingOptions] = useState(true);
@@ -383,6 +387,7 @@ function ZTPModal({ device, onClose, onSuccess }) {
     use_radius: true,
     bind_lan: ["LAN1"],
     bind_ssid: ["SSID1"],
+    wifi_max_clients: 32,
   });
 
 
@@ -787,6 +792,9 @@ function ZTPModal({ device, onClose, onSuccess }) {
                     <Label className="text-[10px] text-muted-foreground uppercase">SSID (Nama WiFi)</Label>
                     <Input value={form.ssid} onChange={e => setForm(f => ({ ...f, ssid: e.target.value }))}
                       placeholder="Budi Home" className="rounded-sm text-xs h-8" />
+                    <p className="text-[9px] text-muted-foreground">
+                      Nama WiFi akan di-push ke semua SSID yang dipilih di Binding Port di atas.
+                    </p>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] text-muted-foreground uppercase">Password WiFi</Label>
@@ -800,9 +808,27 @@ function ZTPModal({ device, onClose, onSuccess }) {
                       </button>
                     </div>
                   </div>
+                  {/* Batas Perangkat WiFi */}
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1">
+                      <Users className="w-3 h-3" /> Maks. Perangkat WiFi
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={128}
+                      value={form.wifi_max_clients}
+                      onChange={e => setForm(f => ({ ...f, wifi_max_clients: parseInt(e.target.value) || 32 }))}
+                      className="rounded-sm text-xs h-8 font-mono"
+                      placeholder="32"
+                    />
+                    <p className="text-[9px] text-muted-foreground">
+                      Batas maks. perangkat yang bisa terhubung ke WiFi ONT (MaxAssociatedDevices). Default: 32.
+                    </p>
+                  </div>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Biarkan kosong jika tidak ingin mengubah konfigurasi WiFi ONT.
+                  Biarkan SSID/Password kosong jika tidak ingin mengubah konfigurasi WiFi ONT.
                 </p>
               </div>
 
@@ -1336,6 +1362,8 @@ function GuideTab() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GenieACSPage() {
+  const { theme } = useTheme();
+  const isCyber = theme === "cyber";
   const { user } = useAuth();
   // ZTP tersedia untuk semua role kecuali viewer/helpdesk read-only
   const READONLY_ROLES = ["viewer", "helpdesk"];

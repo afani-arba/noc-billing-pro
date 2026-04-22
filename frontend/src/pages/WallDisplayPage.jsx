@@ -185,7 +185,7 @@ export default function WallDisplayPage() {
   const warningCount = data.security_alerts.length;
 
   return (
-    <div className={`min-h-screen font-sans flex flex-col overflow-hidden ${ isCyber ? "bg-[#0b101e] text-slate-300 selection:bg-[hsl(162,100%,50%)]/50" : "border-t-[3px] border-blue-500 bg-[#0f172a] text-slate-300 selection:bg-blue-900/50" }`} style={isCyber ? {} : { background: 'radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 50%)' }}>
+    <div className={`min-h-screen font-sans flex flex-col overflow-hidden ${ isCyber ? "bg-[#050b14] text-slate-300 selection:bg-[hsl(162,100%,50%)]/50 relative" : "border-t-[3px] border-blue-500 bg-[#0f172a] text-slate-300 selection:bg-blue-900/50" }`} style={isCyber ? { backgroundImage: 'radial-gradient(circle at 15% 50%, rgba(0, 230, 118, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(0, 212, 255, 0.05), transparent 25%)' } : { background: 'radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 50%)' }}>
       
       {/* ── HEADER NAVBAR ── */}
       <div className={`flex-none z-20 ${ isCyber ? "bg-[#0f172a]/40 border-b border-white/5" : "bg-[#0f172a]/60 border-b border-white/[0.04] shadow-xl shadow-black/20" }`}>
@@ -216,19 +216,19 @@ export default function WallDisplayPage() {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 pb-3">
 
           {/* Online */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/20 border border-emerald-500/30 rounded-lg">
+          <div className={`flex items-center gap-2 px-3 py-2 ${ isCyber ? "glass-card border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)] rounded-sm" : "bg-emerald-950/20 border border-emerald-500/30 rounded-lg" }`}>
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] flex-none"></div>
             <span className="text-emerald-400 font-bold text-xs uppercase tracking-widest leading-none whitespace-nowrap">{gs.online_routers || 0} Online</span>
           </div>
 
           {/* Offline */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-red-950/20 border border-red-500/30 rounded-lg">
+          <div className={`flex items-center gap-2 px-3 py-2 ${ isCyber ? "glass-card border border-red-500/40 shadow-[0_0_15px_rgba(248,113,113,0.2)] rounded-sm" : "bg-red-950/20 border border-red-500/30 rounded-lg" }`}>
             <WifiOff className="w-4 h-4 text-red-400 flex-none" />
             <span className="text-red-400 font-bold text-xs uppercase tracking-widest leading-none whitespace-nowrap">{gs.offline_routers || 0} Offline</span>
           </div>
 
           {/* Warning */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-950/20 border border-amber-500/30 rounded-lg">
+          <div className={`flex items-center gap-2 px-3 py-2 ${ isCyber ? "glass-card border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)] rounded-sm" : "bg-amber-950/20 border border-amber-500/30 rounded-lg" }`}>
             <ShieldAlert className="w-4 h-4 text-amber-500 flex-none" />
             <span className="text-amber-500 font-bold text-xs uppercase tracking-widest leading-none whitespace-nowrap">{warningCount} Alert</span>
             {/* Alerts toggle on mobile */}
@@ -243,7 +243,7 @@ export default function WallDisplayPage() {
           <div className="w-px h-4 bg-white/10 flex-none"></div>
 
           {/* Bandwidth DL/UL */}
-          <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-black/20 border border-white/5">
+          <div className={`flex items-center gap-3 px-4 py-2 ${ isCyber ? "glass-card border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-sm" : "rounded-lg bg-black/20 border border-white/5" }`}>
             <div className="flex items-center gap-1.5 text-blue-400">
               <ArrowDown className="w-4 h-4 flex-none" strokeWidth={2.5} />
               <span className="font-bold text-xs tracking-wide whitespace-nowrap">{formatGbps(gs.total_dl_mbps)}</span>
@@ -259,7 +259,7 @@ export default function WallDisplayPage() {
           <div className="w-px h-4 bg-white/10 flex-none"></div>
 
           {/* PPPoE / Hotspot */}
-          <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-black/20 border border-white/5">
+          <div className={`flex items-center gap-3 px-4 py-2 ${ isCyber ? "glass-card border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] rounded-sm" : "rounded-lg bg-black/20 border border-white/5" }`}>
             <div className="flex items-center gap-2">
               <span className="font-bold text-xs text-slate-200 whitespace-nowrap">{gs.total_pppoe?.toLocaleString() || 0}</span>
               <span className="text-[10px] text-blue-400 uppercase tracking-widest font-bold">PPPoE</span>
@@ -317,10 +317,10 @@ export default function WallDisplayPage() {
                 if (isOffline) {
                   return (
                     <div key={rt.id} onClick={() => setSelectedRouter(rt)}
-                         className="flex flex-col rounded-2xl bg-red-950/10 border border-red-900/30 p-4 cursor-pointer hover:bg-red-950/20 transition-all min-h-[200px] sm:min-h-[240px]">
+                         className={`flex flex-col p-4 cursor-pointer transition-all min-h-[200px] sm:min-h-[240px] relative overflow-hidden ${ isCyber ? "glass-card border border-red-500/50 shadow-[0_0_20px_rgba(255,0,0,0.15)] hover:shadow-[0_0_30px_rgba(255,0,0,0.4)] bg-black/40" : "rounded-2xl bg-red-950/10 border border-red-900/30 hover:bg-red-950/20" }`}>
                        <div className="flex items-center justify-between opacity-50 mb-2">
                          <div className="min-w-0 pr-2">
-                           <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px] block mb-0.5">ROUTER</span>
+                           <span className={`font-bold uppercase tracking-widest text-[9px] block mb-0.5 ${ isCyber ? "text-red-400/70" : "text-slate-500" }`}>ROUTER</span>
                            <span className="text-red-300 font-bold text-base sm:text-lg truncate block">{rt.name}</span>
                          </div>
                        </div>
@@ -336,7 +336,9 @@ export default function WallDisplayPage() {
                 return (
                   <div key={rt.id} 
                        onClick={() => { setSelectedRouter(rt); setTelemetryResult(null); }}
-                       className="flex flex-col rounded-2xl bg-[#1e293b]/60 border border-[#334155]/60 hover:bg-[#1e293b]/90 hover:border-slate-500/50 shadow-2xl transition-all duration-300 p-3.5 sm:p-4 cursor-pointer group">
+                       className={`flex flex-col shadow-2xl transition-all duration-300 p-3.5 sm:p-4 cursor-pointer group relative overflow-hidden ${ isCyber ? "glass-card border border-cyan-500/20 hover:border-cyan-400 hover:shadow-[0_0_30px_rgba(0,255,136,0.25)] bg-black/30 backdrop-blur-md" : "rounded-2xl bg-[#1e293b]/60 border border-[#334155]/60 hover:bg-[#1e293b]/90 hover:border-slate-500/50" }`}>
+                    {/* Cyber Inner Glow highlight */}
+                    {isCyber && <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />}
                     
                     {/* Header Top Nav */}
                     <div className="flex justify-between items-center mb-3 pb-3 border-b border-transparent group-hover:border-white/5 transition-colors">
@@ -359,15 +361,15 @@ export default function WallDisplayPage() {
                        {/* LEFT SIDE: CPU & RAM Box */}
                        <div className="flex-1 flex flex-col gap-2 min-w-0">
                           {/* CPU */}
-                          <div className="bg-[#0f172a] rounded-xl p-2.5 sm:p-3 border border-white/[0.02] shadow-inner shadow-black/40">
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">CPU ({rt.cpu}%)</div>
+                          <div className={`p-2.5 sm:p-3 shadow-inner shadow-black/40 ${ isCyber ? "bg-black/20 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-xl border border-white/[0.02]" }`}>
+                             <div className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider mb-2 ${ isCyber ? "text-cyan-400 font-mono" : "text-slate-400" }`}>CPU ({rt.cpu}%)</div>
                              <div className="h-2 w-full bg-[#1e293b] rounded-full overflow-hidden shadow-inner">
                                  <div className="h-full rounded-full transition-all duration-700 shadow-[inset_0_2px_4px_rgba(255,255,255,0.1)]" style={{width: `${Math.min(rt.cpu, 100)}%`, background: getCpuGradient(rt.cpu)}}></div>
                              </div>
                           </div>
                           {/* RAM */}
-                          <div className="bg-[#0f172a] rounded-xl p-2.5 sm:p-3 border border-white/[0.02] shadow-inner shadow-black/40">
-                             <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">RAM ({rt.ram}%)</div>
+                          <div className={`p-2.5 sm:p-3 shadow-inner shadow-black/40 ${ isCyber ? "bg-black/20 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-xl border border-white/[0.02]" }`}>
+                             <div className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider mb-2 ${ isCyber ? "text-cyan-400 font-mono" : "text-slate-400" }`}>RAM ({rt.ram}%)</div>
                              <div className="h-2 w-full bg-[#1e293b] rounded-full overflow-hidden shadow-inner">
                                  <div className={`h-full rounded-full transition-all duration-700 shadow-[inset_0_2px_4px_rgba(255,255,255,0.1)] ${rt.ram > 80 ? 'bg-amber-400' : 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]'}`} style={{width: `${Math.min(rt.ram, 100)}%`}}></div>
                              </div>
@@ -377,25 +379,25 @@ export default function WallDisplayPage() {
                        {/* RIGHT SIDE: PING, DL, UL Box */}
                        <div className="w-[96px] sm:w-[108px] flex-none flex flex-col gap-1.5">
                            {/* PING */}
-                           <div className="flex-1 bg-[#0f172a] rounded-[10px] border border-white/[0.02] shadow-inner px-2 flex items-center justify-between min-h-[34px]">
-                              <div className="flex items-center gap-1"><Activity className="w-3 h-3 text-amber-500 flex-none"/><span className="text-[9px] text-slate-400 font-medium tracking-wide uppercase">PING</span></div>
-                              <span className="text-[10px] font-mono font-medium text-slate-200">{rt.ping != null ? (rt.ping === 0 ? '<1' : rt.ping) + 'ms' : '---'}</span>
+                           <div className={`flex-1 shadow-inner px-2 flex items-center justify-between min-h-[34px] ${ isCyber ? "bg-black/20 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-[10px] border border-white/[0.02]" }`}>
+                              <div className="flex items-center gap-1"><Activity className="w-3 h-3 text-amber-500 flex-none"/><span className={`text-[9px] font-medium tracking-wide uppercase ${ isCyber ? "text-amber-500/70" : "text-slate-400" }`}>PING</span></div>
+                              <span className={`text-[10px] font-mono font-medium ${ isCyber ? "text-amber-400" : "text-slate-200" }`}>{rt.ping != null ? (rt.ping === 0 ? '<1' : rt.ping) + 'ms' : '---'}</span>
                            </div>
                            {/* DL */}
-                           <div className="flex-1 bg-[#0f172a] rounded-[10px] border border-white/[0.02] shadow-inner px-2 flex items-center justify-between min-h-[34px]">
-                              <div className="flex items-center gap-1"><ArrowDown className="w-3 h-3 text-[#38bdf8] flex-none"/><span className="text-[9px] text-slate-400 font-medium tracking-wide">DL</span></div>
-                              <span className="text-[10px] font-mono font-medium text-white shrink-0">{formatMbps(rt.dl_total)}</span>
+                           <div className={`flex-1 shadow-inner px-2 flex items-center justify-between min-h-[34px] ${ isCyber ? "bg-black/20 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-[10px] border border-white/[0.02]" }`}>
+                              <div className="flex items-center gap-1"><ArrowDown className="w-3 h-3 text-[#38bdf8] flex-none"/><span className={`text-[9px] font-medium tracking-wide ${ isCyber ? "text-[#38bdf8]/70" : "text-slate-400" }`}>DL</span></div>
+                              <span className={`text-[10px] font-mono font-medium shrink-0 ${ isCyber ? "text-[#38bdf8]" : "text-white" }`}>{formatMbps(rt.dl_total)}</span>
                            </div>
                            {/* UL */}
-                           <div className="flex-1 bg-[#0f172a] rounded-[10px] border border-white/[0.02] shadow-inner px-2 flex items-center justify-between min-h-[34px]">
-                              <div className="flex items-center gap-1"><ArrowUp className="w-3 h-3 text-[#f87171] flex-none"/><span className="text-[9px] text-slate-400 font-medium tracking-wide">UL</span></div>
-                              <span className="text-[10px] font-mono font-medium text-white shrink-0">{formatMbps(rt.ul_total)}</span>
+                           <div className={`flex-1 shadow-inner px-2 flex items-center justify-between min-h-[34px] ${ isCyber ? "bg-black/20 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-[10px] border border-white/[0.02]" }`}>
+                              <div className="flex items-center gap-1"><ArrowUp className="w-3 h-3 text-[#f87171] flex-none"/><span className={`text-[9px] font-medium tracking-wide ${ isCyber ? "text-[#f87171]/70" : "text-slate-400" }`}>UL</span></div>
+                              <span className={`text-[10px] font-mono font-medium shrink-0 ${ isCyber ? "text-[#f87171]" : "text-white" }`}>{formatMbps(rt.ul_total)}</span>
                            </div>
                        </div>
                     </div>
 
                     {/* BOTTOM: CHART BLOCK */}
-                    <div className="w-full bg-[#0f172a] rounded-xl border border-white/[0.02] p-3 pb-2 flex flex-col h-[120px] sm:h-[140px] relative shadow-inner shadow-black/40">
+                    <div className={`w-full p-3 pb-2 flex flex-col h-[120px] sm:h-[140px] relative shadow-inner shadow-black/40 ${ isCyber ? "bg-black/40 rounded-sm border border-white/5" : "bg-[#0f172a] rounded-xl border border-white/[0.02]" }`}>
                         {/* Legends */}
                         <div className="flex items-center gap-3 mb-2 truncate shrink-0">
                            <div className="flex items-center gap-1.5 shrink-0">
@@ -471,8 +473,8 @@ export default function WallDisplayPage() {
         </div>
 
         {/* RIGHT SIDEBAR: ACTIVE ALERTS — hidden on mobile, shown on lg+ */}
-        <div className="hidden lg:flex w-full lg:w-[290px] xl:w-[330px] flex-none flex-col bg-[#0f172a] border border-[#334155]/60 rounded-[20px] overflow-hidden shadow-2xl">
-           <div className="px-5 py-4 border-b border-white/[0.04] bg-[#1e293b]/40 flex items-center justify-between">
+        <div className={`hidden lg:flex w-full lg:w-[290px] xl:w-[330px] flex-none flex-col overflow-hidden shadow-2xl ${ isCyber ? "glass-card border border-amber-500/20 bg-black/30 backdrop-blur-md relative" : "bg-[#0f172a] border border-[#334155]/60 rounded-[20px]" }`}>
+           <div className={`px-5 py-4 flex items-center justify-between ${ isCyber ? "bg-black/40 border-b border-white/5" : "border-b border-white/[0.04] bg-[#1e293b]/40" }`}>
              <div className="text-[11px] font-bold tracking-widest text-amber-500 uppercase flex items-center gap-2">
                <ShieldAlert className="w-4 h-4" strokeWidth={2} /> ACTIVE ALERTS
              </div>
