@@ -1236,7 +1236,7 @@ def _normalize_devices(devices: list) -> list:
             "last_inform": last_inform,
             "online": is_online,
             "registered": d.get("_registered", ""),
-            "_raw": d if limit == 1 else None # Raw cuma disertakan kalau get by id
+            "_raw": d if len(devices) == 1 else None # Raw cuma disertakan kalau get by id
         })
     return result
 
