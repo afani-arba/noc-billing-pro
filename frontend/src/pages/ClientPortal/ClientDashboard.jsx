@@ -336,6 +336,9 @@ export default function ClientDashboard() {
   const [rebootMsg, setRebootMsg] = useState({ text: '', type: '' });
   const [rebootConfirm, setRebootConfirm] = useState(false);
   const [inAppNotif, setInAppNotif] = useState(null);
+  const [invoiceHistory, setInvoiceHistory] = useState([]);
+  const [showInvoiceHistory, setShowInvoiceHistory] = useState(false);
+  const [pdfDownloading, setPdfDownloading] = useState(null);
 
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -354,6 +357,34 @@ export default function ClientDashboard() {
   const [token, setToken] = useState(null);
   const [tokenLoaded, setTokenLoaded] = useState(false);
   const baseUrl = '/api';
+
+  const fetchInvoiceHistory = async (tok) => {
+    try {
+      const res = await axios.get(`${baseUrl}/client-portal/invoices`, {
+        headers: { Authorization: `Bearer ${tok}` }
+      });
+      setInvoiceHistory(res.data?.invoices || []);
+    } catch (e) { console.warn("Invoice history error:", e.message); }
+  };
+
+  const downloadPDF = async (invoiceId, tok) => {
+    setPdfDownloading(invoiceId);
+    try {
+      const res = await axios.get(`${baseUrl}/client-portal/invoices/${invoiceId}/pdf`, {
+        headers: { Authorization: `Bearer ${tok}` },
+        responseType: "blob"
+      });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice-${invoiceId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Gagal mengunduh PDF. Silakan coba lagi.");
+    }
+    setPdfDownloading(null);
+  };
 
   useEffect(() => {
     const loadToken = async () => {
@@ -382,6 +413,7 @@ export default function ClientDashboard() {
           headers: { Authorization: `Bearer ${token}` }
         });
         setData(res.data);
+        fetchInvoiceHistory(token);
       } catch (err) {
         if (err.response?.status === 401) {
           await Preferences.remove({ key: 'clientToken' });
@@ -754,6 +786,44 @@ export default function ClientDashboard() {
                      Bayar Lebih Awal
                   </Button>
                </div>
+            )}
+
+            {/* Invoice History Toggle */}
+            <div className="mt-6 mb-2">
+               <button onClick={() => setShowInvoiceHistory(!showInvoiceHistory)} className="flex items-center justify-between w-full p-4 bg-white border border-slate-200 rounded-[16px] shadow-sm">
+                 <div className="flex items-center gap-3">
+                   <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileUp className="w-5 h-5"/></div>
+                   <span className="font-bold text-slate-700">Riwayat Tagihan</span>
+                 </div>
+                 <span className="text-sm font-medium text-slate-400">{showInvoiceHistory ? "Tutup" : "Lihat Semua"}</span>
+               </button>
+            </div>
+
+            {showInvoiceHistory && invoiceHistory.length > 0 && (
+               <div className="bg-white border border-slate-200 p-4 rounded-[16px] shadow-sm space-y-3 mb-4">
+                  {invoiceHistory.map((inv, idx) => (
+                     <div key={idx} className="flex justify-between items-center p-3 rounded-xl border border-slate-100 bg-slate-50">
+                        <div>
+                           <p className="text-sm font-bold text-slate-800">{new Date(inv.period_start || inv.created_at).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}</p>
+                           <p className="text-[10px] text-slate-500 font-mono mt-0.5">{inv.invoice_number}</p>
+                           <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase ${inv.status === 'paid' ? 'bg-green-100 text-green-600' : inv.status === 'partial' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'}`}>
+                             {inv.status === 'paid' ? 'LUNAS' : inv.status === 'partial' ? 'CICILAN' : 'BELUM LUNAS'}
+                           </span>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-sm font-bold text-slate-800 mb-1.5">Rp {inv.total?.toLocaleString('id-ID')}</p>
+                           <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1.5 px-2 bg-white"
+                             onClick={() => downloadPDF(inv.id, token)} disabled={pdfDownloading === inv.id}>
+                             {pdfDownloading === inv.id ? <RefreshCw className="w-3 h-3 animate-spin"/> : <FileUp className="w-3 h-3"/>}
+                             {pdfDownloading === inv.id ? "Unduh..." : "PDF"}
+                           </Button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            )}
+            {showInvoiceHistory && invoiceHistory.length === 0 && (
+               <div className="text-center p-6 text-sm text-slate-500 font-medium bg-white border border-slate-200 rounded-[16px]">Belum ada riwayat tagihan.</div>
             )}
          </div>
 
