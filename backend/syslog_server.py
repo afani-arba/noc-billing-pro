@@ -278,7 +278,19 @@ def _parse_dns_entry(source_ip: str, hostname: str, message: str) -> dict | None
     # Resolve device_id from sender IP
     # ── PENTING: jika device cache kosong (baru start), gunakan IP dulu
     # Cache akan diisi oleh _refresh_caches() yang jalan paralel
+
+    # Coba resolve dari source_ip terlebih dahulu
     dev = _device_cache.get(source_ip, {})
+
+    # Jika source_ip tidak ditemukan atau source_ip adalah gateway VPN,
+    # coba resolve dari hostname (nama MikroTik identity yang dikirimkan dalam syslog)
+    if not dev.get("id") and hostname and hostname != source_ip:
+        # Coba exact match dan case-insensitive
+        dev = (_device_cache.get(hostname)
+               or _device_cache.get(hostname.upper())
+               or _device_cache.get(hostname.lower())
+               or {})
+
     # SELALU gunakan UUID jika tersedia, fallback ke IP jika belum ada di cache
     device_id   = dev.get("id") or source_ip    # UUID jika ada, IP jika tidak
     device_name = dev.get("name") or hostname or source_ip
@@ -505,13 +517,26 @@ async def _refresh_caches():
                 if vpn_ip_field and vpn_ip_field not in new_dev:
                     new_dev[vpn_ip_field] = device_info
 
+                # ── INDEX BY NAME (hostname) ─────────────────────────────────
+                # MikroTik di balik VPN mengirim syslog dengan source_ip = VPN gateway,
+                # tapi hostname = identity MikroTik itu sendiri (misal ARSYAPRO, SIPIN-DUREN).
+                # Dengan mengindex by name, kita bisa resolve device dari hostname field.
+                dev_name_key = (d.get("name") or "").strip().upper()
+                if dev_name_key:
+                    new_dev[dev_name_key] = device_info
+                    # Juga index lowercase untuk toleransi case
+                    new_dev[dev_name_key.lower()] = device_info
+
             _device_cache = new_dev
             _device_cache_ts = _t.time()
             # Bersihkan _db_miss_ts untuk IP yang sekarang sudah diketahui
             for _miss_ip in list(_db_miss_ts.keys()):
                 if _miss_ip in _device_cache:
                     del _db_miss_ts[_miss_ip]
-            logger.info(f"[PeeringEye] Device cache refreshed: {len(_device_cache)} devices")
+
+            # Log cache entries untuk debugging
+            logger.info(f"[PeeringEye] Device cache refreshed: {len(_device_cache)} entries from {len(devs)} devices")
+            logger.debug(f"[PeeringEye] Cache keys: {list(new_dev.keys())}")
 
             # Platform cache from DB
             docs = await db.peering_platforms.find({"is_active": {"$ne": False}}, {"_id": 0}).to_list(500)
@@ -562,6 +587,8 @@ async def _dns_processor(dns_queue: asyncio.Queue):
                         try:
                             _fb_db  = get_db()
                             _ip_esc = re.escape(source_ip)
+
+                            # Coba lookup by IP dulu
                             _fb_doc = await _fb_db.devices.find_one(
                                 {"$or": [
                                     {"ip_address": {"$regex": f"^{_ip_esc}(:\\d+)?$"}},
@@ -570,12 +597,28 @@ async def _dns_processor(dns_queue: asyncio.Queue):
                                 ]},
                                 {"id": 1, "name": 1, "_id": 0}
                             )
+
+                            # Jika tidak ketemu by IP, coba by hostname (MikroTik identity)
+                            # Ini fix utama untuk topologi VPN: semua MT kirim dari IP gateway yang sama
+                            if not _fb_doc and hostname and hostname != source_ip:
+                                _fb_doc = await _fb_db.devices.find_one(
+                                    {"name": {"$regex": f"^{re.escape(hostname)}$", "$options": "i"}},
+                                    {"id": 1, "name": 1, "_id": 0}
+                                )
+                                if _fb_doc:
+                                    logger.info(f"[PeeringEye] DB fallback by hostname OK: {hostname} → {_fb_doc['id']} ({_fb_doc.get('name','')})")
+
                             if _fb_doc:
-                                _device_cache[source_ip] = {"id": _fb_doc["id"], "name": _fb_doc.get("name", source_ip)}
-                                logger.info(f"[PeeringEye] DB fallback OK: {source_ip} → {_fb_doc['id']} ({_fb_doc.get('name','')})")
+                                # Simpan ke cache dengan kedua key: IP dan hostname
+                                _dev_info = {"id": _fb_doc["id"], "name": _fb_doc.get("name", source_ip)}
+                                _device_cache[source_ip] = _dev_info
+                                if hostname and hostname != source_ip:
+                                    _device_cache[hostname] = _dev_info
+                                    _device_cache[hostname.upper()] = _dev_info
+                                logger.info(f"[PeeringEye] DB fallback OK: {source_ip}/{hostname} → {_fb_doc['id']} ({_fb_doc.get('name','')})")
                             else:
                                 _db_miss_ts[source_ip] = _now_ts
-                                logger.debug(f"[PeeringEye] DB fallback miss: {source_ip} tidak ada di tabel devices")
+                                logger.debug(f"[PeeringEye] DB fallback miss: {source_ip}/{hostname} tidak ada di tabel devices")
                         except Exception as _fb_err:
                             logger.debug(f"[PeeringEye] DB fallback error {source_ip}: {_fb_err}")
 
