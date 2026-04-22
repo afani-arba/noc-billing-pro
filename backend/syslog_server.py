@@ -204,16 +204,20 @@ DEFAULT_PLATFORM_PATTERNS = [
 # In-memory accumulators (flushed every FLUSH_INTERVAL)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# {(device_id, platform): {"hits": N, "bytes": 0, "icon": .., "color": .., "domains": {}, "clients": {}}}
-_dns_acc: dict = defaultdict(lambda: {"hits": 0, "bytes": 0, "icon": "🌐", "color": "#64748b", "domains": defaultdict(int), "clients": defaultdict(int)})
+# {(device_id, platform): {"hits": N, "bytes": 0, "device_name": "", "icon": .., "color": .., "domains": {}, "clients": {}}}
+_dns_acc: dict = defaultdict(lambda: {"hits": 0, "bytes": 0, "device_name": "", "icon": "🌐", "color": "#64748b", "domains": defaultdict(int), "clients": defaultdict(int)})
 _platform_cache: list = []      # list of (regex, name, icon, color)
 _platform_cache_ts: float = 0.0
 _device_cache: dict = {}        # ip → {id, name}
 _device_cache_ts: float = 0.0
+_db_miss_ts: dict = {}          # {ip: timestamp} — IP yg sudah di-cari ke DB tapi tidak ketemu
+DB_MISS_COOLDOWN = 300          # detik — jeda sebelum retry DB lookup untuk IP yg sama
 
 # ── DNS regex helpers ──────────────────────────────────────────────────────────
 _DNS_QUERY_RE  = re.compile(r"query\s+from\s+([0-9.]+).*?:\s+#?\d*\s*([a-z0-9\-\.]+\.[a-z]{2,})", re.IGNORECASE)
 _DNS_QUERY_RE2 = re.compile(r"got\s+query\s+from\s+([0-9.]+)", re.IGNORECASE)
+# ROS 7 format: "dns query: 192.168.1.10 for youtube.com" atau "dns,debug query youtube.com from 192.168.1.10"
+_DNS_QUERY_RE3 = re.compile(r"(?:dns\s+query[:\s]+|query\s+)([a-z0-9\-\.]+\.[a-z]{2,})\s+from\s+([0-9.]+)", re.IGNORECASE)
 _DOMAIN_RE     = re.compile(r"\b((?:[a-z0-9\-]+\.)+(?:com|net|org|id|io|co|tv|me|app|dev|biz|info|cloud|media|cdn))\b", re.IGNORECASE)
 _CLIENT_IP_RE  = re.compile(r"from\s+([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})", re.IGNORECASE)
 
@@ -233,9 +237,21 @@ def _match_platform(domain: str) -> tuple:
 
 
 def _is_dns_query(message: str) -> bool:
-    """Detect if a syslog message is a MikroTik DNS query log."""
+    """Detect if a syslog message is a MikroTik DNS query log.
+    
+    Format yang didukung:
+    - ROS 6: 'query from 192.168.1.10: 1234 A youtube.com'
+    - ROS 7: 'dns,debug query youtube.com from 192.168.1.10'
+    - ROS 7 alt: 'dns query: youtube.com from 192.168.1.10'
+    """
     msg = message.lower()
-    return ("query" in msg and ("from" in msg or "dns" in msg))
+    # ROS 6 format
+    if "query" in msg and ("from" in msg or "dns" in msg):
+        return True
+    # ROS 7 dns,debug format
+    if "dns" in msg and ("query" in msg or "lookup" in msg):
+        return True
+    return False
 
 
 def _parse_dns_entry(source_ip: str, hostname: str, message: str) -> dict | None:
@@ -398,17 +414,21 @@ async def _metrics_processor(metrics_queue: asyncio.Queue):
                 device_id = dev.get("id", "")
 
                 if not device_id:
-                    # Fallback: cari langsung ke DB
+                    # Fallback: cari ke DB via ip_address, bgp_peer_ip, atau vpn_ip
                     db     = get_db()
-                    ip_esc = source_ip.replace(".", r"\.")
+                    ip_esc = re.escape(source_ip)
                     doc    = await db.devices.find_one(
-                        {"ip_address": {"$regex": f"^{ip_esc}(:\\d+)?$"}},
-                        {"id": 1, "_id": 0}
+                        {"$or": [
+                            {"ip_address": {"$regex": f"^{ip_esc}(:\\d+)?$"}},
+                            {"bgp_peer_ip": source_ip},
+                            {"vpn_ip": source_ip},
+                        ]},
+                        {"id": 1, "name": 1, "_id": 0}
                     )
                     if doc:
                         device_id = doc["id"]
-                        # Masukkan ke cache
-                        _device_cache[source_ip] = {"id": device_id, "name": source_ip}
+                        # Masukkan ke cache agar tidak re-query
+                        _device_cache[source_ip] = {"id": device_id, "name": doc.get("name", source_ip)}
 
                 if device_id:
                     db = get_db()
@@ -465,22 +485,32 @@ async def _refresh_caches():
         try:
             db = get_db()
             # Device cache: ip_address → {id, name}
-            devs = await db.devices.find({}, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "bgp_peer_ip": 1}).to_list(1000)
+            devs = await db.devices.find({}, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "bgp_peer_ip": 1, "vpn_ip": 1}).to_list(1000)
             new_dev = {}
             for d in devs:
                 device_info = {"id": d.get("id", ""), "name": d.get("name", "")}
-                
+
                 # Index by management IP
                 ip = (d.get("ip_address") or "").split(":")[0].strip()
                 if ip:
                     new_dev[ip] = device_info
-                
+
                 # Index by BGP/Tunnel IP (PENTING untuk Peering-Eye via VPN)
                 tunnel_ip = (d.get("bgp_peer_ip") or "").strip()
                 if tunnel_ip:
                     new_dev[tunnel_ip] = device_info
+
+                # Index by VPN IP khusus (field vpn_ip jika dikonfigurasi)
+                vpn_ip_field = (d.get("vpn_ip") or "").strip()
+                if vpn_ip_field and vpn_ip_field not in new_dev:
+                    new_dev[vpn_ip_field] = device_info
+
             _device_cache = new_dev
             _device_cache_ts = _t.time()
+            # Bersihkan _db_miss_ts untuk IP yang sekarang sudah diketahui
+            for _miss_ip in list(_db_miss_ts.keys()):
+                if _miss_ip in _device_cache:
+                    del _db_miss_ts[_miss_ip]
             logger.info(f"[PeeringEye] Device cache refreshed: {len(_device_cache)} devices")
 
             # Platform cache from DB
@@ -512,10 +542,43 @@ async def _refresh_caches():
 
 async def _dns_processor(dns_queue: asyncio.Queue):
     """Consumer: reads DNS entries from queue and accumulates for Peering-Eye."""
+    # Import broadcaster lazily agar tidak circular import saat startup
+    try:
+        from services.dns_feed_broadcaster import push_dns_event as _push_feed
+    except ImportError:
+        _push_feed = None
+
     while True:
         try:
             source_ip, hostname, message = await dns_queue.get()
             try:
+                # ── DB Fallback: IP VPN MikroTik yang belum ada di cache ──────────
+                # Setiap IP asing dicoba resolve ke device sekali per DB_MISS_COOLDOWN.
+                # Ini mengatasi syslog yang dikirim dari IP tunnel VPN (bukan ip_address).
+                if source_ip not in _device_cache:
+                    _now_ts    = time.time()
+                    _last_miss = _db_miss_ts.get(source_ip, 0)
+                    if (_now_ts - _last_miss) > DB_MISS_COOLDOWN:
+                        try:
+                            _fb_db  = get_db()
+                            _ip_esc = re.escape(source_ip)
+                            _fb_doc = await _fb_db.devices.find_one(
+                                {"$or": [
+                                    {"ip_address": {"$regex": f"^{_ip_esc}(:\\d+)?$"}},
+                                    {"bgp_peer_ip": source_ip},
+                                    {"vpn_ip": source_ip},
+                                ]},
+                                {"id": 1, "name": 1, "_id": 0}
+                            )
+                            if _fb_doc:
+                                _device_cache[source_ip] = {"id": _fb_doc["id"], "name": _fb_doc.get("name", source_ip)}
+                                logger.info(f"[PeeringEye] DB fallback OK: {source_ip} → {_fb_doc['id']} ({_fb_doc.get('name','')})")
+                            else:
+                                _db_miss_ts[source_ip] = _now_ts
+                                logger.debug(f"[PeeringEye] DB fallback miss: {source_ip} tidak ada di tabel devices")
+                        except Exception as _fb_err:
+                            logger.debug(f"[PeeringEye] DB fallback error {source_ip}: {_fb_err}")
+
                 result = _parse_dns_entry(source_ip, hostname, message)
                 if result:
                     key = (result["device_id"], result["platform"])
@@ -523,9 +586,27 @@ async def _dns_processor(dns_queue: asyncio.Queue):
                     acc["hits"]  += 1
                     acc["icon"]   = result["icon"]
                     acc["color"]  = result["color"]
+                    # Simpan device_name untuk di-flush ke stats
+                    if not acc["device_name"] and result["device_name"]:
+                        acc["device_name"] = result["device_name"]
                     acc["domains"][result["domain"]] += 1
                     if result.get("client_ip"):
                         acc["clients"][result["client_ip"]] += 1
+
+                    # ── Push ke live DNS feed WebSocket broadcaster ──────────────
+                    if _push_feed is not None:
+                        feed_event = {
+                            "ts":          time.time(),
+                            "device_id":   result["device_id"],
+                            "device_name": result["device_name"],
+                            "domain":      result["domain"],
+                            "platform":    result["platform"],
+                            "icon":        result["icon"],
+                            "color":       result["color"],
+                            "client_ip":   result.get("client_ip"),
+                        }
+                        asyncio.create_task(_push_feed(feed_event))
+
             except Exception as e:
                 logger.debug(f"[PeeringEye] DNS parse error: {e}")
             finally:
@@ -570,6 +651,7 @@ async def _peering_eye_flusher():
                     "hits":        data["hits"],
                     "bytes":       data.get("bytes", 0),
                     "packets":     0,
+                    "device_name": data.get("device_name", ""),
                     "top_domains": top_domains,
                     "top_clients": top_clients,
                     "timestamp":   now_iso,
@@ -584,6 +666,13 @@ async def _peering_eye_flusher():
                 await db.peering_eye_stats.bulk_write(ops)
                 total_hits = sum(v["hits"] for v in snapshot.values())
                 logger.info(f"[PeeringEye] Flushed {len(ops)} platform records ({total_hits} DNS hits) to MongoDB")
+
+                # ── Trigger auto-alert check ──────────────────────────────────
+                try:
+                    from services.peering_alert_service import check_alerts_from_snapshot
+                    asyncio.create_task(check_alerts_from_snapshot(dict(snapshot)))
+                except ImportError:
+                    pass
 
         except asyncio.CancelledError:
             logger.info("[PeeringEye] Flusher shutting down")

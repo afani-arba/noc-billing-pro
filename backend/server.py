@@ -148,6 +148,15 @@ async def lifespan(app: FastAPI):
         await db.audit_logs.create_index([("timestamp", 1)], expireAfterSeconds=7_776_000, background=True, name="ttl_audit_90d")
         await db.syslog_logs.create_index([("timestamp", 1)], expireAfterSeconds=5_184_000, background=True, name="ttl_syslog_60d")
         await db.traffic_history.create_index([("timestamp", 1)], expireAfterSeconds=604_800, background=True, name="ttl_traffic_7d")
+        # ── Peering Eye — new collections ─────────────────────────────────────
+        await db.pppoe_sessions.create_index([("device_id", 1), ("ip", 1)], unique=True, background=True, name="idx_pppoe_dev_ip")
+        await db.pppoe_sessions.create_index([("updated_at", 1)], expireAfterSeconds=900, background=True, name="ttl_pppoe_15m")
+        await db.hotspot_sessions.create_index([("device_id", 1), ("ip", 1)], unique=True, background=True, name="idx_hs_dev_ip")
+        await db.hotspot_sessions.create_index([("updated_at", 1)], expireAfterSeconds=900, background=True, name="ttl_hs_15m")
+        await db.peering_alerts.create_index([("timestamp", -1)], background=True, name="idx_alerts_ts")
+        await db.peering_alerts.create_index([("status", 1), ("timestamp", -1)], background=True, name="idx_alerts_status_ts")
+        await db.peering_alerts.create_index([("timestamp", 1)], expireAfterSeconds=604_800, background=True, name="ttl_alerts_7d")
+
     except Exception as e:
         logger.error(f"TTL index error: {e}")
 
@@ -266,10 +275,35 @@ async def lifespan(app: FastAPI):
 
     # Session cache
     if _svc("ENABLE_SESSION_CACHE"):
-        from services.session_cache_service import session_cache_loop
+        from services.session_cache_service import session_cache_loop, session_ip_mapping_loop
         t = asyncio.create_task(session_cache_loop())
         _background_tasks.append(t)
         logger.info("Session cache started")
+
+        # IP → nama mapping sync (30 detik, untuk top-clients Peering Eye)
+        t = asyncio.create_task(session_ip_mapping_loop())
+        _background_tasks.append(t)
+        logger.info("Session IP mapping sync started (30s interval)")
+
+    # Peering Alert Service — auto-alerting Judi/Porn + cleanup
+    if _svc("ENABLE_PEERING_ALERTS"):
+        try:
+            from services.peering_alert_service import cleanup_old_alerts_loop
+            t = asyncio.create_task(cleanup_old_alerts_loop())
+            _background_tasks.append(t)
+            logger.info("Peering Alert cleanup service started")
+        except Exception as e:
+            logger.error(f"Peering Alert service error: {e}")
+
+    # IP Accounting Poller — bandwidth per platform dari MikroTik
+    if _svc("ENABLE_IP_ACCOUNTING"):
+        try:
+            from services.ip_accounting_poller import ip_accounting_loop
+            t = asyncio.create_task(ip_accounting_loop())
+            _background_tasks.append(t)
+            logger.info("IP Accounting poller started (5-min interval)")
+        except Exception as e:
+            logger.error(f"IP Accounting poller error: {e}")
 
     # BGP Content Steering
     if _svc("ENABLE_BGP_STEERING"):

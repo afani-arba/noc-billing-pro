@@ -160,6 +160,9 @@ class MikroTikBase:
     async def add_firewall_address_list(self, list_name: str, address: str, comment: str = "") -> dict: return {}
     async def remove_firewall_address_list(self, mt_id: str) -> dict: return {}
 
+    # ── IP Accounting (untuk bandwidth per platform Peering-Eye) ──
+    async def get_ip_accounting_snapshot(self) -> list: raise NotImplementedError
+
     # ── Mangle / Firewall Listing ──
     async def list_ip_routes(self, limit: int = 500) -> list: return []
     async def get_all_interface_stats(self) -> dict: return {"isp_interfaces": [], "isp_comments": {}, "stats": {}}
@@ -1477,6 +1480,50 @@ class MikroTikRestAPI(MikroTikBase):
         except Exception as e:
             raise Exception(f"Gagal hapus netwatch {mt_id}: {e}")
 
+    # ── IP Accounting Snapshot (ROS 7.x REST API) ──────────────────────────────
+    async def get_ip_accounting_snapshot(self) -> list:
+        """
+        Ambil IP Accounting snapshot dari MikroTik ROS 7.x via REST API.
+
+        ROS 7: GET /rest/ip/accounting/snapshot
+        Mengembalikan list of entries dengan field:
+          src-address, dst-address, bytes, packets
+
+        Pastikan IP Accounting diaktifkan di MikroTik:
+          /ip accounting set enabled=yes
+          /ip accounting set threshold=unlimited (opsional, untuk menghindari data loss)
+
+        Return: list of {src-address: str, dst-address: str, bytes: int, packets: int}
+        """
+        try:
+            items = await asyncio.wait_for(
+                self._async_req("GET", "ip/accounting/snapshot"),
+                timeout=25.0
+            )
+            if isinstance(items, list):
+                # Normalisasi: pastikan bytes adalah integer
+                result = []
+                for entry in items:
+                    result.append({
+                        "src-address": entry.get("src-address", ""),
+                        "dst-address": entry.get("dst-address", ""),
+                        "bytes":   int(entry.get("bytes", 0)),
+                        "packets": int(entry.get("packets", 0)),
+                    })
+                return result
+            return []
+        except asyncio.TimeoutError:
+            raise asyncio.TimeoutError(f"Timeout ambil IP Accounting snapshot dari {self.host}")
+        except NotImplementedError:
+            raise
+        except Exception as e:
+            err_str = str(e)
+            # Jika 404, berarti IP Accounting tidak aktif / endpoint tidak tersedia di versi ini
+            if "404" in err_str:
+                logger.debug(f"[IPAccounting] {self.host}: endpoint ip/accounting/snapshot tidak tersedia (404) — aktifkan /ip accounting di MikroTik")
+                raise NotImplementedError("IP Accounting tidak aktif di device ini")
+            raise Exception(f"Gagal ambil IP Accounting snapshot: {err_str}")
+
     # ── Ping (ROS 7.x REST API) ──
     async def ping_host(self, address: str = "8.8.8.8", count: int = 4, interface: str = ""):
         """
@@ -1812,6 +1859,66 @@ class MikroTikLegacyAPI(MikroTikBase):
             return await asyncio.to_thread(self._set_resource, "/queue/simple", mt_id, data)
         except Exception as e:
             raise Exception(f"Gagal update simple queue (API): {e}")
+
+    # ── IP Accounting Snapshot (ROS 6.x API Protocol) ──────────────────────────
+    async def get_ip_accounting_snapshot(self) -> list:
+        """
+        Ambil IP Accounting snapshot dari MikroTik ROS 6.x via API Protocol.
+
+        ROS 6 membutuhkan dua langkah:
+          1. /ip accounting snapshot take  — ambil snapshot saat ini
+          2. /ip accounting snapshot print — baca hasilnya
+
+        Pastikan IP Accounting diaktifkan di MikroTik:
+          /ip accounting set enabled=yes
+
+        Return: list of {src-address: str, dst-address: str, bytes: int, packets: int}
+        """
+        def _take_and_read(api):
+            try:
+                # Langkah 1: take snapshot (/ip accounting snapshot take)
+                snapshot_resource = api.get_resource("/ip/accounting/snapshot")
+                try:
+                    snapshot_resource.call("take")
+                except Exception:
+                    pass  # Beberapa ROS6 versi lama tidak punya "take" sub-command
+
+                # Langkah 2: baca isi snapshot
+                items = snapshot_resource.get()
+                if not items:
+                    return []
+
+                result = []
+                for entry in items:
+                    try:
+                        result.append({
+                            "src-address": entry.get("src-address", ""),
+                            "dst-address": entry.get("dst-address", ""),
+                            "bytes":   int(entry.get("bytes", 0)),
+                            "packets": int(entry.get("packets", 0)),
+                        })
+                    except (ValueError, TypeError):
+                        continue
+                return result
+            except Exception as e:
+                err_str = str(e)
+                if "no such command" in err_str.lower() or "unknown command" in err_str.lower() or "no such item" in err_str.lower():
+                    raise NotImplementedError("IP Accounting tidak aktif atau tidak tersedia di device ini")
+                raise
+
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(self._execute, _take_and_read),
+                timeout=25.0
+            )
+            return result if result else []
+        except asyncio.TimeoutError:
+            raise asyncio.TimeoutError(f"Timeout ambil IP Accounting snapshot dari {self.host}")
+        except NotImplementedError:
+            raise
+        except Exception as e:
+            raise Exception(f"Gagal ambil IP Accounting snapshot (ROS6): {e}")
+
 
     async def list_hotspot_profiles(self):
         try:

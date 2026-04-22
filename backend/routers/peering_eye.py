@@ -8,12 +8,13 @@ Endpoints untuk membaca data dari collection:
 Mount prefix: /api/peering-eye
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, HTTPException, Body, WebSocket, WebSocketDisconnect
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from pydantic import BaseModel
 import subprocess
 import asyncio
+import json
 import uuid
 import os
 import re
@@ -391,6 +392,174 @@ async def delete_platform(plat_id: str, user=Depends(require_admin)):
         raise HTTPException(404, "Platform tidak ditemukan")
     return {"message": "Deleted"}
 
+
+# ─── Endpoints: Alerts (Judi & Pornografi) ────────────────────────────────────
+
+@router.get("/alerts")
+async def get_peering_alerts(
+    status:    str = Query("active", description="Filter status: active/all/dismissed"),
+    device_id: str = Query("",       description="Filter device tertentu (opsional)"),
+    platform:  str = Query("",       description="Filter platform tertentu (opsional)"),
+    limit:     int = Query(50,        description="Jumlah maksimal alert"),
+    user=Depends(get_current_user),
+):
+    """Daftar alert peering terkini (Judi Online, Situs Dewasa, dsb.)."""
+    db = get_db()
+    query: dict = {}
+    if status and status != "all":
+        query["status"] = status
+    if device_id and device_id != "all":
+        ids = await _resolve_device_ids(db, device_id)
+        query["device_id"] = {"$in": ids}
+    if platform and platform != "all":
+        query["platform"] = {"$regex": platform, "$options": "i"}
+
+    docs = await db.peering_alerts.find(
+        query, {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    return {"alerts": docs, "total": len(docs)}
+
+
+@router.get("/alerts/summary")
+async def get_alerts_summary(user=Depends(get_current_user)):
+    """Ringkasan alert dalam 24 jam terakhir, digroup per platform."""
+    db = get_db()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": cutoff}}},
+        {"$group": {
+            "_id": "$platform",
+            "count":      {"$sum": 1},
+            "last_seen":  {"$max": "$timestamp"},
+            "icon":       {"$last": "$icon"},
+            "color":      {"$last": "$color"},
+            "active":     {"$sum": {"$cond": [{"$eq": ["$status", "active"]}, 1, 0]}},
+        }},
+        {"$sort": {"count": -1}},
+    ]
+    docs = await db.peering_alerts.aggregate(pipeline).to_list(50)
+    total_active = await db.peering_alerts.count_documents({"status": "active"})
+    return {
+        "period":       "24h",
+        "total_active": total_active,
+        "by_platform": [
+            {
+                "platform":  d["_id"],
+                "icon":      d.get("icon", "⚠️"),
+                "color":     d.get("color", "#ef4444"),
+                "count":     d["count"],
+                "active":    d["active"],
+                "last_seen": d["last_seen"],
+            }
+            for d in docs
+        ],
+    }
+
+
+@router.post("/alerts/{alert_id}/dismiss")
+async def dismiss_alert(
+    alert_id: str,
+    user=Depends(require_write),
+):
+    """Dismiss (tutup) sebuah alert agar tidak muncul lagi di list active."""
+    db = get_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    res = await db.peering_alerts.update_one(
+        {"id": alert_id},
+        {"$set": {
+            "status":       "dismissed",
+            "dismissed_at": now_iso,
+            "dismissed_by": user.get("username", ""),
+        }}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Alert tidak ditemukan")
+    return {"message": "Alert dismissed"}
+
+
+# ─── WebSocket: Live DNS Feed ─────────────────────────────────────────────────
+
+@router.websocket("/ws/dns-feed")
+async def dns_feed_websocket(websocket: WebSocket):
+    """
+    Real-time DNS event feed via WebSocket.
+    Setiap event DNS yang diproses oleh syslog_server akan dikirim ke semua
+    koneksi WebSocket yang aktif.
+    Throttle: max 20 event/detik per koneksi.
+    Format event JSON:
+    {
+      "ts": 1234567890.123,
+      "device_id": "uuid",
+      "device_name": "MikroTik-01",
+      "domain": "youtube.com",
+      "platform": "YouTube",
+      "icon": "▶️",
+      "color": "#ef4444",
+      "client_ip": "192.168.1.10"
+    }
+    """
+    await websocket.accept()
+    logger.info("[DNSFeed] WebSocket client connected")
+
+    try:
+        from services.dns_feed_broadcaster import subscribe, unsubscribe
+        q = await subscribe()
+    except ImportError:
+        await websocket.send_text(json.dumps({"error": "DNS broadcaster tidak aktif"}))
+        await websocket.close()
+        return
+
+    # Throttle state
+    _last_flush  = asyncio.get_event_loop().time()
+    _event_count = 0
+    _MAX_PER_SEC = 20
+
+    try:
+        while True:
+            # Tunggu event dari broadcaster (timeout 30 detik untuk ping)
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # Kirim ping/heartbeat agar koneksi tidak drop
+                try:
+                    await websocket.send_text(json.dumps({"type": "ping"}))
+                except Exception:
+                    break
+                continue
+
+            # Throttle: max _MAX_PER_SEC event/detik
+            now = asyncio.get_event_loop().time()
+            if now - _last_flush >= 1.0:
+                _last_flush  = now
+                _event_count = 0
+
+            if _event_count >= _MAX_PER_SEC:
+                # Skip event ini (throttled)
+                continue
+
+            _event_count += 1
+            try:
+                event["type"] = "dns"
+                await websocket.send_text(json.dumps(event, default=str))
+            except Exception:
+                break
+
+    except WebSocketDisconnect:
+        logger.info("[DNSFeed] WebSocket client disconnected")
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.warning(f"[DNSFeed] WebSocket error: {e}")
+    finally:
+        try:
+            from services.dns_feed_broadcaster import unsubscribe
+            await unsubscribe(q)
+        except Exception:
+            pass
+        logger.info("[DNSFeed] WebSocket cleanup selesai")
+
+
+
 async def get_platform_meta(db) -> dict:
     docs = await db.peering_platforms.find({}, {"_id": 0, "name": 1, "icon": 1, "color": 1}).to_list(1000)
     meta = {}
@@ -435,8 +604,9 @@ async def _resolve_device_ids(db, device_id: str) -> list:
             {"ip_address": {"$regex": f"^{re.escape(device_id.split(':')[0])}(:\\d+)?$"}},
             {"name": device_id},
             {"bgp_peer_ip": device_id},
+            {"vpn_ip": device_id},
         ]},
-        {"id": 1, "ip_address": 1, "name": 1, "bgp_peer_ip": 1}
+        {"id": 1, "ip_address": 1, "name": 1, "bgp_peer_ip": 1, "vpn_ip": 1}
     )
 
     if dev:
@@ -449,6 +619,9 @@ async def _resolve_device_ids(db, device_id: str) -> list:
         # BGP/Tunnel IP
         bgp_ip = (dev.get("bgp_peer_ip") or "").strip()
         if bgp_ip: res.add(bgp_ip)
+        # VPN Tunnel IP (field khusus untuk IP tunnel VPN)
+        vpn_ip = (dev.get("vpn_ip") or "").strip()
+        if vpn_ip: res.add(vpn_ip)
         # Tambahkan device_id asli yang dikirim juga (fallback jika tidak ditemukan di devices)
         res.add(device_id)
         return list(res)
@@ -487,12 +660,18 @@ async def peering_eye_devices(user=Depends(get_current_user)):
         ip = (d.get("ip_address") or "").split(":")[0].strip()
         hits = 0
         last_seen = None
-        for k in (dev_id, d.get("name"), ip):
-            if k and k in stats_map:
+        
+        # Lacak device_id yang sudah diproses agar tidak duplikat
+        keys_to_check = [k for k in (dev_id, d.get("name"), ip) if k]
+        
+        for k in keys_to_check:
+            if k in stats_map:
                 hits += stats_map[k]["hits"]
                 if stats_map[k]["last_seen"]:
                     if not last_seen or stats_map[k]["last_seen"] > last_seen:
                         last_seen = stats_map[k]["last_seen"]
+                # Hapus dari stats_map agar nanti yang tersisa adalah unregistered
+                del stats_map[k]
         
         result.append({
             "device_id":   dev_id,
@@ -500,8 +679,18 @@ async def peering_eye_devices(user=Depends(get_current_user)):
             "last_seen":   last_seen or "",
             "total_hits":  hits,
         })
+        
+    # Tambahkan unregistered devices (IP yang ngirim log tapi gak ada di tabel devices)
+    for k, st in stats_map.items():
+        if k:
+            result.append({
+                "device_id":   k,
+                "device_name": f"Unknown Router ({k})",
+                "last_seen":   st["last_seen"] or "",
+                "total_hits":  st["hits"],
+            })
+            
     return sorted(result, key=lambda x: x["device_name"].lower())
-
 
 
 # ─── Endpoint: Stats — aggregate per platform ─────────────────────────────────
@@ -528,9 +717,7 @@ async def peering_eye_stats(
     if device_id and device_id != "all":
         ids = await _resolve_device_ids(db, device_id)
         match["device_id"] = {"$in": ids}
-    elif known_ids:
-        # Filter hanya device yang terdaftar — buang IP liar (VPS, gateway, dll)
-        match["device_id"] = {"$in": list(known_ids)}
+    # Hapus filter known_ids agar traffic dari router yang belum terdaftar tetap tampil
 
     pipeline = [
         {"$match": match},
@@ -778,8 +965,41 @@ async def debug_clients(limit: int = 5):
 # ─── Endpoint: Top Clients ────────────────────────────────────────────────────
 
 async def get_active_ip_mapping(db, device_id: str) -> dict:
-    """Map IP ke nama user PPPoE/Hotspot jika tersedia. Fallback kosong jika belum ada."""
-    return {}
+    """
+    Map IP ke nama user PPPoE/Hotspot dari MongoDB collections pppoe_sessions + hotspot_sessions.
+    Return format: {ip: {name, mac, type}}
+    Jika device_id kosong/all, kembalikan dari semua device.
+    """
+    try:
+        query = {}
+        if device_id and device_id != "all":
+            # Resolve device ke semua kemungkinan IDs
+            ids = await _resolve_device_ids(db, device_id)
+            query = {"device_id": {"$in": ids}}
+
+        # Query pppoe_sessions
+        pppoe_docs = await db.pppoe_sessions.find(
+            query, {"_id": 0, "ip": 1, "name": 1, "mac": 1, "type": 1}
+        ).to_list(5000)
+
+        # Query hotspot_sessions
+        hs_docs = await db.hotspot_sessions.find(
+            query, {"_id": 0, "ip": 1, "name": 1, "mac": 1, "type": 1}
+        ).to_list(5000)
+
+        mapping = {}
+        for doc in pppoe_docs + hs_docs:
+            ip = doc.get("ip", "")
+            if ip:
+                mapping[ip] = {
+                    "name": doc.get("name", ""),
+                    "mac":  doc.get("mac", ""),
+                    "type": doc.get("type", "pppoe"),
+                }
+        return mapping
+    except Exception as e:
+        logger.debug(f"[PeeringEye] get_active_ip_mapping error: {e}")
+        return {}
 
 @router.get("/top-clients")
 async def peering_eye_top_clients(
@@ -941,34 +1161,35 @@ async def client_activity(
 
     # ── Cari nama PPPoE / Hotspot dari DB sesi aktif ─────────────────────────
     user_info = {}
-    # Cek pppoe_sessions
+    # Cek pppoe_sessions — field 'ip' (bukan 'ip_address') sesuai _sync_sessions_to_db
     pppoe_sess = await db.pppoe_sessions.find_one(
-        {"ip_address": ip},
-        {"_id": 0, "username": 1, "service": 1, "uptime": 1, "mac_address": 1}
+        {"ip": ip},
+        {"_id": 0, "name": 1, "mac": 1, "type": 1, "updated_at": 1}
     )
     if pppoe_sess:
         user_info = {
-            "name":    pppoe_sess.get("username", ""),
+            "name":    pppoe_sess.get("name", ""),
             "type":    "PPPoE",
-            "uptime":  pppoe_sess.get("uptime", ""),
-            "mac":     pppoe_sess.get("mac_address", ""),
-            "service": pppoe_sess.get("service", ""),
+            "uptime":  pppoe_sess.get("updated_at", ""),
+            "mac":     pppoe_sess.get("mac", ""),
+            "service": "",
         }
     else:
-        # Cek hotspot_sessions
+        # Cek hotspot_sessions — field 'ip' juga
         hotspot_sess = await db.hotspot_sessions.find_one(
-            {"ip_address": ip},
-            {"_id": 0, "username": 1, "uptime": 1, "mac_address": 1}
+            {"ip": ip},
+            {"_id": 0, "name": 1, "mac": 1, "type": 1, "updated_at": 1}
         )
         if hotspot_sess:
             user_info = {
-                "name":    hotspot_sess.get("username", ""),
+                "name":    hotspot_sess.get("name", ""),
                 "type":    "Hotspot",
-                "uptime":  hotspot_sess.get("uptime", ""),
-                "mac":     hotspot_sess.get("mac_address", ""),
+                "uptime":  hotspot_sess.get("updated_at", ""),
+                "mac":     hotspot_sess.get("mac", ""),
                 "service": "",
             }
         else:
+
             # Cek peering_clients (custom client list jika ada)
             client_doc = await db.peering_clients.find_one(
                 {"ip": ip},
