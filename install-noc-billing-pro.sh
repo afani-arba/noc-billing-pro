@@ -72,23 +72,32 @@ else
     cd noc-billing-pro
 fi
 
-echo ">>> Mengkonfigurasi file .env..."
+echo ">>> Mengkonfigurasi file .env Backend..."
 IP_VPS=$(curl -s ifconfig.me || echo "127.0.0.1")
 JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
 
-if [ ! -f ".env" ]; then
-cat > .env <<EOF
-# Auto-generated .env configuration
-MONGO_URI=mongodb://noc-mongodb:27017/nocbillingpro
-GENIEACS_MONGODB_CONNECTION_URL=mongodb://noc-mongodb:27017/genieacs
-GENIEACS_CWMP_ACCESS_URL=http://${IP_VPS}:7547
-SYSLOG_PORT=5142
-PEERING_FLUSH=60
-JWT_SECRET=${JWT_SECRET}
+if [ ! -f "backend/.env" ]; then
+    if [ -f "backend/.env.example" ]; then
+        cp backend/.env.example backend/.env
+        sed -i "s/GANTI_DENGAN_SECRET_KEY_64_KARAKTER_RANDOM/${JWT_SECRET}/g" backend/.env
+        echo "File backend/.env berhasil di-generate dari template."
+    else
+        # Fallback jika .env.example tidak ada
+        cat > backend/.env <<EOF
+MONGO_URI=mongodb://mongodb:27017/nocbillingpro
+SECRET_KEY=${JWT_SECRET}
+APP_EDITION=billing_pro
+ENABLE_SYSLOG=true
+ENABLE_POLLING=true
+ENABLE_GENIEACS_SYNC=true
+GENIEACS_URL=http://genieacs-nbi:7557
+GENIEACS_USERNAME=admin
+GENIEACS_PASSWORD=admin
 EOF
-    echo "File .env berhasil dibuat."
+        echo "File backend/.env berhasil dibuat manual."
+    fi
 else
-    echo "File .env sudah ada. Melewati pembuatan .env..."
+    echo "File backend/.env sudah ada. Melewati pembuatan .env..."
 fi
 
 echo ">>> Mengkonfigurasi Firewall (UFW)..."
