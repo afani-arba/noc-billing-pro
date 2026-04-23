@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Memastikan PATH memuat direktori sbin agar dpkg/apt berjalan lancar di Debian
+export PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 echo "========================================================="
 echo "   Auto-Installer Ultimate NOC Billing Pro (Debian 12)   "
 echo "========================================================="
