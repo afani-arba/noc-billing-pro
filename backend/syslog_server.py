@@ -497,7 +497,7 @@ async def _refresh_caches():
         try:
             db = get_db()
             # Device cache: ip_address → {id, name}
-            devs = await db.devices.find({}, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "bgp_peer_ip": 1, "vpn_ip": 1}).to_list(1000)
+            devs = await db.devices.find({}, {"_id": 0, "id": 1, "name": 1, "ip_address": 1, "bgp_peer_ip": 1, "vpn_ip": 1, "hostname_identity": 1}).to_list(1000)
             new_dev = {}
             for d in devs:
                 device_info = {"id": d.get("id", ""), "name": d.get("name", "")}
@@ -526,6 +526,16 @@ async def _refresh_caches():
                     new_dev[dev_name_key] = device_info
                     # Juga index lowercase untuk toleransi case
                     new_dev[dev_name_key.lower()] = device_info
+
+                # ── INDEX BY HOSTNAME_IDENTITY (field opsional di device DB) ─
+                # Jika device memiliki field hostname_identity (MikroTik /system identity name),
+                # index dengan nilai tersebut — tanpa perlu ubah nama device di dashboard.
+                # Contoh: device "R. Duren-Sipin" bisa punya hostname_identity="SIPIN-DUREN"
+                hn_identity = (d.get("hostname_identity") or "").strip()
+                if hn_identity:
+                    new_dev[hn_identity] = device_info
+                    new_dev[hn_identity.upper()] = device_info
+                    new_dev[hn_identity.lower()] = device_info
 
             _device_cache = new_dev
             _device_cache_ts = _t.time()
