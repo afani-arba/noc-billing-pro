@@ -57,10 +57,7 @@ else
 fi
 
 # 6. Setup Repository & Deploy NOC Billing Pro
-echo ">>> [6/6] Kredensial untuk Clone Repository Private..."
-read -p "Masukkan GitHub Username Anda: " GITHUB_USER
-read -s -p "Masukkan GitHub Personal Access Token (PAT): " GITHUB_TOKEN
-echo ""
+echo ">>> [6/6] Melakukan Clone Repository..."
 
 cd /opt
 if [ -d "noc-billing-pro" ]; then
@@ -68,7 +65,7 @@ if [ -d "noc-billing-pro" ]; then
     cd noc-billing-pro
     git pull origin main
 else
-    git clone https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/afani-arba/noc-billing-pro.git
+    git clone https://github.com/afani-arba/noc-billing-pro.git
     cd noc-billing-pro
 fi
 
