@@ -110,6 +110,17 @@ ufw allow 7547/tcp
 ufw allow 5142/udp
 echo "y" | ufw enable
 
+echo ">>> Menyiapkan file konfigurasi GenieACS..."
+if [ ! -f "genieacs/app-custom.css" ]; then
+    if [ -f "genieacs/app-original.css" ]; then
+        cp genieacs/app-original.css genieacs/app-custom.css
+        echo "File app-custom.css disalin dari app-original.css"
+    else
+        touch genieacs/app-custom.css
+        echo "File app-custom.css kosong dibuat."
+    fi
+fi
+
 echo ">>> Membangun dan menjalankan NOC Billing Pro (Backend, Frontend, GenieACS)..."
 docker compose up --build -d
 
