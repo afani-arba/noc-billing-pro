@@ -112,6 +112,8 @@ export default function HotspotBillingPage() {
   const [waOrdersFilter, setWaOrdersFilter] = useState("");
   const [waSearch, setWaSearch]             = useState("");
 
+  const [selectedVouchers, setSelectedVouchers] = useState(new Set());
+
   const [editVoucher, setEditVoucher] = useState(null);
   const [transferVoucher, setTransferVoucher] = useState(null);
   const [transferTarget, setTransferTarget] = useState("");
@@ -182,6 +184,37 @@ export default function HotspotBillingPage() {
       });
   };
 
+  const handleBatchDelete = async () => {
+    if (selectedVouchers.size === 0) return;
+    if (!confirm(`Hapus ${selectedVouchers.size} voucher terpilih?`)) return;
+    const toastId = toast.loading("Menghapus voucher...");
+    try {
+      await api.post("/hotspot-vouchers/batch-delete", { voucher_ids: Array.from(selectedVouchers) });
+      toast.success(`${selectedVouchers.size} voucher berhasil dihapus`, { id: toastId });
+      setSelectedVouchers(new Set());
+      fetchVouchers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Gagal menghapus", { id: toastId });
+    }
+  };
+
+  const toggleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedVouchers(new Set(vouchers.map(v => v.id)));
+    } else {
+      setSelectedVouchers(new Set());
+    }
+  };
+
+  const toggleSelectVoucher = (id) => {
+    setSelectedVouchers(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const loadPackages = useCallback(() => {
     setPackagesLoading(true);
     api.get("/billing/packages")
@@ -212,7 +245,7 @@ export default function HotspotBillingPage() {
       setVouchers(prev => {
         // Optimistic Merge: If server data is stale (lower or equal uptime than local calculation)
         // we "sticky" our local calculation into the new data to prevent the timer "jumping back".
-        return newData.map(v => {
+        let merged = newData.map(v => {
           const old = prev.find(o => o.id === v.id);
           if (old && v.status === "active" && old.status === "active") {
              const localProgress = Math.floor((nowTs - lastFetchTime.current) / 1000);
@@ -225,6 +258,15 @@ export default function HotspotBillingPage() {
           }
           return v;
         });
+
+        // Urutkan: active di paling atas
+        merged.sort((a, b) => {
+          if (a.status === "active" && b.status !== "active") return -1;
+          if (a.status !== "active" && b.status === "active") return 1;
+          return 0;
+        });
+
+        return merged;
       });
       
       lastFetchTime.current = nowTs;
@@ -973,53 +1015,63 @@ export default function HotspotBillingPage() {
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="gap-2 rounded-sm" onClick={() => fetchVouchers()} disabled={vLoading}>
-                  <RefreshCw className={`w-4 h-4 ${vLoading ? "animate-spin" : ""}`} /> Refresh
-                </Button>
-                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-green-400 border-green-500/30 hover:bg-green-500/10" onClick={() => setImportModal(true)}>
-                  <FileUp className="w-4 h-4" /> Import CSV
-                </Button>
-                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => setMikrotikImportModal(true)}>
-                  <Upload className="w-4 h-4" /> Import MikroTik
-                </Button>
-                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-blue-400 border-blue-500/30 hover:bg-blue-500/10" onClick={handleExportCSV}>
-                  <FileDown className="w-4 h-4" /> Export CSV
-                </Button>
-              </div>
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-3 sm:mt-0">
+                  {selectedVouchers.size > 0 && (
+                    <button onClick={handleBatchDelete} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors w-full sm:w-auto justify-center">
+                      <Trash2 className="w-3.5 h-3.5" /> Hapus Terpilih ({selectedVouchers.size})
+                    </button>
+                  )}
+                  <button onClick={() => fetchVouchers()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-muted/50 border border-border hover:bg-muted transition-colors w-full sm:w-auto justify-center">
+                    <RefreshCw className={`w-3.5 h-3.5 ${vLoading ? "animate-spin" : ""}`} /> Refresh
+                  </button>
+                  <button onClick={() => setImportModal(true)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors w-full sm:w-auto justify-center">
+                    <Upload className="w-3.5 h-3.5" /> Import CSV
+                  </button>
+                  <button onClick={() => setMikrotikImportModal(true)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors w-full sm:w-auto justify-center">
+                    <UploadCloud className="w-3.5 h-3.5" /> Import MikroTik
+                  </button>
+                  <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors w-full sm:w-auto justify-center">
+                    <Download className="w-3.5 h-3.5" /> Export CSV
+                  </button>
+                </div>
             </div>
-
 
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-widest text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Router</th>
-                      <th className="px-4 py-3 text-left">Username</th>
-                      <th className="px-4 py-3 text-left">Paket / Profile</th>
-                      <th className="px-4 py-3 text-left">Batas Waktu</th>
-                      <th className="px-4 py-3 text-left">Waktu Pakai</th>
-                      <th className="px-4 py-3 text-left">Sisa Waktu</th>
-                      <th className="px-4 py-3 text-right">Harga</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      <th className="px-4 py-3 text-left">Login Pertama</th>
-                      <th className="px-4 py-3 text-left">Dibuat</th>
-                      <th className="px-4 py-3 text-center">Aksi</th>
+                <table className="w-full text-left whitespace-nowrap">
+                  <thead>
+                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground bg-muted/20">
+                      <th className="px-4 py-3 w-10 text-center">
+                        <input type="checkbox" className="rounded border-border bg-background" checked={vouchers.length > 0 && selectedVouchers.size === vouchers.length} onChange={toggleSelectAll} />
+                      </th>
+                      <th className="px-4 py-3 font-medium">Router</th>
+                      <th className="px-4 py-3 font-medium">Username</th>
+                      <th className="px-4 py-3 font-medium">Paket / Profile</th>
+                      <th className="px-4 py-3 font-medium">Batas Waktu</th>
+                      <th className="px-4 py-3 font-medium">Waktu Pakai</th>
+                      <th className="px-4 py-3 font-medium">Sisa Waktu</th>
+                      <th className="px-4 py-3 font-medium text-right">Harga</th>
+                      <th className="px-4 py-3 font-medium text-center">Status</th>
+                      <th className="px-4 py-3 font-medium">Login Pertama</th>
+                      <th className="px-4 py-3 font-medium">Dibuat</th>
+                      <th className="px-4 py-3 font-medium text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {vLoading ? (
-                      <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
+                      <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">
                         <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat…
                       </td></tr>
                     ) : vouchers.length === 0 ? (
-                      <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">
+                      <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">
                         <RpIcon className="w-8 h-8 mx-auto mb-2 opacity-20" />
                         <p className="text-sm">Belum ada voucher</p>
                       </td></tr>
                     ) : vouchers.map(v => (
                       <tr key={v.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 w-10 text-center">
+                          <input type="checkbox" className="rounded border-border bg-background" checked={selectedVouchers.has(v.id)} onChange={() => toggleSelectVoucher(v.id)} />
+                        </td>
                         <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "—"}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-primary">{v.username} <div className="text-[10px] text-muted-foreground">Pass: {v.password}</div></td>
                         <td className="px-4 py-3 text-xs">{v.profile || "—"}</td>

@@ -92,6 +92,100 @@ async def save_hotspot_settings(data: HotspotSettingsUpdate, user=Depends(requir
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 class VoucherUpdate(BaseModel):
+"""
+Hotspot router: voucher management, sales tracking, RADIUS status, dan settings.
+Endpoint prefix: /hotspot-*  (langsung di root /api)
+"""
+import uuid
+import logging
+import csv
+import io
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from core.db import get_db
+from core.auth import (
+    get_current_user, require_admin, require_write, require_enterprise,
+    check_device_access, get_user_allowed_devices
+)
+
+router = APIRouter(tags=["hotspot"])
+
+logger = logging.getLogger(__name__)
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+# HOTSPOT SETTINGS
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+
+class HotspotSettingsUpdate(BaseModel):
+    wa_number: Optional[str] = None
+    welcome_message: Optional[str] = None
+    payment_enabled: Optional[bool] = None
+    bank_name: Optional[str] = None
+    bank_number: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    packages: Optional[list] = None
+    footer_text: Optional[str] = None
+    portal_logo_url: Optional[str] = None
+    portal_title: Optional[str] = None
+    auto_wa_enabled: Optional[bool] = None
+    # ── Payment Gateway Hotspot ──────────────────────────────────────────
+    xendit_enabled: Optional[bool] = None
+    xendit_secret_key: Optional[str] = None
+    xendit_webhook_token: Optional[str] = None
+    xendit_va_bank: Optional[str] = None
+    midtrans_enabled: Optional[bool] = None
+    midtrans_server_key: Optional[str] = None
+    midtrans_client_key: Optional[str] = None
+    midtrans_is_production: Optional[bool] = None
+    active_payment_providers: Optional[list] = None  # ["xendit", "midtrans", "manual"]
+
+
+@router.get("/hotspot-settings", dependencies=[Depends(require_enterprise)])
+async def get_hotspot_settings(user=Depends(get_current_user)):
+    db = get_db()
+    settings = await db.hotspot_settings.find_one({}, {"_id": 0})
+    if not settings:
+        settings = {
+            "wa_number": "",
+            "welcome_message": "Selamat datang di Hotspot kami!",
+            "payment_enabled": False,
+            "bank_name": "",
+            "bank_number": "",
+            "bank_account_name": "",
+            "packages": [],
+            "footer_text": "",
+            "portal_title": "Hotspot Login",
+            "auto_wa_enabled": False,
+        }
+        await db.hotspot_settings.insert_one(settings)
+    settings.pop("_id", None)
+    return settings
+
+
+@router.post("/hotspot-settings", dependencies=[Depends(require_enterprise)])
+async def save_hotspot_settings(data: HotspotSettingsUpdate, user=Depends(require_write)):
+    db = get_db()
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(400, "Tidak ada data yang dikirim")
+    await db.hotspot_settings.update_one({}, {"$set": update_data}, upsert=True)
+    settings = await db.hotspot_settings.find_one({}, {"_id": 0})
+    return settings or {}
+
+
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+# HOTSPOT VOUCHERS
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+
+class VoucherUpdate(BaseModel):
     password: Optional[str] = None
     profile: Optional[str] = None
     validity: Optional[str] = None
@@ -100,6 +194,9 @@ class VoucherUpdate(BaseModel):
 
 class VoucherTransfer(BaseModel):
     new_device_id: str
+
+class BatchDeleteRequest(BaseModel):
+    voucher_ids: list[str]
 
 
 @router.get("/hotspot-vouchers", dependencies=[Depends(require_enterprise)])
@@ -310,9 +407,25 @@ async def delete_hotspot_voucher(voucher_id: str, user=Depends(require_write)):
     return {"message": "Voucher dihapus"}
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+@router.post("/hotspot-vouchers/batch-delete", dependencies=[Depends(require_enterprise)])
+async def batch_delete_hotspot_vouchers(data: BatchDeleteRequest, user=Depends(require_write)):
+    db = get_db()
+    
+    # RBAC filter
+    scope = get_user_allowed_devices(user)
+    if scope is not None:
+        vouchers = await db.hotspot_vouchers.find({"id": {"$in": data.voucher_ids}}, {"id": 1, "device_id": 1}).to_list(None)
+        unauthorized = [v["id"] for v in vouchers if v.get("device_id") not in scope]
+        if unauthorized:
+             raise HTTPException(403, "Anda tidak memiliki hak akses untuk menghapus beberapa voucher yang dipilih")
+
+    result = await db.hotspot_vouchers.delete_many({"id": {"$in": data.voucher_ids}})
+    return {"message": f"{result.deleted_count} voucher berhasil dihapus", "deleted_count": result.deleted_count}
+
+
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 # HOTSPOT SALES
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 @router.get("/hotspot-sales", dependencies=[Depends(require_enterprise)])
 async def list_hotspot_sales(
@@ -340,9 +453,9 @@ async def list_hotspot_sales(
     return sales
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 # HOTSPOT PROFILES (from MikroTik)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 @router.get("/hotspot-profiles", dependencies=[Depends(require_enterprise)])
 async def list_hotspot_profiles(
@@ -438,9 +551,9 @@ async def push_hotspot_radius_config(req: PushRadiusRequest, user=Depends(requir
     except Exception as e:
         raise HTTPException(500, f"Gagal push RADIUS: {e}")
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 # HOTSPOT RADIUS STATUS
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 @router.get("/hotspot-radius-status", dependencies=[Depends(require_enterprise)])
 async def hotspot_radius_status(
@@ -473,9 +586,9 @@ async def hotspot_radius_status(
     }
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 # HOTSPOT USERS (batch create / generator)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
 
 class HotspotUserBatch(BaseModel):
     users: List[dict]
