@@ -822,3 +822,86 @@ async def import_hotspot_vouchers(
         "created": created, "skipped": skipped, "failed": failed,
         "total": len(created) + len(skipped) + len(failed),
     }
+
+
+@router.post("/hotspot-vouchers/import/mikrotik", dependencies=[Depends(require_enterprise)])
+async def import_mikrotik_hotspot_vouchers(
+    device_id: str = Query(...),
+    user=Depends(require_write),
+):
+    """
+    Import voucher/user langsung dari router MikroTik (Hotspot).
+    Pastikan password, profile/paket, limit uptime, dan sisa uptime ikut terimport.
+    """
+    if not check_device_access(user, device_id):
+        raise HTTPException(403, "Tidak memiliki akses ke router ini")
+    db = get_db()
+    device = await db.devices.find_one({"id": device_id})
+    if not device:
+        raise HTTPException(404, "Device tidak ditemukan")
+    device_name = device.get("name", device_id)
+
+    try:
+        from mikrotik_api import get_api_client
+        mt = get_api_client(device)
+        hotspot_users = await mt.list_hotspot_users()
+    except Exception as e:
+        logger.error(f"[hotspot-import] Gagal ambil data dari MikroTik: {e}")
+        raise HTTPException(500, f"Gagal terhubung ke MikroTik: {e}")
+
+    # Buat peta profile -> price
+    packages = await db.billing_packages.find(
+        {"source_device_id": device_id, "type": {"$in": ["hotspot", "both"]}},
+        {"_id": 0, "profile_name": 1, "price": 1}
+    ).to_list(1000)
+    profile_price_map = {p.get("profile_name"): p.get("price", 0) for p in packages if p.get("profile_name")}
+
+    created, skipped, failed = [], [], []
+
+    for u in hotspot_users:
+        username = (u.get("name") or "").strip()
+        if not username or username == "default-trial":
+            continue
+        
+        existing = await db.hotspot_vouchers.find_one({"username": username, "device_id": device_id})
+        if existing:
+            skipped.append(username)
+            continue
+            
+        try:
+            password     = (u.get("password") or "").strip()
+            profile      = (u.get("profile") or "default").strip()
+            uptime_limit = (u.get("limit-uptime") or "").strip()
+            uptime_used  = (u.get("uptime") or "").strip()
+            comment      = (u.get("comment") or "").strip()
+            
+            price = profile_price_map.get(profile, 0)
+            
+            used_uptime_secs = _parse_uptime_to_secs(uptime_used)
+            limit_uptime_secs = _parse_uptime_to_secs(uptime_limit)
+            
+            status = "new"
+            if used_uptime_secs > 0:
+                status = "active"
+                if limit_uptime_secs > 0 and used_uptime_secs >= limit_uptime_secs:
+                    status = "expired"
+
+            doc = {
+                "id": str(uuid.uuid4()), "username": username, "password": password,
+                "profile": profile, "device_id": device_id, "router_name": device_name,
+                "status": status, "price": price, "uptime_limit": uptime_limit, "validity": "",
+                "comment": comment, "session_start_time": None, "used_uptime_secs": used_uptime_secs,
+                "limit_uptime_secs": limit_uptime_secs,
+                "validity_secs": 0,
+                "created_at": _now(), "updated_at": _now(),
+            }
+            await db.hotspot_vouchers.insert_one(doc)
+            created.append(username)
+        except Exception as e:
+            failed.append({"username": username, "error": str(e)})
+
+    return {
+        "message": f"Import MikroTik selesai: {len(created)} diimpor, {len(skipped)} dilewati, {len(failed)} gagal",
+        "created": created, "skipped": skipped, "failed": failed,
+        "total": len(created) + len(skipped) + len(failed),
+    }

@@ -410,14 +410,14 @@ async def bulk_reboot(
 
 
 def _is_online(device: dict) -> bool:
-    """Cek apakah device GenieACS online (last_inform < 15 menit)."""
+    """Cek apakah device GenieACS online (last_inform < 75 menit)."""
     from datetime import datetime, timezone, timedelta
     last = device.get("_lastInform", "")
     if not last:
         return False
     try:
         dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-        return dt > datetime.now(timezone.utc) - timedelta(minutes=15)
+        return dt > datetime.now(timezone.utc) - timedelta(minutes=75)
     except Exception:
         return False
 
@@ -968,7 +968,7 @@ def _valid_rx(v: str) -> bool:
 def _normalize_devices(devices: list) -> list:
     """Extract key fields from raw GenieACS device objects for list view."""
     from datetime import datetime, timezone, timedelta
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=75)
     result = []
     for d in devices:
         last_inform = d.get("_lastInform", "")

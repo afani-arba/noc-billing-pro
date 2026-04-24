@@ -126,6 +126,10 @@ export default function HotspotBillingPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
+  const [mikrotikImportModal, setMikrotikImportModal] = useState(false);
+  const [mikrotikImporting, setMikrotikImporting] = useState(false);
+  const [mikrotikImportResult, setMikrotikImportResult] = useState(null);
+
   // ── Payment Settings (Hotspot)
   const [hsPaySettings, setHsPaySettings] = useState({});
   const [hsPayLoading, setHsPayLoading] = useState(false);
@@ -288,6 +292,18 @@ export default function HotspotBillingPage() {
       fetchVouchers();
     } catch (e) { toast.error(e.response?.data?.detail || "Gagal import"); }
     finally { setImporting(false); }
+  };
+
+  const handleMikrotikImportSubmit = async () => {
+    if (!selectedDevice) return toast.error("Pilih router MikroTik terlebih dahulu");
+    setMikrotikImporting(true);
+    try {
+      const r = await api.post(`/hotspot-vouchers/import/mikrotik?device_id=${selectedDevice}`);
+      setMikrotikImportResult(r.data);
+      toast.success(r.data.message);
+      fetchVouchers();
+    } catch (e) { toast.error(e.response?.data?.detail || "Gagal import dari MikroTik"); }
+    finally { setMikrotikImporting(false); }
   };
 
   const loadHsPaySettings = useCallback(async () => {
@@ -764,6 +780,37 @@ export default function HotspotBillingPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal Import Voucher dari MikroTik */}
+      <Dialog open={mikrotikImportModal} onOpenChange={(o) => { setMikrotikImportModal(o); if (!o) setMikrotikImportResult(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Upload className="w-5 h-5 text-primary" /> Import dari MikroTik</DialogTitle>
+            <DialogDescription>
+              Tarik data voucher/user Hotspot langsung dari router MikroTik yang terpilih.<br/>
+              Data yang ditarik: username, password, profile, limit uptime, dan uptime terpakai.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="text-sm">
+              Router Terpilih: <span className="font-semibold">{devices.find(d => d.id === selectedDevice)?.name || selectedDevice}</span>
+            </div>
+            {mikrotikImportResult && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs space-y-1">
+                <p className="font-semibold text-foreground">{mikrotikImportResult.message}</p>
+                {mikrotikImportResult.skipped?.length > 0 && <p className="text-amber-400">⚠ Dilewati ({mikrotikImportResult.skipped.length}): {mikrotikImportResult.skipped.slice(0,5).join(", ")}{mikrotikImportResult.skipped.length > 5 ? "..." : ""}</p>}
+                {mikrotikImportResult.failed?.length > 0 && <p className="text-red-400">✕ Gagal ({mikrotikImportResult.failed.length})</p>}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMikrotikImportModal(false); setMikrotikImportResult(null); }}>Tutup</Button>
+            <Button onClick={handleMikrotikImportSubmit} disabled={mikrotikImporting || !selectedDevice} className="gap-2">
+              {mikrotikImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Mulai Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Tabs */}
       <div className="flex border-b border-border overflow-x-auto no-scrollbar">
         {tabs.map(t => (
@@ -931,7 +978,10 @@ export default function HotspotBillingPage() {
                   <RefreshCw className={`w-4 h-4 ${vLoading ? "animate-spin" : ""}`} /> Refresh
                 </Button>
                 <Button variant="outline" size="sm" className="gap-2 rounded-sm text-green-400 border-green-500/30 hover:bg-green-500/10" onClick={() => setImportModal(true)}>
-                  <FileUp className="w-4 h-4" /> Import
+                  <FileUp className="w-4 h-4" /> Import CSV
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2 rounded-sm text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => setMikrotikImportModal(true)}>
+                  <Upload className="w-4 h-4" /> Import MikroTik
                 </Button>
                 <Button variant="outline" size="sm" className="gap-2 rounded-sm text-blue-400 border-blue-500/30 hover:bg-blue-500/10" onClick={handleExportCSV}>
                   <FileDown className="w-4 h-4" /> Export CSV

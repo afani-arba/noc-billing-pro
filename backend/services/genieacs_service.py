@@ -826,14 +826,14 @@ def set_hard_isolation(device_id: str, enable: bool) -> dict:
 def get_stats() -> dict:
     """
     Return overall stats: total devices, online count, faults count.
-    'Online' = lastInform within last 15 minutes.
+    'Online' = lastInform within last 75 minutes (60m TR-069 interval + 15m buffer).
     """
     try:
         all_devices = _get("/devices", {"limit": 5000, "projection": "_id,_lastInform"})
         total = len(all_devices)
 
         from datetime import datetime, timezone, timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=75)
 
         online = 0
         for d in all_devices:
