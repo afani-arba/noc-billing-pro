@@ -1037,113 +1037,170 @@ export default function HotspotBillingPage() {
             </div>
 
             <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left whitespace-nowrap">
+              <div className="overflow-x-auto rounded-lg">
+                <table className="w-full text-left text-xs" style={{minWidth: '900px'}}>
+
                   <thead>
-                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground bg-muted/20">
-                      <th className="px-4 py-3 w-10 text-center">
-                        <input type="checkbox" className="rounded border-border bg-background" checked={vouchers.length > 0 && selectedVouchers.size === vouchers.length} onChange={toggleSelectAll} />
+                    <tr className="border-b-2 border-border text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/30">
+                      <th className="px-3 py-3 w-8 text-center">
+                        <input type="checkbox" className="rounded border-border bg-background cursor-pointer" checked={vouchers.length > 0 && selectedVouchers.size === vouchers.length} onChange={toggleSelectAll} />
                       </th>
-                      <th className="px-4 py-3 font-medium">Router</th>
-                      <th className="px-4 py-3 font-medium">Username</th>
-                      <th className="px-4 py-3 font-medium">Paket / Profile</th>
-                      <th className="px-4 py-3 font-medium">Batas Waktu</th>
-                      <th className="px-4 py-3 font-medium">Waktu Pakai</th>
-                      <th className="px-4 py-3 font-medium">Sisa Waktu</th>
-                      <th className="px-4 py-3 font-medium text-right">Harga</th>
-                      <th className="px-4 py-3 font-medium text-center">Status</th>
-                      <th className="px-4 py-3 font-medium">Login Pertama</th>
-                      <th className="px-4 py-3 font-medium">Dibuat</th>
-                      <th className="px-4 py-3 font-medium text-center">Aksi</th>
+                      <th className="px-3 py-3 font-semibold min-w-[110px]">Router</th>
+                      <th className="px-3 py-3 font-semibold min-w-[130px]">Username / Pass</th>
+                      <th className="px-3 py-3 font-semibold min-w-[90px]">Paket</th>
+                      <th className="px-3 py-3 font-semibold min-w-[140px]">Batas &amp; Sisa Waktu</th>
+                      <th className="px-3 py-3 font-semibold min-w-[100px]">Waktu Pakai</th>
+                      <th className="px-3 py-3 font-semibold text-right min-w-[90px]">Harga</th>
+                      <th className="px-3 py-3 font-semibold text-center min-w-[70px]">Status</th>
+                      <th className="px-3 py-3 font-semibold min-w-[120px]">Login &amp; Dibuat</th>
+                      <th className="px-3 py-3 font-semibold text-center min-w-[80px]">Aksi</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody className="divide-y divide-border/50">
                     {vLoading ? (
-                      <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat…
+                      <tr><td colSpan={10} className="py-16 text-center text-muted-foreground">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Memuat data voucher…
                       </td></tr>
                     ) : vouchers.length === 0 ? (
-                      <tr><td colSpan={12} className="py-12 text-center text-muted-foreground">
-                        <RpIcon className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                      <tr><td colSpan={10} className="py-16 text-center text-muted-foreground">
+                        <RpIcon className="w-8 h-8 mx-auto mb-3 opacity-20" />
                         <p className="text-sm">Belum ada voucher</p>
                       </td></tr>
                     ) : vouchers.map(v => (
-                      <tr key={v.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 w-10 text-center">
-                          <input type="checkbox" className="rounded border-border bg-background" checked={selectedVouchers.has(v.id)} onChange={() => toggleSelectVoucher(v.id)} />
+                      <tr key={v.id} className={`hover:bg-muted/20 transition-colors ${
+                        v.status === 'active' ? 'border-l-2 border-l-green-500/50' : ''
+                      }`}>
+                        {/* Checkbox */}
+                        <td className="px-3 py-2.5 text-center">
+                          <input type="checkbox" className="rounded border-border bg-background cursor-pointer" checked={selectedVouchers.has(v.id)} onChange={() => toggleSelectVoucher(v.id)} />
                         </td>
-                        <td className="px-4 py-3 font-semibold text-xs text-muted-foreground">{v.router_name || "—"}</td>
-                        <td className="px-4 py-3 font-mono font-semibold text-primary">{v.username} <div className="text-[10px] text-muted-foreground">Pass: {v.password}</div></td>
-                        <td className="px-4 py-3 text-xs">{v.profile || "—"}</td>
-                        <td className="px-4 py-3 text-xs">
-                          {v.uptime_limit ? <div className="text-primary font-semibold">Limit: {v.uptime_limit}</div> : null}
-                          <div className="text-[10px] text-muted-foreground">Aktif: {v.validity || "—"}</div>
+
+                        {/* Router */}
+                        <td className="px-3 py-2.5">
+                          <span className="font-semibold text-muted-foreground text-[11px] leading-tight block">{v.router_name || "—"}</span>
                         </td>
-                        <td className="px-4 py-3 text-xs">
-                           <span className="font-mono bg-muted/50 px-1 py-0.5 rounded">{getLiveUptime(v)}</span>
-                           {v.comment && <div className="text-[10px] text-muted-foreground mt-1 line-clamp-1" title={v.comment}>{v.comment}</div>}
+
+                        {/* Username / Password */}
+                        <td className="px-3 py-2.5">
+                          <div className="font-mono font-bold text-primary text-[12px] leading-tight">{v.username}</div>
+                          <div className="text-[10px] text-muted-foreground/70 font-mono mt-0.5">🔑 {v.password || "—"}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs min-w-[120px]">
+
+                        {/* Paket / Profile */}
+                        <td className="px-3 py-2.5">
+                          <span className="inline-block bg-muted/60 border border-border text-[10px] font-semibold px-1.5 py-0.5 rounded text-foreground leading-tight break-words max-w-[85px]">{v.profile || "—"}</span>
+                        </td>
+
+                        {/* Batas & Sisa Waktu — digabung */}
+                        <td className="px-3 py-2.5">
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] text-muted-foreground uppercase font-medium">Uptime:</span>
-                              <span className={`font-mono font-semibold px-1 py-0.5 rounded text-[10px] ${
-                                getLiveSisaUptime(v) === "Habis" ? "text-red-400 bg-red-400/10 border border-red-400/20" : "text-primary"
+                            {/* Batas Uptime */}
+                            {v.uptime_limit ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] text-muted-foreground w-[38px] shrink-0">Limit</span>
+                                <span className="font-mono font-semibold text-[10px] text-foreground">{v.uptime_limit}</span>
+                              </div>
+                            ) : null}
+                            {/* Batas Validitas */}
+                            {v.validity ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] text-muted-foreground w-[38px] shrink-0">Aktif</span>
+                                <span className="font-mono font-semibold text-[10px] text-foreground">{v.validity}</span>
+                              </div>
+                            ) : null}
+                            {/* Divider */}
+                            {(v.uptime_limit || v.validity) ? <div className="border-t border-border/40 my-0.5" /> : null}
+                            {/* Sisa Uptime */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-muted-foreground w-[38px] shrink-0">Sisa ⏱</span>
+                              <span className={`font-mono font-bold text-[10px] ${
+                                getLiveSisaUptime(v) === "Habis" ? "text-red-400" :
+                                getLiveSisaUptime(v) === "—" ? "text-muted-foreground" : "text-green-400"
                               }`}>{getLiveSisaUptime(v)}</span>
                             </div>
-                             <div className="flex items-center justify-between gap-2">
-                               <span className="text-[10px] text-muted-foreground uppercase font-medium">Aktif:</span>
-                               <span className={`font-mono font-semibold px-1 py-0.5 rounded text-[10px] ${
-                                 getLiveSisaValiditas(v) === "Habis" ? "text-red-400 bg-red-400/10 border border-red-400/20" : "text-muted-foreground"
-                               }`}>{getLiveSisaValiditas(v)}</span>
-                             </div>
+                            {/* Sisa Validitas */}
+                            {(v.validity_secs > 0 || v.validity) ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] text-muted-foreground w-[38px] shrink-0">Sisa 📅</span>
+                                <span className={`font-mono font-bold text-[10px] ${
+                                  getLiveSisaValiditas(v) === "Habis" ? "text-red-400" :
+                                  getLiveSisaValiditas(v) === "—" ? "text-muted-foreground" : "text-blue-400"
+                                }`}>{getLiveSisaValiditas(v)}</span>
+                              </div>
+                            ) : null}
                           </div>
                         </td>
 
+                        {/* Waktu Pakai */}
+                        <td className="px-3 py-2.5">
+                          <div className="font-mono text-[11px] font-semibold text-foreground">{getLiveUptime(v)}</div>
+                          {v.comment && (
+                            <div className="text-[9px] text-muted-foreground mt-0.5 break-words max-w-[95px]" title={v.comment}>
+                              {v.comment.length > 30 ? v.comment.slice(0, 30) + '…' : v.comment}
+                            </div>
+                          )}
+                        </td>
 
-                        <td className="px-4 py-3 text-right font-medium">{fmt(v.price)}</td>
-                        <td className="px-4 py-3 text-center"><VoucherStatusBadge status={v.status} /></td>
-                        {/* Kolom Login Pertama — menggunakan session_start_time dari backend */}
-                        <td className="px-4 py-3 text-xs min-w-[120px]">
+                        {/* Harga */}
+                        <td className="px-3 py-2.5 text-right">
+                          <span className="font-bold text-[11px] text-foreground whitespace-nowrap">{fmt(v.price)}</span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-3 py-2.5 text-center">
+                          <VoucherStatusBadge status={v.status} />
+                        </td>
+
+                        {/* Login Pertama & Dibuat — digabung */}
+                        <td className="px-3 py-2.5">
                           {v.session_start_time ? (
-                            <div className="space-y-0.5">
-                              <div className="font-semibold text-green-400">
-                                {new Date(v.session_start_time).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                            <div className="mb-1">
+                              <div className="text-[9px] text-muted-foreground uppercase font-medium mb-0.5">Login</div>
+                              <div className="font-semibold text-green-400 text-[10px] leading-tight whitespace-nowrap">
+                                {new Date(v.session_start_time).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" })}
                               </div>
-                              <div className="text-[10px] text-muted-foreground font-mono">
-                                {new Date(v.session_start_time).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                              <div className="text-[9px] text-muted-foreground font-mono">
+                                {new Date(v.session_start_time).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-muted-foreground/40 text-[10px] italic">Belum login</span>
+                            <div className="text-[9px] text-muted-foreground/50 italic mb-1">Belum login</div>
                           )}
+                          <div className="border-t border-border/40 pt-1">
+                            <div className="text-[9px] text-muted-foreground uppercase font-medium mb-0.5">Dibuat</div>
+                            <div className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{fmtDt(v.created_at)}</div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDt(v.created_at)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-1 justify-center">
-                            {/* Tombol toggle hanya untuk voucher yang bukan expired */}
-                            {v.status === "disabled" ? (
-                              <button onClick={() => handleToggleStatus(v)} className="text-[10px] px-2 py-1 rounded border border-green-500/30 text-green-400 hover:bg-green-500/10" title="Aktifkan Kembali">
-                                <CheckCircle className="w-3 h-3" />
+
+                        {/* Aksi */}
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col gap-1 items-center">
+                            <div className="flex gap-1">
+                              {v.status === "disabled" ? (
+                                <button onClick={() => handleToggleStatus(v)} className="p-1 rounded border border-green-500/30 text-green-400 hover:bg-green-500/10 transition-colors" title="Aktifkan Kembali">
+                                  <CheckCircle className="w-3 h-3" />
+                                </button>
+                              ) : v.status !== "expired" ? (
+                                <button onClick={() => handleToggleStatus(v)} className="p-1 rounded border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 transition-colors" title="Nonaktifkan Sementara">
+                                  <Ban className="w-3 h-3" />
+                                </button>
+                              ) : null}
+                              <button onClick={() => setTransferVoucher(v)} className="p-1 rounded border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition-colors" title="Pindah Router">
+                                <ArrowRightLeft className="w-3 h-3" />
                               </button>
-                            ) : v.status !== "expired" ? (
-                              <button onClick={() => handleToggleStatus(v)} className="text-[10px] px-2 py-1 rounded border border-orange-500/30 text-orange-400 hover:bg-orange-500/10" title="Nonaktifkan Sementara">
-                                <Ban className="w-3 h-3" />
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => setEditVoucher({...v})} className="p-1 rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Edit Voucher">
+                                <Edit className="w-3 h-3" />
                               </button>
-                            ) : null}
-                            <button onClick={() => setTransferVoucher(v)} className="text-[10px] px-2 py-1 rounded border border-blue-500/30 text-blue-400 hover:bg-blue-500/10" title="Transfer Mikrotik">
-                              <ArrowRightLeft className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => setEditVoucher({...v})} className="text-[10px] px-2 py-1 rounded border border-border text-foreground hover:bg-muted" title="Edit">
-                              <Edit className="w-3 h-3" />
-                            </button>
-                            <button onClick={() => {
-                               if(confirm(`Hapus voucher ${v.username}?`)) {
-                                 api.delete(`/hotspot-vouchers/${v.id}`).then(()=>fetchVouchers());
-                               }
-                            }} className="text-[10px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10" title="Hapus">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                              <button onClick={() => {
+                                if(confirm(`Hapus voucher ${v.username}?`)) {
+                                  api.delete(`/hotspot-vouchers/${v.id}`).then(()=>fetchVouchers());
+                                }
+                              }} className="p-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors" title="Hapus Voucher">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>
