@@ -1,1 +1,54 @@
-404 Not Found
+[
+  {
+    "_id": "RXPower",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANDSLInterfaceConfig.OpticalSignalLevel\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) {\n    let v = Number(r.value[0]);\n    if(v < -100) return {writable: false, value: [(v / 1000).toFixed(2), \"xsd:string\"]};\n    if(v < -10) return {writable: false, value: [(v / 100).toFixed(2), \"xsd:string\"]};\n    return {writable: false, value: [v.toFixed(2), \"xsd:string\"]};\n}\nlet d = declare(\"InternetGatewayDevice.WANDevice.1.WANDSLDiagnostics.OpticalSignalLevel\", {value: 1});\nif(d.value !== undefined && d.value !== null && d.value[0]) {\n    let v = Number(d.value[0]);\n    if(v < -100) return {writable: false, value: [(v / 1000).toFixed(2), \"xsd:string\"]};\n    if(v < -10) return {writable: false, value: [(v / 100).toFixed(2), \"xsd:string\"]};\n    return {writable: false, value: [v.toFixed(2), \"xsd:string\"]};\n}\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "gettemp",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANDSLInterfaceConfig.Temperature\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "pppoeUsername",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.Username\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value.length > 0) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "pppoeUsername2",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.Username\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value.length > 0) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "pppoeIP",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.ExternalIPAddress\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value.length > 0) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "IPTR069",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value.length > 0) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "pppoeMac",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.*.WANPPPConnection.*.MACAddress\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value.length > 0) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "PonMac",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANDSLInterfaceConfig.MACAddress\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nlet d = declare(\"InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress\", {value: 1});\nif(d.value !== undefined && d.value !== null && d.value[0]) return {writable: false, value: [d.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "getponmode",
+    "script": "let r = declare(\"InternetGatewayDevice.WANDevice.1.WANDSLInterfaceConfig.ModulationType\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"GPON\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "getSerialNumber",
+    "script": "let r = declare(\"InternetGatewayDevice.DeviceInfo.SerialNumber\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "activedevices",
+    "script": "let r = declare(\"InternetGatewayDevice.LANDevice.1.Hosts.HostNumberOfEntries\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"0\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "getdeviceuptime",
+    "script": "let r = declare(\"InternetGatewayDevice.DeviceInfo.UpTime\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) {\n    let s = Number(r.value[0]);\n    let d = Math.floor(s / 86400);\n    let h = Math.floor((s % 86400) / 3600);\n    let m = Math.floor((s % 3600) / 60);\n    return {writable: false, value: [`${d}d ${h}h ${m}m`, \"xsd:string\"]};\n}\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  },
+  {
+    "_id": "superPassword",
+    "script": "let r = declare(\"InternetGatewayDevice.ManagementServer.ConnectionRequestPassword\", {value: 1});\nif(r.value !== undefined && r.value !== null && r.value[0]) return {writable: false, value: [r.value[0], \"xsd:string\"]};\nreturn {writable: false, value: [\"\", \"xsd:string\"]};"
+  }
+]

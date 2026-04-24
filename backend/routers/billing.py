@@ -302,6 +302,14 @@ class PackageCreate(BaseModel):
     active: bool = True
     device_id: Optional[str] = None  # Jika diisi → buat profile di MikroTik secara otomatis
     
+    # -- Native Burst --
+    burst_limit_down: Optional[str] = None
+    burst_limit_up: Optional[str] = None
+    burst_threshold_down: Optional[str] = None
+    burst_threshold_up: Optional[str] = None
+    burst_time_down: Optional[str] = None
+    burst_time_up: Optional[str] = None
+    
     # ── Dynamic Bandwidth (Day/Night) ──
     day_night_enabled: bool = False
     night_rate_limit: Optional[str] = None
@@ -332,6 +340,14 @@ class PackageUpdate(BaseModel):
     validity: Optional[str] = None
     billing_cycle: Optional[int] = None
     active: Optional[bool] = None
+
+    # -- Native Burst --
+    burst_limit_down: Optional[str] = None
+    burst_limit_up: Optional[str] = None
+    burst_threshold_down: Optional[str] = None
+    burst_threshold_up: Optional[str] = None
+    burst_time_down: Optional[str] = None
+    burst_time_up: Optional[str] = None
     
     # ── Dynamic Bandwidth (Day/Night) ──
     day_night_enabled: Optional[bool] = None
@@ -390,22 +406,42 @@ async def list_packages(
     return pkgs
 
 
-async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: str, speed_down: str, service_type: str = "pppoe"):
+async def _push_profile_to_mikrotik(device: dict, profile_name: str, speed_up: str, speed_down: str, service_type: str = "pppoe", pkg_data: dict = None):
     """Background task: push profile ke MikroTik secara diam-diam setelah paket manual dibuat."""
     from mikrotik_api import get_api_client
     try:
         mt = get_api_client(device)
 
-        # Susun rate-limit: format MikroTik = "download/upload" (mis: "20M/20M")
-        rate_limit = ""
+        # Susun rate-limit: format MikroTik = rate burst threshold time
         sd = (speed_down or "").strip()
         su = (speed_up or "").strip()
-        if sd and su:
-            rate_limit = f"{sd}/{su}"
-        elif sd:
-            rate_limit = sd
-        elif su:
-            rate_limit = su
+        bl_d = ""
+        bl_u = ""
+        bt_d = ""
+        bt_u = ""
+        time_d = ""
+        time_u = ""
+        if pkg_data:
+            bl_d = (pkg_data.get("burst_limit_down") or "").strip()
+            bl_u = (pkg_data.get("burst_limit_up") or "").strip()
+            bt_d = (pkg_data.get("burst_threshold_down") or "").strip()
+            bt_u = (pkg_data.get("burst_threshold_up") or "").strip()
+            time_d = (pkg_data.get("burst_time_down") or "").strip()
+            time_u = (pkg_data.get("burst_time_up") or "").strip()
+        
+        rate = f"{sd}/{su}" if (sd and su) else (sd or su)
+        burst = f"{bl_d}/{bl_u}" if (bl_d and bl_u) else (bl_d or bl_u)
+        thresh = f"{bt_d}/{bt_u}" if (bt_d and bt_u) else (bt_d or bt_u)
+        time = f"{time_d}/{time_u}" if (time_d and time_u) else (time_d or time_u)
+        
+        parts = []
+        if rate: parts.append(rate)
+        if burst:
+            parts.append(burst)
+            if thresh:
+                parts.append(thresh)
+                if time: parts.append(time)
+        rate_limit = " ".join(parts)
 
         # Tentukan path profile berdasarkan service_type
         base_path = "/ip/hotspot/user-profile" if service_type == "hotspot" else "/ppp/profile"
@@ -479,7 +515,7 @@ async def create_package(data: PackageCreate, background_tasks: BackgroundTasks,
     if device and data.service_type in ("pppoe", "both"):
         background_tasks.add_task(
             _push_profile_to_mikrotik,
-            device, data.name, data.speed_up, data.speed_down, "pppoe"
+            device, data.name, data.speed_up, data.speed_down, "pppoe", doc
         )
 
     return doc
@@ -598,6 +634,22 @@ async def sync_packages_from_mikrotik(
 
     added, existing = [], []
     device_name = device.get("name", device.get("host", device_id))
+    def _parse_rate_limit(rl: str):
+        parts = rl.split()
+        rate = parts[0] if len(parts) > 0 else ""
+        burst = parts[1] if len(parts) > 1 else ""
+        thresh = parts[2] if len(parts) > 2 else ""
+        time = parts[3] if len(parts) > 3 else ""
+        return {
+            "speed_down": rate.split("/")[0] if "/" in rate else rate,
+            "speed_up": rate.split("/")[1] if "/" in rate else "",
+            "burst_limit_down": burst.split("/")[0] if "/" in burst else burst,
+            "burst_limit_up": burst.split("/")[1] if "/" in burst else "",
+            "burst_threshold_down": thresh.split("/")[0] if "/" in thresh else thresh,
+            "burst_threshold_up": thresh.split("/")[1] if "/" in thresh else "",
+            "burst_time_down": time.split("/")[0] if "/" in time else time,
+            "burst_time_up": time.split("/")[1] if "/" in time else "",
+        }
 
     # Proses PPPoE profiles
     for p in pppoe_profiles:
@@ -612,6 +664,7 @@ async def sync_packages_from_mikrotik(
         if existing_pkg:
             existing.append(pname)
             continue
+        rl_parsed = _parse_rate_limit(p.get("rate-limit", ""))
         doc = {
             "id": str(uuid.uuid4()),
             "name": pname,
@@ -621,12 +674,11 @@ async def sync_packages_from_mikrotik(
             "service_type": "pppoe",
             "type": "pppoe", # Backward compatibility for TR-069 search
             "price": 0,
-            "speed_up": p.get("rate-limit", "").split("/")[1] if "/" in p.get("rate-limit", "") else "",
-            "speed_down": p.get("rate-limit", "").split("/")[0] if "/" in p.get("rate-limit", "") else "",
             "billing_cycle": 30,
             "active": True,
             "synced_at": _now(),
             "created_at": _now(),
+            **rl_parsed
         }
         await db.billing_packages.insert_one(doc)
         doc.pop("_id", None)
@@ -645,6 +697,7 @@ async def sync_packages_from_mikrotik(
         if existing_pkg:
             existing.append(f"{pname} (hs)")
             continue
+        rl_parsed = _parse_rate_limit(p.get("rate-limit", ""))
         doc = {
             "id": str(uuid.uuid4()),
             "name": f"{pname} (Hotspot)",
@@ -654,12 +707,11 @@ async def sync_packages_from_mikrotik(
             "service_type": "hotspot",
             "type": "hotspot", # Backward compatibility
             "price": 0,
-            "speed_up": p.get("rate-limit", "").split("/")[1] if "/" in p.get("rate-limit", "") else "",
-            "speed_down": p.get("rate-limit", "").split("/")[0] if "/" in p.get("rate-limit", "") else "",
             "billing_cycle": 30,
             "active": True,
             "synced_at": _now(),
             "created_at": _now(),
+            **rl_parsed
         }
         await db.billing_packages.insert_one(doc)
         doc.pop("_id", None)

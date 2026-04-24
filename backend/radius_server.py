@@ -153,6 +153,30 @@ def _decrypt_pap(cipher: bytes, authenticator: bytes, secret: bytes) -> str:
     return result.rstrip(b"\x00").decode("utf-8", errors="replace")
 
 
+def _build_rate_limit_string(pkg: dict) -> str:
+    up = str(pkg.get("speed_up", "")).strip()
+    down = str(pkg.get("speed_down", "")).strip()
+    bl_u = str(pkg.get("burst_limit_up", "")).strip()
+    bl_d = str(pkg.get("burst_limit_down", "")).strip()
+    bt_u = str(pkg.get("burst_threshold_up", "")).strip()
+    bt_d = str(pkg.get("burst_threshold_down", "")).strip()
+    time_u = str(pkg.get("burst_time_up", "")).strip()
+    time_d = str(pkg.get("burst_time_down", "")).strip()
+    
+    rate = f"{up}/{down}" if up and down else (up or down)
+    burst = f"{bl_u}/{bl_d}" if bl_u and bl_d else (bl_u or bl_d)
+    thresh = f"{bt_u}/{bt_d}" if bt_u and bt_d else (bt_u or bt_d)
+    time = f"{time_u}/{time_d}" if time_u and time_d else (time_u or time_d)
+    
+    parts = []
+    if rate: parts.append(rate)
+    if burst:
+        parts.append(burst)
+        if thresh:
+            parts.append(thresh)
+            if time: parts.append(time)
+    return " ".join(parts)
+
 def _build_vsa_rate_limit(rate_str: str) -> bytes:
     """Build Vendor-Specific Attribute (VSA) untuk Mikrotik-Rate-Limit."""
     rate_val = rate_str.encode("utf-8")
@@ -346,11 +370,9 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
                     rate_str = override_rate
                     logger.info(f"RADIUS PPPoE: rate OVERRIDE '{rate_str}' untuk {uname!r}")
                 elif pkg:
-                    down = str(pkg.get("speed_down", "")).strip()
-                    up   = str(pkg.get("speed_up", "")).strip()
-                    if down and up:
-                        rate_str = f"{up}/{down}"
-                        logger.info(f"RADIUS PPPoE: rate '{rate_str}' untuk {uname!r}")
+                    rate_str = _build_rate_limit_string(pkg)
+                    if rate_str:
+                        logger.info(f"RADIUS: rate `{rate_str}`")
 
                 if rate_str:
                     reply_attrs.append((26, _build_vsa_rate_limit(rate_str)))
@@ -443,10 +465,8 @@ class RADIUSProtocol(asyncio.DatagramProtocol):
                     "$or": [{"name": profile_name}, {"id": profile_name}]
                 })
                 if pkg:
-                    down = str(pkg.get("speed_down", "")).strip()
-                    up   = str(pkg.get("speed_up", "")).strip()
-                    if down and up:
-                        rate_str = f"{up}/{down}"
+                    rate_str = _build_rate_limit_string(pkg)
+                    if rate_str:
                         reply_attrs.append((26, _build_vsa_rate_limit(rate_str)))
                         logger.info(f"RADIUS Hotspot: rate '{rate_str}' untuk {uname!r}")
         except Exception as e:

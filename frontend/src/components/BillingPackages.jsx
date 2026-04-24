@@ -24,6 +24,12 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
     speed_down:         initial?.speed_down || "",
     service_type:       initial?.service_type || initial?.type || defaultServiceType,
     uptime_limit:       initial?.uptime_limit || "",
+    burst_limit_up:       initial?.burst_limit_up || "",
+    burst_limit_down:     initial?.burst_limit_down || "",
+    burst_threshold_up:   initial?.burst_threshold_up || "",
+    burst_threshold_down: initial?.burst_threshold_down || "",
+    burst_time_up:        initial?.burst_time_up || "",
+    burst_time_down:      initial?.burst_time_down || "",
     validity:           initial?.validity || "",
     billing_cycle:      initial?.billing_cycle || 30,
     active:             initial?.active ?? true,
@@ -69,6 +75,12 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
         enable_early_promo:   form.enable_early_promo,
         promo_amount:         Number(form.promo_amount) || 0,
         boost_duration_hours: Number(form.boost_duration_hours) || 24,
+        burst_limit_up:       form.burst_limit_up,
+        burst_limit_down:     form.burst_limit_down,
+        burst_threshold_up:   form.burst_threshold_up,
+        burst_threshold_down: form.burst_threshold_down,
+        burst_time_up:        form.burst_time_up,
+        burst_time_down:      form.burst_time_down,
       };
       if (isEdit) await api.put(`/billing/packages/${initial.id}`, payload);
       else        await api.post("/billing/packages", payload);
@@ -80,11 +92,12 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
 
   const FORM_TABS = [
     { id: "basic",   label: "Dasar"       },
+    { id: "burst",   label: "Burst",      badge: form.burst_limit_up || form.burst_limit_down },
     { id: "fup",     label: "FUP",        badge: form.fup_enabled       },
     { id: "night",   label: "Night Mode", badge: form.day_night_enabled },
     { id: "promo",   label: "Promo",      badge: form.enable_early_promo },
   ].filter(tab => {
-    if (defaultServiceType === "hotspot" && tab.id !== "basic") return false;
+    if (defaultServiceType === "hotspot" && tab.id !== "basic" && tab.id !== "burst") return false;
     return true;
   });
 
@@ -433,8 +446,17 @@ function PackageRow({ p, isAdmin, defaultServiceType, editPrice, setEditPrice, s
           <td className="px-3 py-2.5 text-[10px] text-muted-foreground font-mono">{p.validity || "—"}</td>
         </>
       )}
-      <td className="px-3 py-2.5 text-[10px] text-muted-foreground font-mono text-center">
-        {(p.speed_down || p.speed_up) ? (p.speed_down + "/" + p.speed_up) : "—"}
+      <td className="px-3 py-2.5 text-center">
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {(p.speed_down || p.speed_up) ? (p.speed_down + "/" + p.speed_up) : "—"}
+          </span>
+          {(p.burst_limit_down || p.burst_limit_up) && (
+            <span className="text-[8px] bg-secondary px-1 py-0.5 rounded-sm text-muted-foreground/80 mt-1 font-mono" title="Burst Configured">
+              +{p.burst_limit_down || p.burst_limit_up}
+            </span>
+          )}
+        </div>
       </td>
       <td className="px-3 py-2.5">
         {isAdmin ? (
