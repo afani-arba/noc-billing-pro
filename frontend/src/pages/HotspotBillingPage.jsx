@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/App";
 import { useAllowedDevices } from "@/hooks/useAllowedDevices";
-import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot, Upload, MapPin, FileUp, FileDown, PieChart, DollarSign, ToggleLeft, ToggleRight, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Edit, Save, RefreshCw, Send, CheckCircle2, Ticket, XCircle, Settings2, Package, Globe, Clock, MessageCircle, Activity, ShoppingCart, Loader2, Link2, Download, Zap, Wifi, WifiOff, ArrowRightLeft, Radio, AlertTriangle, AlertCircle, MessageSquare, Key, Image, ShieldCheck, CreditCard, Printer, BarChart2, List, TrendingUp, CheckCircle, Ban, Banknote, Landmark, QrCode, Bot, Upload, UploadCloud, MapPin, FileUp, FileDown, PieChart, DollarSign, ToggleLeft, ToggleRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
