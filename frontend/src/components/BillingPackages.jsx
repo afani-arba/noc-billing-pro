@@ -211,6 +211,61 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
             </>
           )}
 
+          {/* ── TAB BURST ───────────────────────────────── */}
+          {formTab === "burst" && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between p-3 bg-secondary/30 rounded-sm border border-border">
+                <div>
+                  <p className="text-xs font-semibold">Native MikroTik Burst</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Konfigurasi parameter Burst Limit, Threshold, dan Time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Limit (Upload)</Label>
+                    <Input value={form.burst_limit_up} onChange={e => set("burst_limit_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="30M" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Limit (Download)</Label>
+                    <Input value={form.burst_limit_down} onChange={e => set("burst_limit_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="30M" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Threshold (Upload)</Label>
+                    <Input value={form.burst_threshold_up} onChange={e => set("burst_threshold_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="15M" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Threshold (Download)</Label>
+                    <Input value={form.burst_threshold_down} onChange={e => set("burst_threshold_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="15M" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Time (Upload)</Label>
+                    <Input value={form.burst_time_up} onChange={e => set("burst_time_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Burst Time (Download)</Label>
+                    <Input value={form.burst_time_down} onChange={e => set("burst_time_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="10" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── TAB FUP ───────────────────────────────── */}
           {formTab === "fup" && (
             <div className="space-y-4">
