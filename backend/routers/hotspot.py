@@ -107,7 +107,7 @@ async def list_hotspot_vouchers(
     search: str = Query(""),
     device_id: str = Query(""),
     status: str = Query(""),
-    limit: int = Query(500),
+    limit: int = Query(5000),
     user=Depends(get_current_user),
 ):
     db = get_db()
@@ -849,12 +849,13 @@ async def import_mikrotik_hotspot_vouchers(
         logger.error(f"[hotspot-import] Gagal ambil data dari MikroTik: {e}")
         raise HTTPException(500, f"Gagal terhubung ke MikroTik: {e}")
 
-    # Buat peta profile -> price
+    # Buat peta profile -> price dan validity
     packages = await db.billing_packages.find(
         {"source_device_id": device_id, "type": {"$in": ["hotspot", "both"]}},
-        {"_id": 0, "profile_name": 1, "price": 1}
+        {"_id": 0, "profile_name": 1, "price": 1, "validity": 1}
     ).to_list(1000)
     profile_price_map = {p.get("profile_name"): p.get("price", 0) for p in packages if p.get("profile_name")}
+    profile_validity_map = {p.get("profile_name"): p.get("validity", "") for p in packages if p.get("profile_name")}
 
     created, skipped, failed = [], [], []
 
@@ -863,22 +864,35 @@ async def import_mikrotik_hotspot_vouchers(
         if not username or username == "default-trial":
             continue
         
+        profile = (u.get("profile") or "default").strip()
+        price = profile_price_map.get(profile, 0)
+        validity_str = profile_validity_map.get(profile, "")
+        
         existing = await db.hotspot_vouchers.find_one({"username": username, "device_id": device_id})
         if existing:
+            # Perbarui masa aktif/harga jika sebelumnya kosong agar voucher lama ikut terupdate
+            updates = {}
+            if not existing.get("validity") and validity_str:
+                updates["validity"] = validity_str
+                updates["validity_secs"] = _parse_uptime_to_secs(validity_str)
+            if not existing.get("price") and price > 0:
+                updates["price"] = price
+            
+            if updates:
+                await db.hotspot_vouchers.update_one({"_id": existing["_id"]}, {"$set": updates})
+                
             skipped.append(username)
             continue
             
         try:
             password     = (u.get("password") or "").strip()
-            profile      = (u.get("profile") or "default").strip()
             uptime_limit = (u.get("limit-uptime") or "").strip()
             uptime_used  = (u.get("uptime") or "").strip()
             comment      = (u.get("comment") or "").strip()
             
-            price = profile_price_map.get(profile, 0)
-            
             used_uptime_secs = _parse_uptime_to_secs(uptime_used)
             limit_uptime_secs = _parse_uptime_to_secs(uptime_limit)
+            validity_secs = _parse_uptime_to_secs(validity_str)
             
             status = "new"
             if used_uptime_secs > 0:
@@ -889,10 +903,10 @@ async def import_mikrotik_hotspot_vouchers(
             doc = {
                 "id": str(uuid.uuid4()), "username": username, "password": password,
                 "profile": profile, "device_id": device_id, "router_name": device_name,
-                "status": status, "price": price, "uptime_limit": uptime_limit, "validity": "",
+                "status": status, "price": price, "uptime_limit": uptime_limit, "validity": validity_str,
                 "comment": comment, "session_start_time": None, "used_uptime_secs": used_uptime_secs,
                 "limit_uptime_secs": limit_uptime_secs,
-                "validity_secs": 0,
+                "validity_secs": validity_secs,
                 "created_at": _now(), "updated_at": _now(),
             }
             await db.hotspot_vouchers.insert_one(doc)
