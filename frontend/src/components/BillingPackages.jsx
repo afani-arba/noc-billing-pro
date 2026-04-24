@@ -92,12 +92,12 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
 
   const FORM_TABS = [
     { id: "basic",   label: "Dasar"       },
-    { id: "burst",   label: "Burst",      badge: form.burst_limit_up || form.burst_limit_down },
     { id: "fup",     label: "FUP",        badge: form.fup_enabled       },
     { id: "night",   label: "Night Mode", badge: form.day_night_enabled },
     { id: "promo",   label: "Promo",      badge: form.enable_early_promo },
   ].filter(tab => {
-    if (defaultServiceType === "hotspot" && tab.id !== "basic" && tab.id !== "burst") return false;
+    // Hotspot hanya tampil tab Dasar saja (FUP/Night/Promo tidak relevan)
+    if (defaultServiceType === "hotspot" && tab.id !== "basic") return false;
     return true;
   });
 
@@ -180,6 +180,48 @@ export function PackageForm({ initial, onClose, onSaved, defaultServiceType = "p
                     className="h-8 rounded-sm text-xs font-mono" placeholder="20M" />
                 </div>
               </div>
+              {/* ── Burst Limit (tampil di tab Dasar untuk kemudahan akses) ── */}
+              <div className="pt-1 border-t border-border/40">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">⚡ Burst Limit (Opsional)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Limit Upload</Label>
+                    <Input value={form.burst_limit_up} onChange={e => set("burst_limit_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="30M" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Limit Download</Label>
+                    <Input value={form.burst_limit_down} onChange={e => set("burst_limit_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="30M" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Threshold Upload</Label>
+                    <Input value={form.burst_threshold_up} onChange={e => set("burst_threshold_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="15M" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Threshold Download</Label>
+                    <Input value={form.burst_threshold_down} onChange={e => set("burst_threshold_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="15M" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Time Upload (detik)</Label>
+                    <Input value={form.burst_time_up} onChange={e => set("burst_time_up", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="10" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground">Burst Time Download (detik)</Label>
+                    <Input value={form.burst_time_down} onChange={e => set("burst_time_down", e.target.value)}
+                      className="h-8 rounded-sm text-xs font-mono" placeholder="10" />
+                  </div>
+                </div>
+                {(form.burst_limit_up || form.burst_limit_down) && (
+                  <p className="text-[9px] text-primary/70 mt-1.5">
+                    ⚡ MikroTik rate-limit: <span className="font-mono">{form.speed_up||"?"}/{form.speed_down||"?"} {form.burst_limit_up||"0"}/{form.burst_limit_down||"0"} {form.burst_threshold_up||"0"}/{form.burst_threshold_down||"0"} {form.burst_time_up||"0"}/{form.burst_time_down||"0"}</span>
+                  </p>
+                )}
+              </div>
+
               {!isEdit && form.service_type !== "hotspot" && (
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
