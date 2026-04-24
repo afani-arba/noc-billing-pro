@@ -187,7 +187,7 @@ class MikroTikRestAPI(MikroTikBase):
         # Support format host:port — parse terlebih dahulu agar tidak double-port
         parsed_host, parsed_port = parse_host_port(host, default_port=port)
         self.host = parsed_host
-        self.port = parsed_port if parsed_port is not None else port
+        self.port = int(parsed_port) if parsed_port is not None else int(port)
         self.use_ssl = use_ssl
 
         scheme = "https" if use_ssl else "http"
@@ -1577,7 +1577,7 @@ class MikroTikLegacyAPI(MikroTikBase):
         self.host = host
         self.username = username
         self.password = password
-        self.port = port
+        self.port = int(port) if port else 8728
         self.use_ssl = use_ssl
         self.plaintext_login = plaintext_login
 
@@ -2818,7 +2818,7 @@ async def discover_device(device: dict) -> dict:
             host=parsed_host,
             username=device.get("api_username", "admin"),
             password=device.get("api_password", ""),
-            port=api_port,
+            port=int(api_port),
             use_ssl=device.get("api_ssl", False),
             plaintext_login=device.get("api_plaintext_login", True),
         )
@@ -2885,7 +2885,7 @@ def get_api_client(device: dict) -> MikroTikBase:
             host=parsed_host,
             username=device.get("api_username", "admin"),
             password=device.get("api_password", ""),
-            port=port,
+            port=int(port),
             use_ssl=device.get("api_ssl", False),
             plaintext_login=device.get("api_plaintext_login", True),
         )
@@ -2899,6 +2899,6 @@ def get_api_client(device: dict) -> MikroTikBase:
             host=parsed_host,
             username=device.get("api_username", "admin"),
             password=device.get("api_password", ""),
-            port=port,
+            port=int(port),
             use_ssl=use_https,
         )
