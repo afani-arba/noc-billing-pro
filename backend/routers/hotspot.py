@@ -106,18 +106,19 @@ class BatchDeleteRequest(BaseModel):
     voucher_ids: list[str]
 
 
-@router.get("/hotspot-vouchers", dependencies=[Depends(require_enterprise)])
-async def list_hotspot_vouchers(
-    search: str = Query(""),
+@router.get("/hotspot-vouchers/stats", dependencies=[Depends(require_enterprise)])
+async def get_hotspot_voucher_stats(
     device_id: str = Query(""),
-    status: str = Query(""),
-    limit: int = Query(5000),
     user=Depends(get_current_user),
 ):
+    """
+    Mengembalikan agregat jumlah voucher per status langsung dari database.
+    Digunakan oleh summary cards di frontend agar tidak tergantung pagination.
+    """
     db = get_db()
     q = {}
 
-    # ΓÇöΓÇöΓÇö RBAC: filter berdasarkan allowed_devices user ΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇöΓÇö
+    # RBAC: filter berdasarkan allowed_devices user
     scope = get_user_allowed_devices(user)  # None = admin (semua)
     if scope is None:
         if device_id:
@@ -127,7 +128,51 @@ async def list_hotspot_vouchers(
         if device_id:
             allowed = [d for d in scope if d == device_id]
         if not allowed:
-            return []
+            return {"total": 0, "active": 0, "offline": 0, "expired": 0, "new": 0, "disabled": 0}
+        q["device_id"] = {"$in": allowed}
+
+    # Aggregation: group by status
+    pipeline = [
+        {"$match": q},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    rows = await db.hotspot_vouchers.aggregate(pipeline).to_list(20)
+    counts = {row["_id"]: row["count"] for row in rows if row["_id"]}
+
+    total = sum(counts.values())
+    return {
+        "total": total,
+        "active": counts.get("active", 0),
+        "offline": counts.get("offline", 0),
+        "expired": counts.get("expired", 0),
+        "new": counts.get("new", 0),
+        "disabled": counts.get("disabled", 0),
+    }
+
+
+@router.get("/hotspot-vouchers", dependencies=[Depends(require_enterprise)])
+async def list_hotspot_vouchers(
+    search: str = Query(""),
+    device_id: str = Query(""),
+    status: str = Query(""),
+    page: int = Query(1, ge=1),
+    limit: int = Query(200, ge=1, le=5000),
+    user=Depends(get_current_user),
+):
+    db = get_db()
+    q = {}
+
+    # ┈┈┈┈ RBAC: filter berdasarkan allowed_devices user ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+    scope = get_user_allowed_devices(user)  # None = admin (semua)
+    if scope is None:
+        if device_id:
+            q["device_id"] = device_id
+    else:
+        allowed = scope
+        if device_id:
+            allowed = [d for d in scope if d == device_id]
+        if not allowed:
+            return {"data": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
         q["device_id"] = {"$in": allowed}
 
     if status:
@@ -138,7 +183,9 @@ async def list_hotspot_vouchers(
             {"profile": {"$regex": search, "$options": "i"}},
         ]
 
-    vouchers = await db.hotspot_vouchers.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    total_count = await db.hotspot_vouchers.count_documents(q)
+    skip = (page - 1) * limit
+    vouchers = await db.hotspot_vouchers.find(q, {"_id": 0}).sort([("status", 1), ("created_at", -1)]).skip(skip).limit(limit).to_list(limit)
 
     # Enrich with device name
     device_ids = list({v["device_id"] for v in vouchers if v.get("device_id")})
@@ -150,13 +197,13 @@ async def list_hotspot_vouchers(
     now_utc = datetime.now(timezone.utc)
     result = []
     for v in vouchers:
-        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "ΓÇö"))
+        v["router_name"] = devices_map.get(v.get("device_id", ""), v.get("device_id", "—"))
 
         limit_uptime  = int(v.get("limit_uptime_secs", 0))
         used_uptime   = int(v.get("used_uptime_secs", 0))
         validity_secs = int(v.get("validity_secs", 0))
         
-        # ΓöÇΓöÇ FIX: Fallback untuk voucher yang tidak tergenerate secs-nya (misal dari Moota/Portal)
+        # ── FIX: Fallback untuk voucher yang tidak tergenerate secs-nya (misal dari Moota/Portal)
         if validity_secs <= 0 and v.get("validity"):
             validity_secs = _parse_uptime_to_secs(v.get("validity"))
             v["validity_secs"] = validity_secs
@@ -165,7 +212,7 @@ async def list_hotspot_vouchers(
             limit_uptime = _parse_uptime_to_secs(v.get("uptime_limit"))
             v["limit_uptime_secs"] = limit_uptime
 
-        # ΓöÇΓöÇ Sisa Uptime (hitung mundur, BERHENTI saat offline) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # ── Sisa Uptime (hitung mundur, BERHENTI saat offline) ────────────
         current_sess_elapsed = 0
         last_sess_start = v.get("last_session_start")
         if last_sess_start and v.get("status") == "active":
@@ -186,7 +233,7 @@ async def list_hotspot_vouchers(
             v["total_used_uptime_secs"] = used_uptime
             v["current_sess_elapsed"]   = 0
 
-        # ΓöÇΓöÇ Sisa Validitas (berjalan TERUS sejak first_login) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+        # ── Sisa Validitas (berjalan TERUS sejak first_login) ───────────────
         first_login = v.get("first_login_time")
         
         # ALIAS untuk kompatibilitas dengan Frontend: 
@@ -207,7 +254,13 @@ async def list_hotspot_vouchers(
 
         result.append(v)
 
-    return result
+    return {
+        "data": result,
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_count + limit - 1) // limit
+    }
 
 
 @router.put("/hotspot-vouchers/{voucher_id}", dependencies=[Depends(require_enterprise)])

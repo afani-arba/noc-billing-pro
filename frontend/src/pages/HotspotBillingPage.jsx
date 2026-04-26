@@ -93,6 +93,12 @@ export default function HotspotBillingPage() {
   const [vouchers, setVouchers]         = useState([]);
   const [vLoading, setVLoading]         = useState(false);
   const [vSearch, setVSearch]           = useState("");
+  const [vPage, setVPage]               = useState(1);
+  const [vLimit, setVLimit]             = useState(200);
+  const [vTotal, setVTotal]             = useState(0);
+  const [vTotalPages, setVTotalPages]   = useState(0);
+  // Stats dari DB (bukan dari halaman saat ini)
+  const [vStats, setVStats]             = useState({ total: 0, active: 0, offline: 0, expired: 0, new: 0, disabled: 0 });
   const [sales, setSales]               = useState([]);
   const [salesLoading, setSalesLoading] = useState(false);
   const [generating, setGenerating]     = useState(false);
@@ -232,16 +238,31 @@ export default function HotspotBillingPage() {
     finally { setSettingsLoading(false); }
   };
 
-  const fetchVouchers = useCallback(async (silent = false) => {
-    if (!silent) setVLoading(true);
+  const fetchVoucherStats = useCallback(async () => {
     try {
       const params = {};
+      if (selectedDevice) params.device_id = selectedDevice;
+      const r = await api.get("/hotspot-vouchers/stats", { params });
+      setVStats(r.data || { total: 0, active: 0, offline: 0, expired: 0, new: 0, disabled: 0 });
+    } catch { /* silent fail */ }
+  }, [selectedDevice]);
+
+  const fetchVouchers = useCallback(async (silent = false) => {
+    if (!silent) setVLoading(true);
+    // Selalu refresh stats dari DB saat fetch vouchers
+    fetchVoucherStats();
+    try {
+      const params = { page: vPage, limit: vLimit };
       if (vSearch) params.search = vSearch;
+      if (selectedDevice) params.device_id = selectedDevice;
       
       const r = await api.get("/hotspot-vouchers", { params });
-      const newData = r.data || [];
+      const newData = r.data?.data || [];
       const nowTs = Date.now();
       
+      setVTotal(r.data?.total || 0);
+      setVTotalPages(r.data?.total_pages || 0);
+
       setVouchers(prev => {
         // Optimistic Merge: If server data is stale (lower or equal uptime than local calculation)
         // we "sticky" our local calculation into the new data to prevent the timer "jumping back".
@@ -272,7 +293,12 @@ export default function HotspotBillingPage() {
       lastFetchTime.current = nowTs;
     } catch { toast.error("Gagal memuat data voucher"); }
     finally { setVLoading(false); }
-  }, [vSearch]);
+  }, [vSearch, vPage, vLimit, selectedDevice, fetchVoucherStats]);
+
+  // Reset page when search or device changes
+  useEffect(() => {
+    setVPage(1);
+  }, [vSearch, selectedDevice]);
 
   const fetchSales = useCallback(async (silent = false) => {
     if (!silent) setSalesLoading(true);
@@ -588,9 +614,10 @@ export default function HotspotBillingPage() {
     return localDt === todayStr;
   });
   const todayRevenue = todayStats.reduce((s, x) => s + (parseFloat(x.price) || 0), 0);
-  const vOnline  = vouchers.filter(v => v.status === "active").length;
-  const vOffline = vouchers.filter(v => v.session_start_time && v.status !== "active" && v.status !== "expired").length;
-  const vExpired = vouchers.filter(v => v.status === "expired").length;
+  // Statistik diambil dari DB (vStats), bukan dari array halaman
+  const vOnline  = vStats.active;
+  const vOffline = vStats.offline;
+  const vExpired = vStats.expired;
 
   const fmtDt = (s) => s ? new Date(s).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : "—";
 
@@ -997,7 +1024,7 @@ export default function HotspotBillingPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <SummaryCard icon={RpIcon} label="Total Voucher" value={vouchers.length} color="bg-blue-500/20 text-blue-400" />
+              <SummaryCard icon={RpIcon} label="Total Voucher" value={vStats.total} color="bg-blue-500/20 text-blue-400" />
               <SummaryCard icon={WifiOff} label="OFFLINE" value={vOffline} color="bg-purple-500/20 text-purple-400" />
               <SummaryCard icon={CheckCircle2} label="Aktif" value={vOnline} color="bg-green-500/20 text-green-400" />
               <SummaryCard icon={XCircle} label="Kadaluarsa" value={vExpired} color="bg-red-500/20 text-red-400" />
@@ -1207,6 +1234,48 @@ export default function HotspotBillingPage() {
                     ))}
                   </tbody>
                 </table>
+                {/* Pagination */}
+                {vTotal > 0 && (
+                  <div className="flex items-center justify-between p-3 border-t border-border/50 bg-muted/10 flex-wrap gap-3">
+                    <div className="text-xs text-muted-foreground flex items-center gap-3">
+                      <span>Menampilkan <span className="font-semibold text-foreground">{vouchers.length}</span> dari <span className="font-semibold text-foreground">{vTotal}</span> voucher</span>
+                      <select 
+                        value={vLimit} 
+                        onChange={e => { setVLimit(Number(e.target.value)); setVPage(1); }}
+                        className="h-7 rounded text-xs bg-background border border-border px-1"
+                      >
+                        <option value={50}>50 per hal</option>
+                        <option value={100}>100 per hal</option>
+                        <option value={500}>500 per hal</option>
+                      </select>
+                    </div>
+                    {vTotalPages > 1 && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setVPage(p => Math.max(1, p - 1))}
+                          disabled={vPage === 1}
+                        >
+                          &lt; Prev
+                        </Button>
+                        <span className="text-xs font-semibold px-2">
+                          {vPage} / {vTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setVPage(p => Math.min(vTotalPages, p + 1))}
+                          disabled={vPage === vTotalPages}
+                        >
+                          Next &gt;
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

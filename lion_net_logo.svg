@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -20 580 140" width="100%" height="100%">
+  <defs>
+    <!-- Drop shadow -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+
+    <!-- Blue Gradient -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4FACFE" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+  </defs>
+
+  <g fill="url(#blueGrad)" stroke="#061324" stroke-width="24" stroke-linejoin="miter" stroke-miterlimit="2" paint-order="stroke fill" filter="url(#shadow)" fill-rule="evenodd">
+    <!-- L -->
+    <path transform="translate(0, 0)" d="M 10,0 L 24,0 L 24,76 L 60,76 L 60,90 L 50,100 L 10,100 L 0,90 L 0,10 Z" />
+    <!-- I -->
+    <path transform="translate(72, 0)" d="M 10,0 L 14,0 L 24,10 L 24,90 L 14,100 L 10,100 L 0,90 L 0,10 Z" />
+    <!-- O -->
+    <path transform="translate(108, 0)" d="M 20,0 L 50,0 L 70,20 L 70,80 L 50,100 L 20,100 L 0,80 L 0,20 Z M 30,24 L 24,30 L 24,70 L 30,76 L 40,76 L 46,70 L 46,30 L 40,24 Z" />
+    <!-- N -->
+    <path transform="translate(190, 0)" d="M 10,0 L 24,0 L 46,50 L 46,10 L 56,0 L 70,0 L 70,90 L 60,100 L 46,100 L 24,50 L 24,90 L 14,100 L 0,100 L 0,10 Z" />
+    <!-- . -->
+    <path transform="translate(272, 0)" d="M 8,76 L 16,76 L 24,84 L 24,92 L 16,100 L 8,100 L 0,92 L 0,84 Z" />
+    <!-- N -->
+    <path transform="translate(308, 0)" d="M 10,0 L 24,0 L 46,50 L 46,10 L 56,0 L 70,0 L 70,90 L 60,100 L 46,100 L 24,50 L 24,90 L 14,100 L 0,100 L 0,10 Z" />
+    <!-- E -->
+    <path transform="translate(390, 0)" d="M 10,0 L 50,0 L 60,10 L 60,24 L 24,24 L 24,38 L 45,38 L 45,62 L 24,62 L 24,76 L 60,76 L 60,90 L 50,100 L 10,100 L 0,90 L 0,10 Z" />
+    <!-- T -->
+    <path transform="translate(462, 0)" d="M 10,0 L 60,0 L 70,10 L 70,24 L 47,24 L 47,90 L 37,100 L 33,100 L 23,90 L 23,24 L 0,24 L 0,10 Z" />
+  </g>
+</svg>

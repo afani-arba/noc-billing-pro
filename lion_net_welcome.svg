@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 280" width="100%" height="100%">
+  <defs>
+    <!-- Gradient for Welcome Text (Purple to Cyan) -->
+    <linearGradient id="welcomeGrad" x1="50" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6E38FF" />
+      <stop offset="100%" stop-color="#00C3FF" />
+    </linearGradient>
+
+    <!-- Gradient for Geometric LION NET (Cyan to Purple) -->
+    <linearGradient id="logoGrad" x1="400" y1="50" x2="800" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00C3FF" />
+      <stop offset="100%" stop-color="#6E38FF" />
+    </linearGradient>
+
+    <!-- Soft Cyan Glow for Welcome Text -->
+    <filter id="welcomeGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#00C3FF" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- LEFT SIDE: Welcome & Wi-Fi -->
+  <g id="left-block">
+    <!-- Welcome Text -->
+    <text x="230" y="115" font-family="'Cooper Black', Georgia, 'Times New Roman', serif" font-weight="900" font-size="85" fill="url(#welcomeGrad)" text-anchor="middle" filter="url(#welcomeGlow)">Welcome</text>
+    
+    <!-- Red Wi-Fi Logo -->
+    <g transform="translate(230, 205)">
+      <!-- Center Ellipse -->
+      <ellipse cx="0" cy="0" rx="42" ry="28" fill="#FF0000" />
+      <text x="0" y="7" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="20" fill="#FFFFFF" text-anchor="middle">Wi Fi</text>
+      
+      <!-- Left Arcs -->
+      <path d="M -52,-25 A 35,35 0 0,0 -52,25" stroke="#FF0000" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <path d="M -72,-45 A 55,55 0 0,0 -72,45" stroke="#FF0000" stroke-width="8" fill="none" stroke-linecap="round"/>
+      
+      <!-- Right Arcs -->
+      <path d="M 52,-25 A 35,35 0 0,1 52,25" stroke="#FF0000" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <path d="M 72,-45 A 55,55 0 0,1 72,45" stroke="#FF0000" stroke-width="8" fill="none" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- RIGHT SIDE: Custom Geometric LION NET -->
+  <g id="right-block" fill-rule="evenodd">
+    <!-- Massive Geometric LION -->
+    <g transform="translate(448, 50) skewX(-20)" fill="url(#logoGrad)">
+      <!-- L -->
+      <path d="M 0,0 L 35,0 L 35,85 L 80,85 L 80,120 L 0,120 Z" />
+      <!-- I -->
+      <path d="M 100,0 L 135,0 L 135,120 L 100,120 Z" />
+      <!-- O -->
+      <path d="M 155,0 L 240,0 L 240,120 L 155,120 Z M 190,35 L 190,85 L 205,85 L 205,35 Z" />
+      <!-- N -->
+      <path d="M 260,0 L 295,0 L 310,85 L 310,0 L 345,0 L 345,120 L 310,120 L 295,35 L 295,120 L 260,120 Z" />
+    </g>
+
+    <!-- Bold NET below -->
+    <g transform="translate(543, 190) skewX(-20)" fill="url(#logoGrad)">
+      <!-- N -->
+      <path d="M 0,0 L 16,0 L 30,34 L 30,0 L 46,0 L 46,50 L 30,50 L 16,16 L 16,50 L 0,50 Z" />
+      <!-- E -->
+      <path d="M 58,0 L 96,0 L 96,14 L 74,14 L 74,18 L 90,18 L 90,32 L 74,32 L 74,36 L 96,36 L 96,50 L 58,50 Z" />
+      <!-- T -->
+      <path d="M 108,0 L 154,0 L 154,14 L 139,14 L 139,50 L 123,50 L 123,14 L 108,14 Z" />
+    </g>
+  </g>
+</svg>

@@ -141,7 +141,7 @@ async def _sync_hotspot_sessions(db):
         # Kumpulkan semua device_id yang punya voucher aktif/offline
         device_ids = await db.hotspot_vouchers.distinct(
             "device_id",
-            {"status": {"$in": ["active", "offline"]}}
+            {"status": {"$in": ["active", "offline", "new"]}}
         )
         if not device_ids:
             return
@@ -166,8 +166,8 @@ async def _sync_hotspot_sessions(db):
 
             # Ambil voucher untuk device ini
             vouchers = await db.hotspot_vouchers.find(
-                {"device_id": device_id, "status": {"$in": ["active", "offline"]}}
-            ).to_list(5000)
+                {"device_id": device_id, "status": {"$in": ["active", "offline", "new"]}}
+            ).to_list(10000)
 
             went_offline = 0
             went_online  = 0
@@ -206,17 +206,22 @@ async def _sync_hotspot_sessions(db):
                     went_offline += 1
                     logger.debug(f"[SessionSync] {username} -> OFFLINE (+{extra_secs}s, total={new_used}s)")
 
-                elif cur_status == "offline" and is_in_mt:
+                elif cur_status in ["offline", "new"] and is_in_mt:
+                    update_data = {
+                        "status":             "active",
+                        "last_session_start": now_iso,
+                        "updated_at":         now_iso,
+                    }
+                    if cur_status == "new":
+                        update_data["first_login_time"] = now_iso
+                        update_data["activated_at"] = now_iso
+                        
                     await db.hotspot_vouchers.update_one(
                         {"_id": v["_id"]},
-                        {"$set": {
-                            "status":             "active",
-                            "last_session_start": now_iso,
-                            "updated_at":         now_iso,
-                        }}
+                        {"$set": update_data}
                     )
                     went_online += 1
-                    logger.debug(f"[SessionSync] {username} -> ACTIVE (reconnect via poll)")
+                    logger.debug(f"[SessionSync] {username} -> ACTIVE (reconnect/first login via poll)")
 
             if went_offline or went_online:
                 logger.info(
