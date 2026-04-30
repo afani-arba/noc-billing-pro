@@ -83,6 +83,10 @@ from routers.voucher_pdf import router as voucher_pdf_router
 from routers.hotspot import router as hotspot_router
 # monitoring pppoe
 from routers.pppoe_monitoring import router as pppoe_monitoring_router
+# Zapret DPI Bypass
+from routers.zapret import router as zapret_router
+# Network Tuning (SQM, Conntrack, MSS, Raw FW, Latency, Interface Health)
+from routers.network_tuning import router as network_tuning_router
 
 _background_tasks: list = []
 
@@ -318,6 +322,36 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"BGP Steering error: {e}")
 
+    # Zapret DPI Bypass Monitor
+    if _svc("ENABLE_ZAPRET_MONITOR"):
+        try:
+            from services.zapret_monitor import zapret_monitor_loop
+            t = asyncio.create_task(zapret_monitor_loop())
+            _background_tasks.append(t)
+            logger.info("Zapret DPI Bypass monitor started")
+        except Exception as e:
+            logger.error(f"Zapret monitor error: {e}")
+
+    # Latency Monitor (ping dari router ke gateway ISP)
+    if _svc("ENABLE_LATENCY_MONITOR"):
+        try:
+            from services.latency_monitor import latency_monitor_loop
+            t = asyncio.create_task(latency_monitor_loop())
+            _background_tasks.append(t)
+            logger.info("Latency Monitor started (30s interval)")
+        except Exception as e:
+            logger.error(f"Latency monitor error: {e}")
+
+    # Interface Health Monitor (CRC, errors, SFP)
+    if _svc("ENABLE_IFACE_HEALTH_MONITOR"):
+        try:
+            from services.interface_health_monitor import interface_health_monitor_loop
+            t = asyncio.create_task(interface_health_monitor_loop())
+            _background_tasks.append(t)
+            logger.info("Interface Health Monitor started (60s interval)")
+        except Exception as e:
+            logger.error(f"Interface health monitor error: {e}")
+
     # App Traffic Metrics Poller (Global ISP per-App bandwidth counter)
     if _svc("ENABLE_BGP_STEERING"):
         try:
@@ -530,6 +564,8 @@ api.include_router(client_portal_router)
 
 # ── 10 & 11. Sentinel Peering Eye + BGP Content Steering ──────────────────
 api.include_router(peering_eye_router)
+api.include_router(zapret_router)
+api.include_router(network_tuning_router)
 
 # ── 12. Pengaturan Platform ────────────────────────────────────────────────
 api.include_router(system_router)

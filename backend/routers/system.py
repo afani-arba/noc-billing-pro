@@ -105,7 +105,11 @@ async def check_update(user=Depends(require_admin)):
                         latest_date = latest_date.replace("T", " ").replace("Z", "")
                         break
         
-        container_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
+        try:
+            with open("/update-data/version.txt", "r") as f:
+                container_commit = f.read().strip()
+        except Exception:
+            container_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
         
         if is_docker:
             # Jika hash commit container sama dengan github, tidak ada update
@@ -400,7 +404,11 @@ async def app_info():
     try:
         import shutil
         if not shutil.which("git"):
-            container_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
+            try:
+                with open("/update-data/version.txt", "r") as f:
+                    container_commit = f.read().strip()
+            except Exception:
+                container_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
             return {"commit": container_commit, "message": "Docker Deployment", "date": "-", "version": "v3.0", "service_name": svc_name}
 
         commit = subprocess.run(

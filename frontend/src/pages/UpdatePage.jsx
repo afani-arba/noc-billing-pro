@@ -146,7 +146,7 @@ export default function UpdatePage() {
     const localStartTime = Date.now();
     let errCount = 0;
     let restartMsgShown = false;
-    const MAX_ERR = 6;
+    const MAX_ERR = 90; // Toleransi 90 * 2 detik = 3 menit (untuk build process)
 
     const doSuccess = () => {
       clearInterval(pollRef.current);
@@ -187,7 +187,7 @@ export default function UpdatePage() {
         if (
           !d.running && !d.done &&
           serverElapsed < 5 &&
-          localElapsed > 30 &&
+          localElapsed > 45 &&
           d.log?.length === 0
         ) {
           setLog(prev => [...prev, "✅ Server berhasil di-restart! Update selesai."]);
@@ -214,7 +214,7 @@ export default function UpdatePage() {
         if (serverElapsed > 0) setElapsed(serverElapsed);
 
       } catch {
-        // Skenario 2: server sedang restart (network error)
+        // Skenario 2: server sedang restart/build (network error)
         errCount += 1;
 
         if (errCount === 2 && !restartMsgShown) {
@@ -222,12 +222,12 @@ export default function UpdatePage() {
           setLog(prev => {
             const last = prev[prev.length - 1] || "";
             if (last.includes("Menunggu")) return prev;
-            return [...prev, "⏳ Menunggu server restart... (ini normal)"];
+            return [...prev, "⏳ Menunggu server mem-build dan restart... (bisa memakan waktu 1-3 menit)"];
           });
         }
 
         if (errCount >= MAX_ERR) {
-          setLog(prev => [...prev, "✅ Server berhasil di-restart! Update selesai."]);
+          setLog(prev => [...prev, "✅ Server kemungkinan sudah restart, atau build timeout. Coba refresh."]);
           doSuccess();
         }
       }

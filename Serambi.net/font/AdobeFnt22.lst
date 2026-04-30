@@ -1,0 +1,76 @@
+%!Adobe-FontList 1.22
+%Locale:0x809
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:TrueType
+FontName:Lato-Regular
+FamilyName:Lato
+StyleName:Regular
+FullName:Lato Regular
+MenuName:Lato
+StyleBits:0
+WritingScript:Roman
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\Lato-Regular.ttf
+DataFormat:sfntData
+hasSVG:no
+VariableFontType:NonVariableFont
+FileLength:75136
+FileModTime:1719820496
+WeightClass:400
+WidthClass:5
+AngleClass:0
+NameArray:0,Win,1,Lato
+%EndFont
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:Invalid
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\fontello.eot
+FileModTime:1602446918
+%EndFont
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:Invalid
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\fontello.svg
+FileModTime:1602446918
+%EndFont
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:TrueType
+FontName:fontello
+FamilyName:fontello
+StyleName:Regular
+FullName:fontello
+MenuName:fontello
+StyleBits:0
+WritingScript:Roman
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\fontello.ttf
+DataFormat:sfntData
+hasSVG:no
+VariableFontType:NonVariableFont
+FileLength:11028
+FileModTime:1602446918
+WeightClass:400
+WidthClass:5
+AngleClass:0
+NameArray:0,Mac,4,fontello
+NameArray:0,Win,1,fontello
+%EndFont
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:Invalid
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\fontello.woff
+FileModTime:1602446918
+%EndFont
+
+%BeginFont
+Handler:DirectoryHandler
+FontType:Invalid
+OutlineFileName:E:\Halaman Login Hotspot\miquel.net\Font\fontello.woff2
+FileModTime:1602446918
+%EndFont
+

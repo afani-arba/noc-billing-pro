@@ -46,8 +46,44 @@ else
     echo "GoBGP sudah terinstall."
 fi
 
-# 5. Install Docker & Docker Compose
-echo ">>> [5/6] Menginstall Docker & Docker Compose..."
+# 5. Install Zapret DPI Bypass
+echo ">>> [5/7] Menginstall Zapret DPI Bypass..."
+if [ ! -d "/opt/zapret" ]; then
+    cd /opt
+    wget -q https://github.com/bol-van/zapret/releases/latest/download/zapret.zip
+    unzip -q zapret.zip -d zapret
+    rm zapret.zip
+    cd zapret
+    
+    # Buat config default untuk ISP Indonesia
+    cat > /opt/zapret/config <<EOF
+# MODE: nfqws, tpws, tpws-socks, filter, custom
+MODE=nfqws
+# IP version: 4, 6, 46
+DISABLE_IPV4=0
+DISABLE_IPV6=1
+# FWTYPE: iptables, nftables, ipfw
+FWTYPE=nftables
+# nfqws options
+NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
+EOF
+    
+    # Link binaries
+    ./install_bin.sh || true
+    
+    # Setup systemd service
+    if [ -f "init.d/systemd/zapret.service" ]; then
+        cp init.d/systemd/zapret.service /etc/systemd/system/
+        systemctl daemon-reload
+        systemctl enable zapret
+        systemctl start zapret || true
+    fi
+else
+    echo "Zapret sudah terinstall."
+fi
+
+# 6. Install Docker & Docker Compose
+echo ">>> [6/7] Menginstall Docker & Docker Compose..."
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com -o get-docker.sh
     sh get-docker.sh
@@ -59,8 +95,8 @@ else
     echo "Docker sudah terinstall."
 fi
 
-# 6. Setup Repository & Deploy NOC Billing Pro
-echo ">>> [6/6] Melakukan Clone Repository..."
+# 7. Setup Repository & Deploy NOC Billing Pro
+echo ">>> [7/7] Melakukan Clone Repository..."
 
 cd /opt
 if [ -d "noc-billing-pro" ]; then
@@ -131,6 +167,7 @@ echo "Semua dependensi Host telah terinstall:"
 echo "- SSTP & L2TP/IPsec Clients"
 echo "- Cloudflared Tunnel"
 echo "- GoBGP (v3.26.0)"
+echo "- Zapret (DPI Bypass)"
 echo "- Docker & NOC Billing Pro Containerized Services"
 echo "---------------------------------------------------------"
 echo "Akses Dashboard  : http://${IP_VPS}"

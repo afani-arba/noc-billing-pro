@@ -52,6 +52,8 @@ const navItems = [
   { to: "/routing",        icon: Route,           label: "OSPF / Routes",          serviceKey: "routing",        nocOnly: true, billingProHide: true },
   { to: "/peering-eye",    icon: Radar,           label: "Sentinel Peering-Eye",   serviceKey: "peering_eye" },
   { to: "/bgp-steering",   icon: GitBranch,       label: "App Traffic & Steering", serviceKey: "bgp_steering" },
+  { to: "/zapret",         icon: Shield,          label: "Zapret DPI Bypass",      serviceKey: "zapret" },
+  { to: "/network-tuning", icon: Activity,        label: "Network Tuning",         serviceKey: "network_tuning" },
   { to: "/sdwan",          icon: Zap,             label: "Load Balance",           serviceKey: "sdwan",          nocOnly: true, billingProHide: true },
 
   // ── SYSTEM ADMINISTRATION ──

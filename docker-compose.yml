@@ -64,6 +64,9 @@ services:
       - ENABLE_HOTSPOT_CLEANUP=true
       # ── Core Monitoring ───────────────────────────────────────────
       - ENABLE_POLLING=true
+      - ENABLE_ZAPRET_MONITOR=true
+      - ENABLE_LATENCY_MONITOR=true
+      - ENABLE_IFACE_HEALTH_MONITOR=true
       - ENABLE_SSE=true
       - ENABLE_SYSLOG=true
       - ENABLE_BACKUP=true
@@ -268,6 +271,8 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       - |
+        apk add --no-cache git
+        git config --global --add safe.directory /app-host
         echo "noc-billing-pro updater siap memantau trigger update..."
         while true; do
 
@@ -277,17 +282,22 @@ services:
             rm -f /update-data/.update-trigger
             echo '{"done":false,"success":null}' > /update-data/.update-running
 
+            cd /app-host
+            echo "Menarik pembaruan dari GitHub..."
+            git pull origin main
+            git rev-parse --short HEAD > /update-data/version.txt
+            
             CF="/app-host/docker-compose.yml"
 
-            docker compose -f "$$CF" pull noc-backend noc-frontend
+            echo "Membangun ulang container..."
+            docker compose -f "$$CF" up -d --build noc-backend noc-frontend
             PE=$$?
 
             if [ $$PE -eq 0 ]; then
-              docker compose -f "$$CF" up -d --force-recreate noc-backend noc-frontend
               echo '{"done":true,"success":true}' > /update-data/.update-running
               echo "Update NOC Billing Pro selesai!"
             else
-              printf '{"done":true,"success":false,"error":"pull failed: exit %s"}' "$$PE" > /update-data/.update-running
+              printf '{"done":true,"success":false,"error":"build/pull failed: exit %s"}' "$$PE" > /update-data/.update-running
             fi
           fi
 
