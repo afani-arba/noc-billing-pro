@@ -42,7 +42,7 @@ const navItems = [
   // ── NOC & INFRASTRUCTURE ──
   { separator: true, label: "NOC Infrastructure", nocOnly: false },
   { to: "/devices",        icon: Server,          label: "Devices Hub",            serviceKey: "devices",        nocOnly: true },
-  { to: "/topology",       icon: GitBranch,       label: "Network Map",            serviceKey: "topology",       billingProHide: true },
+  { to: "/network-map",    icon: GitBranch,       label: "Network Map FTTH",       serviceKey: "network_map" },
   { to: "/ping",           icon: Activity,        label: "Network Ping Tool",      serviceKey: "ping",           billingProHide: true },
   { to: "/sla",            icon: BarChart2,       label: "SLA Monitor",            serviceKey: "sla",            billingProHide: true },
   { to: "/incidents",      icon: AlertTriangle,   label: "Incidents",              serviceKey: "incidents",      billingProHide: true },

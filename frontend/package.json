@@ -59,7 +59,9 @@
     "sigma": "^3.0.0",
     "graphology": "^0.25.4",
     "graphology-layout-forceatlas2": "^0.10.1",
-    "graphology-layout": "^0.6.1"
+    "graphology-layout": "^0.6.1",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^4.2.1"
   },
   "scripts": {
     "start": "vite",

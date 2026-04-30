@@ -87,6 +87,8 @@ from routers.pppoe_monitoring import router as pppoe_monitoring_router
 from routers.zapret import router as zapret_router
 # Network Tuning (SQM, Conntrack, MSS, Raw FW, Latency, Interface Health)
 from routers.network_tuning import router as network_tuning_router
+# Network Map (FTTH Topology: MikroTik → OLT → ODC → ODP → ONT)
+from routers.network_map import router as network_map_router
 
 _background_tasks: list = []
 
@@ -566,6 +568,7 @@ api.include_router(client_portal_router)
 api.include_router(peering_eye_router)
 api.include_router(zapret_router)
 api.include_router(network_tuning_router)
+api.include_router(network_map_router)
 
 # ── 12. Pengaturan Platform ────────────────────────────────────────────────
 api.include_router(system_router)

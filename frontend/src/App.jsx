@@ -50,6 +50,7 @@ const AdminPage               = lazy(() => import("@/pages/AdminPage"));
 const BgpSteeringPage         = lazy(() => import("@/pages/BgpSteeringPage"));
 const ZapretPage              = lazy(() => import("@/pages/ZapretPage"));
 const NetworkTuningPage       = lazy(() => import("@/pages/NetworkTuningPage"));
+const NetworkMapPage          = lazy(() => import("@/pages/NetworkMapPage"));
 const NotificationsPage       = lazy(() => import("@/pages/NotificationsPage"));
 const BackupsPage             = lazy(() => import("@/pages/BackupsPage"));
 const UpdatePage              = lazy(() => import("@/pages/UpdatePage"));
@@ -245,6 +246,7 @@ export default function App() {
                   <Route path="bgp-steering"           element={<BgpSteeringPage />} />
                   <Route path="zapret"                 element={<ZapretPage />} />
                   <Route path="network-tuning"          element={<NetworkTuningPage />} />
+                  <Route path="network-map"             element={<NetworkMapPage />} />
 
                   {/* 12. Pengaturan */}
                   <Route path="settings"               element={<SettingsPage />} />
