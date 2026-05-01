@@ -5,7 +5,7 @@ set -e
 export PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 echo "========================================================="
-echo "   Auto-Installer Ultimate NOC Billing Pro (Debian 12)   "
+echo "  Auto-Installer Ultimate NOC Billing Pro (Debian 12/13) "
 echo "========================================================="
 echo ""
 
@@ -18,7 +18,7 @@ fi
 # 1. Update OS & Install Dependensi Dasar
 echo ">>> [1/6] Mengupdate sistem dan dependensi inti..."
 apt-get update && apt-get upgrade -y
-apt-get install -y git curl wget ufw nano apt-transport-https ca-certificates software-properties-common gnupg2 procps util-linux
+apt-get install -y git curl wget ufw nano apt-transport-https ca-certificates gnupg2 procps util-linux
 
 # 2. Install VPN Clients (SSTP, L2TP, IPsec) & Network Tools
 echo ">>> [2/6] Menginstall VPN Clients (SSTP, L2TP/IPsec) dan Network Tools..."
