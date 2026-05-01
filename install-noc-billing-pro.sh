@@ -1,127 +1,165 @@
 #!/bin/bash
-set -e
 
-# Memastikan PATH memuat direktori sbin agar dpkg/apt berjalan lancar di Debian
+# =============================================================================
+#   Auto-Installer NOC Billing Pro - Debian 12/13 (Trixie) Compatible
+# =============================================================================
+# Memastikan PATH lengkap agar semua binary sistem ditemukan
 export PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# Warna output
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+ok()   { echo -e "${GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+fail() { echo -e "${RED}[FAIL]${NC} $1"; }
+info() { echo -e "${CYAN}>>>  $1${NC}"; }
+
+echo ""
 echo "========================================================="
-echo "  Auto-Installer Ultimate NOC Billing Pro (Debian 12/13) "
+echo "   Auto-Installer NOC Billing Pro (Debian 12/13)         "
 echo "========================================================="
 echo ""
 
-# Pastikan script dijalankan sebagai root
-if [ "$EUID" -ne 0 ]; then 
-  echo "Tolong jalankan script ini sebagai root (gunakan sudo)"
-  exit 1
+# Pastikan dijalankan sebagai root
+if [ "$EUID" -ne 0 ]; then
+    fail "Jalankan script ini sebagai root (gunakan: sudo bash install.sh)"
+    exit 1
 fi
 
-# 1. Update OS & Install Dependensi Dasar
-echo ">>> [1/6] Mengupdate sistem dan dependensi inti..."
-apt-get update && apt-get upgrade -y
-apt-get install -y git curl wget ufw nano apt-transport-https ca-certificates gnupg2 procps util-linux unzip
+# ─────────────────────────────────────────────────────────────
+# STEP 1: Update OS & Dependensi Dasar
+# ─────────────────────────────────────────────────────────────
+info "[1/7] Mengupdate sistem dan dependensi inti..."
+apt-get update -qq && apt-get upgrade -y -qq
+apt-get install -y -qq \
+    git curl wget ufw nano \
+    apt-transport-https ca-certificates \
+    gnupg2 procps util-linux unzip \
+    && ok "Dependensi dasar berhasil diinstall." \
+    || warn "Beberapa paket dasar gagal, lanjut..."
 
-# 2. Install VPN Clients (SSTP, L2TP, IPsec) & Network Tools
-echo ">>> [2/6] Menginstall VPN Clients (SSTP, L2TP/IPsec) dan Network Tools..."
-apt-get install -y sstp-client ppp xl2tpd strongswan iproute2 iptables kmod traceroute iputils-ping
+# ─────────────────────────────────────────────────────────────
+# STEP 2: Install VPN Clients & Network Tools
+# ─────────────────────────────────────────────────────────────
+info "[2/7] Menginstall VPN & Network Tools..."
+# Install satu per satu agar 1 paket gagal tidak blokir yang lain
+for PKG in ppp strongswan iproute2 iptables traceroute iputils-ping kmod xl2tpd sstp-client; do
+    apt-get install -y -qq "$PKG" 2>/dev/null \
+        && ok "  $PKG installed" \
+        || warn "  $PKG tidak tersedia di repo Debian 13, dilewati."
+done
 
-# 3. Install Cloudflared (Cloudflare Tunnel)
-echo ">>> [3/6] Menginstall Cloudflared..."
-if ! command -v cloudflared &> /dev/null; then
-    curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-    dpkg -i cloudflared.deb
-    rm cloudflared.deb
+# ─────────────────────────────────────────────────────────────
+# STEP 3: Install Cloudflared
+# ─────────────────────────────────────────────────────────────
+info "[3/7] Menginstall Cloudflared..."
+if ! command -v cloudflared &>/dev/null; then
+    ARCH=$(dpkg --print-architecture)
+    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}.deb" -o /tmp/cloudflared.deb \
+        && dpkg -i /tmp/cloudflared.deb \
+        && rm -f /tmp/cloudflared.deb \
+        && ok "Cloudflared berhasil diinstall." \
+        || warn "Cloudflared gagal diinstall, lanjut..."
 else
-    echo "Cloudflared sudah terinstall."
+    ok "Cloudflared sudah terinstall. ($(cloudflared --version 2>&1 | head -1))"
 fi
 
-# 4. Install GoBGP
-echo ">>> [4/6] Menginstall GoBGP..."
-if ! command -v gobgp &> /dev/null; then
-    wget -q https://github.com/osrg/gobgp/releases/download/v3.26.0/gobgp_3.26.0_linux_amd64.tar.gz
-    tar -xzf gobgp_3.26.0_linux_amd64.tar.gz
-    mv gobgp /usr/local/bin/
-    mv gobgpd /usr/local/bin/
-    rm -f gobgp_3.26.0_linux_amd64.tar.gz
+# ─────────────────────────────────────────────────────────────
+# STEP 4: Install GoBGP
+# ─────────────────────────────────────────────────────────────
+info "[4/7] Menginstall GoBGP..."
+if ! command -v gobgp &>/dev/null; then
+    GOBGP_VER="3.26.0"
+    wget -q "https://github.com/osrg/gobgp/releases/download/v${GOBGP_VER}/gobgp_${GOBGP_VER}_linux_amd64.tar.gz" -O /tmp/gobgp.tar.gz \
+        && tar -xzf /tmp/gobgp.tar.gz -C /tmp \
+        && mv /tmp/gobgp /usr/local/bin/ \
+        && mv /tmp/gobgpd /usr/local/bin/ \
+        && rm -f /tmp/gobgp.tar.gz \
+        && ok "GoBGP v${GOBGP_VER} berhasil diinstall." \
+        || warn "GoBGP gagal diinstall, lanjut..."
 else
-    echo "GoBGP sudah terinstall."
+    ok "GoBGP sudah terinstall."
 fi
 
-# 5. Install Zapret DPI Bypass
-echo ">>> [5/7] Menginstall Zapret DPI Bypass..."
+# ─────────────────────────────────────────────────────────────
+# STEP 5: Install Zapret DPI Bypass
+# ─────────────────────────────────────────────────────────────
+info "[5/7] Menginstall Zapret DPI Bypass..."
 if [ ! -d "/opt/zapret" ]; then
-    cd /opt
-    git clone --depth=1 https://github.com/bol-van/zapret.git zapret
-    cd zapret
+    git clone --depth=1 https://github.com/bol-van/zapret.git /opt/zapret 2>&1 \
+        && ok "Zapret repository berhasil di-clone." \
+        || { warn "Zapret gagal di-clone, lanjut..."; }
 
-    # Buat config default untuk ISP Indonesia
-    cat > /opt/zapret/config <<'EOF'
+    if [ -d "/opt/zapret" ]; then
+        # Buat config default untuk ISP Indonesia
+        cat > /opt/zapret/config <<'ZAPRETEOF'
 # MODE: nfqws, tpws, tpws-socks, filter, custom
 MODE=nfqws
-# IP version: 4, 6, 46
 DISABLE_IPV4=0
 DISABLE_IPV6=1
-# FWTYPE: iptables, nftables, ipfw
 FWTYPE=nftables
-# nfqws options
 NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
-EOF
+ZAPRETEOF
 
-    # Build dan install binaries
-    if [ -f "install_bin.sh" ]; then
-        chmod +x install_bin.sh
-        ./install_bin.sh || true
-    fi
+        cd /opt/zapret
+        if [ -f "install_bin.sh" ]; then
+            chmod +x install_bin.sh
+            ./install_bin.sh || true
+        fi
 
-    # Setup systemd service
-    if [ -f "init.d/systemd/zapret.service" ]; then
-        cp init.d/systemd/zapret.service /etc/systemd/system/
-        systemctl daemon-reload
-        systemctl enable zapret || true
-        systemctl start zapret || true
+        if [ -f "init.d/systemd/zapret.service" ]; then
+            cp init.d/systemd/zapret.service /etc/systemd/system/
+            systemctl daemon-reload
+            systemctl enable zapret || true
+            systemctl start zapret || true
+        fi
+        ok "Zapret berhasil dikonfigurasi."
     fi
-    echo "Zapret berhasil diinstall."
 else
-    echo "Zapret sudah terinstall."
+    ok "Zapret sudah terinstall di /opt/zapret."
 fi
 
-# 6. Install Docker & Docker Compose
-echo ">>> [6/7] Menginstall Docker & Docker Compose..."
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
+# ─────────────────────────────────────────────────────────────
+# STEP 6: Install Docker & Docker Compose
+# ─────────────────────────────────────────────────────────────
+info "[6/7] Menginstall Docker & Docker Compose..."
+if ! command -v docker &>/dev/null; then
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    sh /tmp/get-docker.sh
     systemctl enable docker
     systemctl start docker
-    apt-get install -y docker-compose-plugin
-    rm -f get-docker.sh
+    apt-get install -y -qq docker-compose-plugin
+    rm -f /tmp/get-docker.sh
+    ok "Docker berhasil diinstall. ($(docker --version))"
 else
-    echo "Docker sudah terinstall."
+    ok "Docker sudah terinstall. ($(docker --version))"
 fi
 
-# 7. Setup Repository & Deploy NOC Billing Pro
-echo ">>> [7/7] Melakukan Clone Repository..."
+# ─────────────────────────────────────────────────────────────
+# STEP 7: Clone Repository & Deploy NOC Billing Pro
+# ─────────────────────────────────────────────────────────────
+info "[7/7] Setup NOC Billing Pro..."
 
 cd /opt
 if [ -d "noc-billing-pro" ]; then
-    echo "Directory noc-billing-pro sudah ada. Mengambil pembaruan terbaru..."
-    cd noc-billing-pro
-    git pull origin main
+    info "  Directory noc-billing-pro sudah ada, pull terbaru..."
+    cd noc-billing-pro && git pull origin main
 else
     git clone https://github.com/afani-arba/noc-billing-pro.git
     cd noc-billing-pro
 fi
 
-echo ">>> Mengkonfigurasi file .env Backend..."
-IP_VPS=$(curl -s ifconfig.me || echo "127.0.0.1")
+# Generate .env
+info "  Mengkonfigurasi file .env Backend..."
+IP_VPS=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 JWT_SECRET=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
 
 if [ ! -f "backend/.env" ]; then
     if [ -f "backend/.env.example" ]; then
         cp backend/.env.example backend/.env
         sed -i "s/GANTI_DENGAN_SECRET_KEY_64_KARAKTER_RANDOM/${JWT_SECRET}/g" backend/.env
-        echo "File backend/.env berhasil di-generate dari template."
+        ok "  backend/.env berhasil dibuat dari template."
     else
-        # Fallback jika .env.example tidak ada
-        cat > backend/.env <<EOF
+        cat > backend/.env <<ENVEOF
 MONGO_URI=mongodb://mongodb:27017/nocbillingpro
 SECRET_KEY=${JWT_SECRET}
 APP_EDITION=billing_pro
@@ -131,47 +169,54 @@ ENABLE_GENIEACS_SYNC=true
 GENIEACS_URL=http://genieacs-nbi:7557
 GENIEACS_USERNAME=admin
 GENIEACS_PASSWORD=admin
-EOF
-        echo "File backend/.env berhasil dibuat manual."
+ENVEOF
+        ok "  backend/.env berhasil dibuat manual."
     fi
 else
-    echo "File backend/.env sudah ada. Melewati pembuatan .env..."
+    warn "  backend/.env sudah ada, dilewati."
 fi
 
-echo ">>> Mengkonfigurasi Firewall (UFW)..."
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 8000/tcp
-ufw allow 8002/tcp
-ufw allow 7547/tcp
-ufw allow 5142/udp
-echo "y" | ufw enable
+# Konfigurasi UFW Firewall
+info "  Mengkonfigurasi Firewall (UFW)..."
+/usr/sbin/ufw allow ssh
+/usr/sbin/ufw allow 80/tcp
+/usr/sbin/ufw allow 443/tcp
+/usr/sbin/ufw allow 8000/tcp
+/usr/sbin/ufw allow 8002/tcp
+/usr/sbin/ufw allow 7547/tcp
+/usr/sbin/ufw allow 5142/udp
+echo "y" | /usr/sbin/ufw enable
+ok "  Firewall dikonfigurasi."
 
-echo ">>> Menyiapkan file konfigurasi GenieACS..."
+# GenieACS CSS
+info "  Menyiapkan file konfigurasi GenieACS..."
 if [ ! -f "genieacs/app-custom.css" ]; then
     if [ -f "genieacs/app-original.css" ]; then
         cp genieacs/app-original.css genieacs/app-custom.css
-        echo "File app-custom.css disalin dari app-original.css"
     else
-        touch genieacs/app-custom.css
-        echo "File app-custom.css kosong dibuat."
+        mkdir -p genieacs && touch genieacs/app-custom.css
     fi
+    ok "  genieacs/app-custom.css siap."
 fi
 
-echo ">>> Membangun dan menjalankan NOC Billing Pro (Backend, Frontend, GenieACS)..."
-docker compose up --build -d
+# Build & Run
+info "  Membangun dan menjalankan Docker containers..."
+docker compose up --build -d && ok "  Docker containers berjalan." || fail "  Docker compose gagal!"
 
+# ─────────────────────────────────────────────────────────────
+# SELESAI
+# ─────────────────────────────────────────────────────────────
+echo ""
 echo "========================================================="
-echo " INSTALASI SELESAI! 🎉"
+echo -e " ${GREEN}INSTALASI SELESAI! 🎉${NC}"
 echo "========================================================="
-echo "Semua dependensi Host telah terinstall:"
-echo "- SSTP & L2TP/IPsec Clients"
-echo "- Cloudflared Tunnel"
-echo "- GoBGP (v3.26.0)"
-echo "- Zapret (DPI Bypass)"
-echo "- Docker & NOC Billing Pro Containerized Services"
+echo " Semua komponen yang berhasil diinstall:"
+command -v cloudflared &>/dev/null && echo "  ✅ Cloudflared Tunnel" || echo "  ⚠️  Cloudflared (skip)"
+command -v gobgp        &>/dev/null && echo "  ✅ GoBGP Router"       || echo "  ⚠️  GoBGP (skip)"
+[ -d /opt/zapret ]                  && echo "  ✅ Zapret DPI Bypass"  || echo "  ⚠️  Zapret (skip)"
+command -v docker       &>/dev/null && echo "  ✅ Docker"             || echo "  ❌ Docker (GAGAL)"
 echo "---------------------------------------------------------"
-echo "Akses Dashboard  : http://${IP_VPS}"
-echo "URL TR-069 ONT   : http://${IP_VPS}:7547"
+echo "  Akses Dashboard  : http://${IP_VPS}"
+echo "  URL TR-069 ONT   : http://${IP_VPS}:7547"
 echo "========================================================="
+echo ""
