@@ -18,7 +18,7 @@ fi
 # 1. Update OS & Install Dependensi Dasar
 echo ">>> [1/6] Mengupdate sistem dan dependensi inti..."
 apt-get update && apt-get upgrade -y
-apt-get install -y git curl wget ufw nano apt-transport-https ca-certificates gnupg2 procps util-linux
+apt-get install -y git curl wget ufw nano apt-transport-https ca-certificates gnupg2 procps util-linux unzip
 
 # 2. Install VPN Clients (SSTP, L2TP, IPsec) & Network Tools
 echo ">>> [2/6] Menginstall VPN Clients (SSTP, L2TP/IPsec) dan Network Tools..."
@@ -50,13 +50,11 @@ fi
 echo ">>> [5/7] Menginstall Zapret DPI Bypass..."
 if [ ! -d "/opt/zapret" ]; then
     cd /opt
-    wget -q https://github.com/bol-van/zapret/releases/latest/download/zapret.zip
-    unzip -q zapret.zip -d zapret
-    rm zapret.zip
+    git clone --depth=1 https://github.com/bol-van/zapret.git zapret
     cd zapret
-    
+
     # Buat config default untuk ISP Indonesia
-    cat > /opt/zapret/config <<EOF
+    cat > /opt/zapret/config <<'EOF'
 # MODE: nfqws, tpws, tpws-socks, filter, custom
 MODE=nfqws
 # IP version: 4, 6, 46
@@ -67,17 +65,21 @@ FWTYPE=nftables
 # nfqws options
 NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
 EOF
-    
-    # Link binaries
-    ./install_bin.sh || true
-    
+
+    # Build dan install binaries
+    if [ -f "install_bin.sh" ]; then
+        chmod +x install_bin.sh
+        ./install_bin.sh || true
+    fi
+
     # Setup systemd service
     if [ -f "init.d/systemd/zapret.service" ]; then
         cp init.d/systemd/zapret.service /etc/systemd/system/
         systemctl daemon-reload
-        systemctl enable zapret
+        systemctl enable zapret || true
         systemctl start zapret || true
     fi
+    echo "Zapret berhasil diinstall."
 else
     echo "Zapret sudah terinstall."
 fi
