@@ -93,8 +93,8 @@ NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
 @router.get("/config")
 async def get_zapret_config(user=Depends(get_current_user)):
     ok, out = await _run_host_cmd(["cat", "/opt/zapret/config"])
-    if not ok:
-        # Jika tidak ada config, kembalikan default template daripada error
+    if not ok or not out.strip():
+        # Jika tidak ada config atau isinya kosong, kembalikan default template daripada error
         return {"config": DEFAULT_ZAPRET_CONFIG, "is_default": True}
     return {"config": out, "is_default": False}
 
