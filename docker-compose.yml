@@ -273,7 +273,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./:/app-host
       - noc_billing_pro_update_data:/update-data
-      - /root/.docker/config.json:/root/.docker/config.json:ro
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -290,24 +289,23 @@ services:
 
             cd /app-host
             echo "Menarik pembaruan dari GitHub..."
-            git pull origin main
-            COMMIT_SHA=$$(git rev-parse --short HEAD)
-            echo "$$COMMIT_SHA" > /update-data/version.txt
-            
-            CF="/app-host/docker-compose.yml"
+            if git pull origin main; then
+              COMMIT_SHA=$$(git rev-parse --short HEAD)
+              echo "$$COMMIT_SHA" > /update-data/version.txt
 
-            echo "Membangun ulang container dengan commit $$COMMIT_SHA..."
-            docker compose -f "$$CF" build \
-              --build-arg APP_COMMIT_SHA="$$COMMIT_SHA" \
-              noc-backend noc-frontend
-            docker compose -f "$$CF" up -d noc-backend noc-frontend
-            PE=$$?
+              CF="/app-host/docker-compose.yml"
+              echo "Membangun ulang container dengan commit $$COMMIT_SHA..."
+              docker compose -f "$$CF" up -d --build noc-backend noc-frontend
+              PE=$$?
 
-            if [ $$PE -eq 0 ]; then
-              echo '{"done":true,"success":true}' > /update-data/.update-running
-              echo "Update NOC Billing Pro selesai!"
+              if [ $$PE -eq 0 ]; then
+                echo '{"done":true,"success":true}' > /update-data/.update-running
+                echo "Update NOC Billing Pro selesai!"
+              else
+                printf '{"done":true,"success":false,"error":"build/up failed: exit %s"}' "$$PE" > /update-data/.update-running
+              fi
             else
-              printf '{"done":true,"success":false,"error":"build/pull failed: exit %s"}' "$$PE" > /update-data/.update-running
+              echo '{"done":true,"success":false,"error":"git pull gagal"}' > /update-data/.update-running
             fi
           fi
 
