@@ -332,7 +332,7 @@ async def perform_update(user=Depends(require_admin)):
             logger.info(msg)
 
         try:
-            is_docker = Path("/.dockerenv").exists() or Path("/update-data").exists()
+            is_docker = Path("/.dockerenv").exists() or Path("/app-host").exists() or "MONGO_URI" in os.environ
 
             # ── 1. Docker Mode: Trigger File via Shared Volume ──────────────────
             # noc-updater service (docker:cli container) membaca trigger ini
