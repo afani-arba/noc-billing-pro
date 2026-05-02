@@ -87,20 +87,20 @@ export default function UpdatePage() {
     setChangelogLoading(true);
     setChangelogError(false);
     try {
-      const r = await fetch(
-        "https://api.github.com/repos/afani-arba/noc-billing-pro/commits?per_page=8",
-        { headers: { "Accept": "application/vnd.github.v3+json" } }
-      );
-      if (!r.ok) throw new Error(`GitHub API: ${r.status}`);
-      const data = await r.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setRepoCommits(data.filter(c => !(c.commit?.message || "").toLowerCase().includes("(license-server)")));
+      // Gunakan backend sebagai proxy agar support repo private via GITHUB_TOKEN
+      const r = await api.get("/system/changelog");
+      const data = r.data;
+      if (data.error) {
+        console.warn("Changelog error:", data.error);
+        setChangelogError(data.error);
+      } else if (Array.isArray(data.commits) && data.commits.length > 0) {
+        setRepoCommits(data.commits);
       } else {
-        setChangelogError(true);
+        setChangelogError("Tidak ada commit yang ditemukan.");
       }
     } catch (e) {
       console.error("Changelog fetch failed:", e);
-      setChangelogError(true);
+      setChangelogError(e.response?.data?.detail || e.message || "Gagal memuat changelog.");
     } finally {
       setChangelogLoading(false);
     }
@@ -402,7 +402,9 @@ export default function UpdatePage() {
             </div>
           ) : changelogError ? (
             <div className="text-center p-6 flex flex-col items-center gap-3">
-              <p className="text-sm text-slate-500">Gagal memuat changelog.</p>
+              <p className="text-sm text-slate-500">
+                {typeof changelogError === 'string' ? changelogError : 'Gagal memuat changelog.'}
+              </p>
               <button
                 onClick={fetchChangelog}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-all"
@@ -413,15 +415,19 @@ export default function UpdatePage() {
           ) : (
             repoCommits.map((c, i) => {
               const isLatest = i === 0;
-              const fullMsg  = c.commit?.message || "";
+              // Support both raw GitHub format (c.commit.message) and backend proxy format (c.message)
+              const fullMsg  = c.message || c.commit?.message || "";
               const title    = fullMsg.split("\n")[0] || "(no message)";
               const body     = fullMsg.split("\n").slice(1).join("\n").trim();
-              const dateStr  = c.commit?.author?.date
-                ? new Date(c.commit.author.date).toLocaleDateString("id-ID", {
+              const dateRaw  = c.date || c.commit?.author?.date || "";
+              const dateStr  = dateRaw
+                ? new Date(dateRaw).toLocaleDateString("id-ID", {
                     day: "2-digit", month: "short", year: "numeric",
                     hour: "2-digit", minute: "2-digit"
                   })
                 : "-";
+              const authorName = c.author || c.commit?.author?.name || "Unknown";
+              const avatarUrl  = c.avatar_url || c.author?.avatar_url || "";
 
               return (
                 <div
@@ -462,16 +468,16 @@ export default function UpdatePage() {
 
                   {/* Author */}
                   <div className="ml-6 flex items-center gap-1.5 mt-1">
-                    {c.author?.avatar_url ? (
+                    {avatarUrl ? (
                       <img
-                        src={c.author.avatar_url}
-                        alt={c.commit?.author?.name}
+                        src={avatarUrl}
+                        alt={authorName}
                         className="w-4 h-4 rounded-full opacity-70"
                       />
                     ) : (
                       <User className="w-3.5 h-3.5 text-slate-600" />
                     )}
-                    <span className="text-[10px] text-slate-600">{c.commit?.author?.name || "Unknown"}</span>
+                    <span className="text-[10px] text-slate-600">{authorName}</span>
                   </div>
                 </div>
               );

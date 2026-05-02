@@ -85,6 +85,12 @@ services:
       # menggunakan: sudo bash gobgp/install-gobgp.sh
       - GOBGPD_HOST=172.17.0.1         # Docker bridge gateway ke host
       - ENABLE_BGP_STEERING=true
+      # ── GitHub Update Settings ────────────────────────────────────────
+      # Repo GitHub untuk check-update dan changelog
+      - GITHUB_REPO=afani-arba/noc-billing-pro
+      # GITHUB_TOKEN diperlukan jika repo PRIVATE (buat di github.com/settings/tokens)
+      # Minimal scope: repo (read)
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       # ── Features DISABLED (tidak diperlukan di Billing Pro) ───────
       - ENABLE_ROUTE_OPTIMIZER=false   # SD-WAN Advanced Route Optimizer
       - ENABLE_NETWATCH_POLLER=false   # Netwatch (sudah digest by polling)
@@ -285,12 +291,16 @@ services:
             cd /app-host
             echo "Menarik pembaruan dari GitHub..."
             git pull origin main
-            git rev-parse --short HEAD > /update-data/version.txt
+            COMMIT_SHA=$$(git rev-parse --short HEAD)
+            echo "$$COMMIT_SHA" > /update-data/version.txt
             
             CF="/app-host/docker-compose.yml"
 
-            echo "Membangun ulang container..."
-            docker compose -f "$$CF" up -d --build noc-backend noc-frontend
+            echo "Membangun ulang container dengan commit $$COMMIT_SHA..."
+            docker compose -f "$$CF" build \
+              --build-arg APP_COMMIT_SHA="$$COMMIT_SHA" \
+              noc-backend noc-frontend
+            docker compose -f "$$CF" up -d noc-backend noc-frontend
             PE=$$?
 
             if [ $$PE -eq 0 ]; then
