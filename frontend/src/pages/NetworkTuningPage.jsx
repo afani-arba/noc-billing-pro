@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { Shield, Activity, Link2, Zap, Wifi, HardDrive, RefreshCw, Play, Square, CheckCircle, XCircle, AlertTriangle, ChevronRight, Gamepad2 } from 'lucide-react';
-
-const API = import.meta.env.VITE_API_URL || '';
-const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+import api from '@/lib/api';
+import { Shield, Activity, Link2, Zap, Wifi, HardDrive, RefreshCw, Play, Square, CheckCircle, XCircle, AlertTriangle, Gamepad2 } from 'lucide-react';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────── */
 const Badge = ({ ok, label }) => (
@@ -46,7 +43,7 @@ function SqmTab({ deviceId }) {
   const fetch_ = useCallback(async () => {
     if (!deviceId) return;
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/sqm/${deviceId}`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/sqm/${deviceId}`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, [deviceId]);
 
@@ -55,7 +52,7 @@ function SqmTab({ deviceId }) {
   const apply = async () => {
     setApplying(true);
     try {
-      await axios.post(`${API}/api/network-tuning/sqm/apply`, { device_id: deviceId, queue_type: queueType }, { headers: headers() });
+      await api.post(`/network-tuning/sqm/apply`, { device_id: deviceId, queue_type: queueType });
       await fetch_();
       alert('SQM berhasil diterapkan!');
     } catch (e) { alert(e.response?.data?.detail || 'Gagal'); } finally { setApplying(false); }
@@ -107,7 +104,7 @@ function ConntrackTab({ deviceId }) {
   const fetch_ = useCallback(async () => {
     if (!deviceId) return;
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/conntrack/${deviceId}`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/conntrack/${deviceId}`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, [deviceId]);
 
@@ -116,7 +113,7 @@ function ConntrackTab({ deviceId }) {
   const optimize = async () => {
     setApplying(true);
     try {
-      await axios.post(`${API}/api/network-tuning/conntrack/optimize`, { device_id: deviceId }, { headers: headers() });
+      await api.post(`/network-tuning/conntrack/optimize`, { device_id: deviceId });
       await fetch_();
       alert('Conntrack berhasil dioptimasi!');
     } catch (e) { alert(e.response?.data?.detail || 'Gagal'); } finally { setApplying(false); }
@@ -161,7 +158,7 @@ function MssTab({ deviceId, devices }) {
     setLoading(true);
     const res = {};
     for (const d of devices) {
-      try { const r = await axios.get(`${API}/api/network-tuning/mss/${d.id}`, { headers: headers() }); res[d.id] = r.data; }
+      try { const r = await api.get(`/network-tuning/mss/${d.id}`); res[d.id] = r.data; }
       catch { res[d.id] = { applied: false }; }
     }
     setStatuses(res);
@@ -172,7 +169,7 @@ function MssTab({ deviceId, devices }) {
 
   const toggle = async (did, enable) => {
     try {
-      await axios.post(`${API}/api/network-tuning/mss/apply`, { device_id: did, enable }, { headers: headers() });
+      await api.post(`/network-tuning/mss/apply`, { device_id: did, enable });
       await fetchAll();
     } catch (e) { alert(e.response?.data?.detail || 'Gagal'); }
   };
@@ -215,7 +212,7 @@ function RawFirewallTab({ deviceId }) {
   const fetch_ = useCallback(async () => {
     if (!deviceId) return;
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/raw-firewall/${deviceId}`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/raw-firewall/${deviceId}`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, [deviceId]);
 
@@ -224,7 +221,7 @@ function RawFirewallTab({ deviceId }) {
   const apply = async (enable) => {
     setApplying(true);
     try {
-      await axios.post(`${API}/api/network-tuning/raw-firewall/apply`, { device_id: deviceId, enable_all: enable }, { headers: headers() });
+      await api.post(`/network-tuning/raw-firewall/apply`, { device_id: deviceId, enable_all: enable });
       await fetch_();
       alert(enable ? 'Rules berhasil diterapkan!' : 'Rules berhasil dihapus!');
     } catch (e) { alert(e.response?.data?.detail || 'Gagal'); } finally { setApplying(false); }
@@ -265,7 +262,7 @@ function LatencyTab() {
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/latency`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/latency`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, []);
 
@@ -310,7 +307,7 @@ function InterfaceHealthTab({ deviceId }) {
   const fetch_ = useCallback(async () => {
     if (!deviceId) return;
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/interface-health/${deviceId}`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/interface-health/${deviceId}`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, [deviceId]);
 
@@ -380,7 +377,7 @@ function QosPriorityTab({ deviceId }) {
   const fetch_ = useCallback(async () => {
     if (!deviceId) return;
     setLoading(true);
-    try { const r = await axios.get(`${API}/api/network-tuning/qos-priority/${deviceId}`, { headers: headers() }); setData(r.data); }
+    try { const r = await api.get(`/network-tuning/qos-priority/${deviceId}`); setData(r.data); }
     catch { setData(null); } finally { setLoading(false); }
   }, [deviceId]);
 
@@ -389,7 +386,7 @@ function QosPriorityTab({ deviceId }) {
   const apply = async (enable) => {
     setApplying(true);
     try {
-      const r = await axios.post(`${API}/api/network-tuning/qos-priority/apply`, { device_id: deviceId, enable }, { headers: headers() });
+      const r = await api.post(`/network-tuning/qos-priority/apply`, { device_id: deviceId, enable });
       await fetch_();
       alert(r.data.message || 'Berhasil');
     } catch (e) { alert(e.response?.data?.detail || 'Gagal'); } finally { setApplying(false); }
@@ -446,7 +443,7 @@ export default function NetworkTuningPage() {
   const [deviceId, setDeviceId] = useState('');
 
   useEffect(() => {
-    axios.get(`${API}/api/devices`, { headers: headers() })
+    api.get('/devices')
       .then(r => { const devs = (r.data || []).map(d => ({ id: d.id, name: d.name })); setDevices(devs); if (devs.length) setDeviceId(devs[0].id); })
       .catch(() => {});
   }, []);
