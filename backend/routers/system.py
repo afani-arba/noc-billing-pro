@@ -77,8 +77,7 @@ async def check_update(user=Depends(require_admin)):
     """
     Check update: bandingkan versi running vs commit terbaru di GitHub.
     - Mendukung repo PRIVATE via GITHUB_TOKEN env var.
-    - Docker mode: baca version.txt → git -C /app-host → APP_VERSION_COMMIT env.
-    - Source mode: git langsung.
+    - Prioritas deteksi versi running: git /app-host (SELALU) → version.txt → APP_VERSION_COMMIT env.
     """
     import shutil
 
@@ -124,51 +123,52 @@ async def check_update(user=Depends(require_admin)):
         gh_error = str(gh_err)
         logger.warning(f"GitHub API error: {gh_err}")
 
-    # ── 2. Cari commit yang sedang berjalan ─────────────────────────────────
-    # Urutan: version.txt → git -C /app-host → APP_VERSION_COMMIT env
+    # ── 2. Deteksi commit yang sedang berjalan ───────────────────────────────
+    # PRIORITAS: git -C /app-host (paling akurat) → version.txt → env var
     current_commit = "docker"
     current_msg = ""
 
-    # a) Baca dari shared volume (ditulis noc-updater setiap update)
+    # a) UTAMA: Coba git dari /app-host (selalu akurat setelah git pull)
+    #    Ini yang paling penting — tidak bergantung pada version.txt
     try:
-        with open("/update-data/version.txt", "r") as _vf:
-            _v = _vf.read().strip()
-            if _v:
-                current_commit = _v
+        _r = subprocess.run(
+            ["git", "-C", "/app-host", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if _r.returncode == 0 and _r.stdout.strip():
+            current_commit = _r.stdout.strip()
+            _m = subprocess.run(
+                ["git", "-C", "/app-host", "log", "-1", "--pretty=%s"],
+                capture_output=True, text=True, timeout=5
+            )
+            current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
+            # Selalu sinkronkan version.txt dengan realita git
+            try:
+                with open("/update-data/version.txt", "w") as _vf:
+                    _vf.write(current_commit)
+            except Exception:
+                pass
     except Exception:
         pass
 
-    # b) Jika masih 'docker', coba git dari /app-host (di-mount read-only di docker-compose)
+    # b) Fallback: version.txt (jika git tidak tersedia di container)
     if current_commit == "docker":
         try:
-            _r = subprocess.run(
-                ["git", "-C", "/app-host", "rev-parse", "--short", "HEAD"],
-                capture_output=True, text=True, timeout=5
-            )
-            if _r.returncode == 0 and _r.stdout.strip():
-                current_commit = _r.stdout.strip()
-                _m = subprocess.run(
-                    ["git", "-C", "/app-host", "log", "-1", "--pretty=%s"],
-                    capture_output=True, text=True, timeout=5
-                )
-                current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
-                # Tulis ke version.txt agar konsisten
-                try:
-                    with open("/update-data/version.txt", "w") as _vf:
-                        _vf.write(current_commit)
-                except Exception:
-                    pass
+            with open("/update-data/version.txt", "r") as _vf:
+                _v = _vf.read().strip()
+                if _v:
+                    current_commit = _v
         except Exception:
             pass
 
-    # c) Fallback ke build-arg env var (APP_COMMIT_SHA via Dockerfile ARG)
+    # c) Fallback: build-arg env var (APP_COMMIT_SHA via Dockerfile ARG)
     if current_commit == "docker":
         _env_commit = os.environ.get("APP_VERSION_COMMIT", "")
         if _env_commit and _env_commit not in ("docker", ""):
             current_commit = _env_commit
 
-    # d) Source mode: git langsung tersedia di container
-    if shutil.which("git"):
+    # d) Source mode: git native langsung di container (bare metal)
+    if shutil.which("git") and current_commit == "docker":
         _r = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, cwd=APP_DIR, timeout=5
@@ -206,7 +206,7 @@ async def check_update(user=Depends(require_admin)):
         "latest_message": latest_message,
         "latest_date": latest_date,
         "commits_behind": 1 if has_update else 0,
-        "message": "Update tersedia dari GitHub!" if has_update else "Aplikasi sudah versi terbaru.",
+        "message": "Update tersedia dari GitHub!" if has_update else "Aplikasi sudah versi terbaru. ✅",
         "error": ""
     }
 
@@ -256,6 +256,10 @@ async def get_changelog(user=Depends(require_admin)):
             return {"commits": [], "error": f"GitHub API error: HTTP {resp.status_code}"}
     except Exception as e:
         logger.error(f"Changelog fetch error: {e}")
+        return {"commits": [], "error": str(e)}
+
+
+
 @router.post("/perform-update")
 async def perform_update(user=Depends(require_admin)):
     """Jalankan update di background thread."""
@@ -507,12 +511,46 @@ async def app_info():
     try:
         import shutil
         if not shutil.which("git"):
+            # Docker mode: cek /app-host git DULU (selalu akurat), lalu version.txt
+            current_commit = "docker"
+            current_msg = "Docker Deployment"
+
+            # 1) git -C /app-host (paling akurat)
             try:
-                with open("/update-data/version.txt", "r") as f:
-                    container_commit = f.read().strip()
+                _r = subprocess.run(
+                    ["git", "-C", "/app-host", "rev-parse", "--short", "HEAD"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if _r.returncode == 0 and _r.stdout.strip():
+                    current_commit = _r.stdout.strip()
+                    _m = subprocess.run(
+                        ["git", "-C", "/app-host", "log", "-1", "--pretty=%s"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    current_msg = _m.stdout.strip() if _m.returncode == 0 else "Docker Deployment"
+                    try:
+                        with open("/update-data/version.txt", "w") as _vf:
+                            _vf.write(current_commit)
+                    except Exception:
+                        pass
             except Exception:
-                container_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
-            return {"commit": container_commit, "message": "Docker Deployment", "date": "-", "version": "v3.0", "service_name": svc_name}
+                pass
+
+            # 2) Fallback: version.txt
+            if current_commit == "docker":
+                try:
+                    with open("/update-data/version.txt", "r") as f:
+                        _v = f.read().strip()
+                        if _v:
+                            current_commit = _v
+                except Exception:
+                    pass
+
+            # 3) Fallback: build-arg env
+            if current_commit == "docker":
+                current_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
+
+            return {"commit": current_commit, "message": current_msg, "date": "-", "version": "v3.0", "service_name": svc_name}
 
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=APP_DIR, timeout=5

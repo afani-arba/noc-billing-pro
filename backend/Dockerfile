@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 # Install system dependencies (untuk traceroute, ping, tzdata, VPN tools, dll)
 RUN apt-get update && apt-get install -y \
+    git \
     traceroute \
     iputils-ping \
     tzdata \
