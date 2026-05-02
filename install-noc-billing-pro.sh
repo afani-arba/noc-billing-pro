@@ -221,6 +221,13 @@ fi
 info "  Membangun dan menjalankan Docker containers..."
 docker compose up --build -d && ok "  Docker containers berjalan." || fail "  Docker compose gagal!"
 
+info "  Mengimpor konfigurasi dan UI template ke GenieACS..."
+if [ -f "genieacs/import_genieacs.sh" ]; then
+    bash genieacs/import_genieacs.sh || warn "  Gagal mengimpor konfigurasi GenieACS."
+else
+    warn "  Script import_genieacs.sh tidak ditemukan."
+fi
+
 # ─────────────────────────────────────────────────────────────
 # SELESAI
 # ─────────────────────────────────────────────────────────────

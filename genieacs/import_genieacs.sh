@@ -142,7 +142,7 @@ try:
         for vp in vps:
             vpid = vp["_id"]
             script_text = vp.get("script", "")
-            url = f"{genie_url}/virtual-parameters/{urllib.parse.quote(vpid, safe='')}"
+            url = f"{genie_url}/virtual_parameters/{urllib.parse.quote(vpid, safe='')}"
             req = urllib.request.Request(url, method="PUT",
                   data=script_text.encode("utf-8"))
             try:
