@@ -56,12 +56,21 @@ async def restart_zapret(user=Depends(require_write)):
         raise HTTPException(500, f"Failed to restart Zapret: {out}")
     return {"message": "Zapret restarted"}
 
+DEFAULT_ZAPRET_CONFIG = """# MODE: nfqws, tpws, tpws-socks, filter, custom
+MODE=nfqws
+DISABLE_IPV4=0
+DISABLE_IPV6=1
+FWTYPE=nftables
+NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
+"""
+
 @router.get("/config")
 async def get_zapret_config(user=Depends(get_current_user)):
     ok, out = await _run_host_cmd(["cat", "/opt/zapret/config"])
     if not ok:
-        raise HTTPException(404, "Zapret configuration file not found")
-    return {"config": out}
+        # Jika tidak ada config, kembalikan default template daripada error
+        return {"config": DEFAULT_ZAPRET_CONFIG, "is_default": True}
+    return {"config": out, "is_default": False}
 
 @router.put("/config")
 async def save_zapret_config(body: dict = Body(...), user=Depends(require_write)):
@@ -69,14 +78,17 @@ async def save_zapret_config(body: dict = Body(...), user=Depends(require_write)
     if not new_config:
         raise HTTPException(400, "Config content cannot be empty")
     
+    # Pastikan direktori ada di host
+    await _run_host_cmd(["mkdir", "-p", "/opt/zapret"])
+
     # Simpan ke temporary file dulu di host
     ok_echo, out_echo = await _run_host_cmd(["bash", "-c", f"cat << 'EOF' > /tmp/zapret_config.tmp\n{new_config}\nEOF"])
     if not ok_echo:
-        raise HTTPException(500, "Failed to write temp config file")
+        raise HTTPException(500, f"Failed to write temp config file: {out_echo}")
         
     ok_mv, out_mv = await _run_host_cmd(["mv", "/tmp/zapret_config.tmp", "/opt/zapret/config"])
     if not ok_mv:
-        raise HTTPException(500, "Failed to apply new config")
+        raise HTTPException(500, f"Failed to apply new config: {out_mv}")
         
     ok_res, out_res = await _run_host_cmd(["systemctl", "restart", "zapret"])
     return {"message": "Configuration saved and Zapret restarted"}
@@ -85,5 +97,5 @@ async def save_zapret_config(body: dict = Body(...), user=Depends(require_write)
 async def get_zapret_logs(user=Depends(get_current_user)):
     ok, out = await _run_host_cmd(["journalctl", "-u", "zapret", "-n", "50", "--no-pager"])
     if not ok:
-        return {"logs": "Failed to fetch logs or no logs available."}
+        return {"logs": f"Failed to fetch logs: {out}"}
     return {"logs": out}
