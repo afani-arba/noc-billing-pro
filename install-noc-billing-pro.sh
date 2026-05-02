@@ -90,6 +90,11 @@ if [ ! -d "/opt/zapret" ]; then
         || { warn "Zapret gagal di-clone, lanjut..."; }
 
     if [ -d "/opt/zapret" ]; then
+        # Setup files for hostlist
+        touch /opt/zapret/hostlist.txt
+        touch /opt/zapret/hostlist-auto.txt
+        chmod 666 /opt/zapret/hostlist.txt /opt/zapret/hostlist-auto.txt
+
         # Buat config default untuk ISP Indonesia
         cat > /opt/zapret/config <<'ZAPRETEOF'
 # MODE: nfqws, tpws, tpws-socks, filter, custom
@@ -97,7 +102,20 @@ MODE=nfqws
 DISABLE_IPV4=0
 DISABLE_IPV6=1
 FWTYPE=nftables
+
+# WAJIB: NFQWS_ENABLE=1 agar daemon aktif
+NFQWS_ENABLE=1
+NFQWS_PORTS_TCP=80,443
+NFQWS_PORTS_UDP=443
+
+# DPI Bypass Strategy: Universal (Semua ISP)
 NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
+
+# UDP / QUIC Bypass (YouTube, Cloudflare, dll via UDP port 443)
+NFQWS_OPT_EXTRA="--dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-cutoff=d3"
+
+MODE_FILTER=none
+# HOSTLIST=/opt/zapret/hostlist.txt
 ZAPRETEOF
 
         cd /opt/zapret

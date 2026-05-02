@@ -1,161 +1,538 @@
+"""
+Zapret DPI Bypass Router
+Fitur:
+- Real-time status dari host OS
+- Start/Stop/Restart service
+- Config editor (via base64 aman dari karakter special)
+- Hostlist manager (domain whitelist/blacklist)
+- ISP Strategy presets (IndiHome, Biznet, Iconnet, Starlink, dll)
+- Blockcheck: test apakah domain bisa bypass
+- QUIC/UDP support info
+- Logs real-time
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Body
-from datetime import datetime, timezone
 import asyncio
-from core.db import get_db
-from core.auth import get_current_user, require_write, require_admin
+import shutil
+import re
+import base64
+from typing import Optional
+from core.auth import get_current_user, require_write
 
 router = APIRouter(prefix="/zapret", tags=["Zapret"])
 
-async def _run_host_cmd(args: list) -> tuple[bool, str]:
-    """Jalankan perintah di host OS menggunakan nsenter ke PID 1."""
-    # Gunakan path absolut nsenter, hanya masuk ke mount namespace
-    nsenter = "/usr/bin/nsenter"
-    import shutil
-    if not shutil.which("nsenter") and shutil.which("/usr/bin/nsenter"):
-        nsenter = "/usr/bin/nsenter"
-    elif shutil.which("nsenter"):
-        nsenter = shutil.which("nsenter")
 
-    cmd = [nsenter, "-t", "1", "-m", "-u", "-i", "-n", "-p", "--"] + args
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
-        out = (stdout + stderr).decode(errors="replace").strip()
-        return proc.returncode == 0, out
-    except Exception as e:
-        return False, str(e)
+# ─── ISP Strategy Presets ────────────────────────────────────────────────────
+
+ISP_STRATEGIES = {
+    "universal": {
+        "name": "Universal (Semua ISP)",
+        "description": "Strategy umum yang bekerja di sebagian besar ISP Indonesia. Cocok sebagai titik awal.",
+        "nfqws_opt": "--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-cutoff=d3",
+        "icon": "🌐"
+    },
+    "indihome": {
+        "name": "IndiHome / Indibiz / Telkomsel",
+        "description": "Optimal untuk jaringan Telkom Indonesia. DPI Telkom menggunakan deep inspection pada SNI/Host header.",
+        "nfqws_opt": "--dpi-desync=fake,disorder2 --dpi-desync-split-pos=midsld --dpi-desync-ttl=8 --dpi-desync-fooling=md5sig",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-cutoff=d3",
+        "icon": "🔴"
+    },
+    "iconnet": {
+        "name": "Iconnet / PLN Icon Plus",
+        "description": "Untuk jaringan PLN Iconnet. Menggunakan split sederhana pada posisi tengah domain.",
+        "nfqws_opt": "--dpi-desync=disorder2 --dpi-desync-split-pos=midsld",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol",
+        "icon": "⚡"
+    },
+    "biznet": {
+        "name": "Biznet / MyRepublic / FirstMedia",
+        "description": "Untuk ISP yang menggunakan DNS filtering + SNI sniffing ringan. Fake + split2 biasanya efektif.",
+        "nfqws_opt": "--dpi-desync=fake,split2 --dpi-desync-ttl=4",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-cutoff=d3",
+        "icon": "🔵"
+    },
+    "starlink": {
+        "name": "Starlink Indonesia",
+        "description": "Untuk Starlink. Global routing umumnya tidak ketat, split2 sederhana cukup.",
+        "nfqws_opt": "--dpi-desync=split2 --dpi-desync-split-pos=1",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol",
+        "icon": "🛸"
+    },
+    "mns": {
+        "name": "MNC / MNS / Nexmedia",
+        "description": "Untuk ISP jaringan MNC. Gunakan disorder dengan TTL rendah.",
+        "nfqws_opt": "--dpi-desync=disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=5",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol",
+        "icon": "📡"
+    },
+    "xl_xl": {
+        "name": "XL / Axis / Smartfren (Mobile)",
+        "description": "Untuk jaringan mobile. Disorder dengan split di posisi SLD efektif untuk bypass blokir situs.",
+        "nfqws_opt": "--dpi-desync=disorder2 --dpi-desync-split-pos=sld --dpi-desync-ttl=6",
+        "nfqws_opt_udp": "--dpi-desync=fake --dpi-desync-any-protocol --dpi-desync-cutoff=d3",
+        "icon": "📱"
+    }
+}
 
 
-async def _run_host_sh(script: str) -> tuple[bool, str]:
-    """Jalankan shell script di host OS."""
-    import shutil
-    nsenter = shutil.which("nsenter") or "/usr/bin/nsenter"
-    cmd = [nsenter, "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "/bin/sh", "-c", script]
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
-        out = (stdout + stderr).decode(errors="replace").strip()
-        return proc.returncode == 0, out
-    except Exception as e:
-        return False, str(e)
+# ─── Default Config Template ─────────────────────────────────────────────────
 
-@router.get("/status")
-async def get_zapret_status(user=Depends(get_current_user)):
-    db = get_db()
-    status = await db.system_settings.find_one({"_id": "zapret_status"}, {"_id": 0})
-    if not status:
-        return {
-            "running": False,
-            "pid": 0,
-            "uptime_seconds": 0,
-            "cpu_percent": 0.0,
-            "ram_mb": 0.0,
-            "packets_processed": 0,
-            "bytes_processed": 0,
-            "config_mode": "",
-            "nfqws_opt": ""
-        }
-    return status
-
-@router.post("/start")
-async def start_zapret(user=Depends(require_write)):
-    ok, out = await _run_host_sh("systemctl start zapret 2>&1 || /bin/systemctl start zapret 2>&1")
-    if not ok:
-        raise HTTPException(500, f"Failed to start Zapret: {out}")
-    return {"message": "Zapret started"}
-
-@router.post("/stop")
-async def stop_zapret(user=Depends(require_write)):
-    ok, out = await _run_host_sh("systemctl stop zapret 2>&1 || /bin/systemctl stop zapret 2>&1")
-    if not ok:
-        raise HTTPException(500, f"Failed to stop Zapret: {out}")
-    return {"message": "Zapret stopped"}
-
-@router.post("/restart")
-async def restart_zapret(user=Depends(require_write)):
-    ok, out = await _run_host_sh("systemctl restart zapret 2>&1 || /bin/systemctl restart zapret 2>&1")
-    if not ok:
-        raise HTTPException(500, f"Failed to restart Zapret: {out}")
-    return {"message": "Zapret restarted"}
-
-@router.get("/diag")
-async def zapret_diag(user=Depends(require_write)):
-    """Endpoint diagnostik untuk debug koneksi nsenter ke host."""
-    results = {}
-    ok_which, out_which = await _run_host_sh("which systemctl && systemctl --version 2>&1 | head -2")
-    results["systemctl"] = {"ok": ok_which, "out": out_which}
-    ok_ls, out_ls = await _run_host_sh("ls /opt/zapret/ 2>&1")
-    results["zapret_dir"] = {"ok": ok_ls, "out": out_ls}
-    ok_svc, out_svc = await _run_host_sh("systemctl is-active zapret 2>&1")
-    results["zapret_service"] = {"active": ok_svc, "status": out_svc}
-    return results
-
-DEFAULT_ZAPRET_CONFIG = """# ===================================================================
+def _build_config(strategy_key: str = "universal", enable_udp: bool = True, enable_auto_hostlist: bool = False) -> str:
+    s = ISP_STRATEGIES.get(strategy_key, ISP_STRATEGIES["universal"])
+    udp_section = ""
+    if enable_udp:
+        udp_section = f"""
+# UDP / QUIC Bypass (YouTube, Cloudflare, dll via UDP port 443)
+NFQWS_OPT_EXTRA=\"{s['nfqws_opt_udp']}\"
+NFQWS_PORTS_UDP=443
+"""
+    auto_hostlist = ""
+    if enable_auto_hostlist:
+        auto_hostlist = """
+# Auto Hostlist: deteksi otomatis domain yang terblokir
+# (akan mengisi /opt/zapret/hostlist-auto.txt secara otomatis)
+NFQWS_OPT_EXTRA_ARGS=\"--hostlist-auto=/opt/zapret/hostlist-auto.txt --hostlist-auto-fail-threshold=3\"
+"""
+    return f"""# ===================================================================
 # ZAPRET CONFIGURATION FOR INDONESIAN BROADBAND ISPs
+# Generated by NOC Billing Pro - Zapret Manager
+# Strategy: {s['name']}
 # ===================================================================
 
-# MODE: nfqws, tpws, tpws-socks, filter, custom
+# ─── Mode ─────────────────────────────────────────────────────────
+# MODE: nfqws (packet-level), tpws (proxy-level), filter, custom
 MODE=nfqws
 DISABLE_IPV4=0
 DISABLE_IPV6=1
 FWTYPE=nftables
 
-# -------------------------------------------------------------------
-# DPI BYPASS STRATEGIES (Uncomment salah satu yang sesuai dengan ISP)
-# -------------------------------------------------------------------
+# ─── NFQWS Settings ───────────────────────────────────────────────
+# WAJIB: NFQWS_ENABLE=1 agar daemon aktif
+NFQWS_ENABLE=1
+NFQWS_PORTS_TCP=80,443
+NFQWS_PORTS_UDP=443
 
-# 1. IndiHome / Indibiz / Telkomsel (Typical Telkom DPI)
-# Sering kali membutuhkan disorder atau split pada posisi host
-# NFQWS_OPT="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=8 --dpi-desync-fooling=md5sig"
+# ─── DPI Bypass Strategy: {s['name']} ─────────────────────────────
+# {s['description']}
+NFQWS_OPT=\"{s['nfqws_opt']}\"
+{udp_section}
+{auto_hostlist}
+# ─── Filter Mode ──────────────────────────────────────────────────
+# none = bypass semua traffic (default, paling simpel)
+# autohostlist = hanya bypass domain yang terdeteksi diblokir
+MODE_FILTER=none
 
-# 2. Iconnet / PLN
-# Biasanya cukup dengan split sederhana atau disorder
-# NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2"
+# ─── Hostlist ─────────────────────────────────────────────────────
+# Uncomment untuk bypass domain tertentu saja:
+# HOSTLIST=/opt/zapret/hostlist.txt
 
-# 3. Starlink Indonesia
-# Starlink global routing umumnya tidak ketat, tapi jika ada pemblokiran lokal:
-# NFQWS_OPT="--dpi-desync=split2 --dpi-desync-split-pos=1"
-
-# 4. Biznet / MyRepublic / FirstMedia
-# Cenderung menggunakan DNS filtering + SNI sniffing ringan
-# NFQWS_OPT="--dpi-desync=fake,split2 --dpi-desync-ttl=4"
-
-# 5. Default Universal (Lebih aman untuk berbagai ISP)
-NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
+# ─── Strategi Lain (komentar untuk referensi) ─────────────────────
+# IndiHome:  NFQWS_OPT="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=midsld --dpi-desync-ttl=8 --dpi-desync-fooling=md5sig"
+# Iconnet:   NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=midsld"
+# Biznet:    NFQWS_OPT="--dpi-desync=fake,split2 --dpi-desync-ttl=4"
+# Starlink:  NFQWS_OPT="--dpi-desync=split2 --dpi-desync-split-pos=1"
+# Universal: NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
 """
+
+
+# ─── Helper: Jalankan perintah di HOST via nsenter ───────────────────────────
+
+async def _run_host_sh(script: str, timeout: int = 20) -> tuple[bool, str]:
+    """Jalankan shell script di host OS melalui nsenter ke PID 1."""
+    nsenter = shutil.which("nsenter") or "/usr/bin/nsenter"
+    cmd = [nsenter, "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "/bin/sh", "-c", script]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        out = (stdout + stderr).decode(errors="replace").strip()
+        return proc.returncode == 0, out
+    except asyncio.TimeoutError:
+        return False, "Command timed out"
+    except Exception as e:
+        return False, str(e)
+
+
+# ─── Helper: Baca status real-time dari host ─────────────────────────────────
+
+async def _get_realtime_status() -> dict:
+    """Baca status Zapret secara real-time dari host OS."""
+    base = {
+        "running": False,
+        "pid": 0,
+        "uptime_seconds": 0,
+        "cpu_percent": 0.0,
+        "ram_mb": 0.0,
+        "packets_processed": 0,
+        "bytes_processed": 0,
+        "config_mode": "",
+        "nfqws_opt": "",
+        "strategy": "unknown",
+        "quic_enabled": False,
+        "auto_hostlist_enabled": False,
+        "hostlist_count": 0,
+    }
+
+    # 1. Cek apakah service aktif
+    ok_active, out_active = await _run_host_sh("systemctl is-active zapret 2>/dev/null")
+    if not ok_active or out_active.strip() != "active":
+        return base
+
+    base["running"] = True
+
+    # 2. PID utama dari systemctl
+    ok_pid, out_pid = await _run_host_sh("systemctl show zapret --property=MainPID --value 2>/dev/null")
+    if ok_pid and out_pid.strip().isdigit():
+        base["pid"] = int(out_pid.strip())
+    if base["pid"] == 0:
+        ok_pg, out_pg = await _run_host_sh("pgrep -f 'nfqws' | head -1 2>/dev/null")
+        if ok_pg and out_pg.strip().isdigit():
+            base["pid"] = int(out_pg.strip())
+
+    # 3. CPU & RAM
+    if base["pid"] > 0:
+        ok_ps, out_ps = await _run_host_sh(f"ps -p {base['pid']} -o %cpu,rss --no-headers 2>/dev/null")
+        if ok_ps and out_ps:
+            parts = out_ps.split()
+            if len(parts) >= 2:
+                try:
+                    base["cpu_percent"] = float(parts[0])
+                    base["ram_mb"] = round(int(parts[1]) / 1024, 2)
+                except (ValueError, IndexError):
+                    pass
+
+    # 4. Uptime
+    ok_ts, out_ts = await _run_host_sh("systemctl show zapret --property=ActiveEnterTimestampMonotonic --value 2>/dev/null")
+    if ok_ts and out_ts.strip().isdigit():
+        monotonic_us = int(out_ts.strip())
+        ok_up, out_up = await _run_host_sh("awk '{print int($1)}' /proc/uptime 2>/dev/null")
+        if ok_up and out_up.strip().isdigit():
+            base["uptime_seconds"] = max(0, int(out_up.strip()) - int(monotonic_us / 1_000_000))
+
+    # 5. Config parsing
+    ok_cfg, out_cfg = await _run_host_sh("cat /opt/zapret/config 2>/dev/null")
+    if ok_cfg and out_cfg:
+        for line in out_cfg.splitlines():
+            line = line.strip()
+            if line.startswith("MODE="):
+                base["config_mode"] = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("NFQWS_OPT="):
+                base["nfqws_opt"] = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("NFQWS_PORTS_UDP=") and "443" in line:
+                base["quic_enabled"] = True
+            elif "hostlist-auto" in line.lower() and not line.startswith("#"):
+                base["auto_hostlist_enabled"] = True
+
+    # 6. Hitung jumlah domain di hostlist
+    ok_hl, out_hl = await _run_host_sh(
+        "wc -l < /opt/zapret/hostlist.txt 2>/dev/null || echo 0"
+    )
+    if ok_hl and out_hl.strip().isdigit():
+        base["hostlist_count"] = int(out_hl.strip())
+
+    # 7. Packet stats dari nft
+    ok_nft, out_nft = await _run_host_sh(
+        "nft list table inet zapret 2>/dev/null | grep -E 'packets|bytes' | head -4"
+    )
+    if ok_nft and out_nft:
+        pkts = bytes_total = 0
+        for m in re.finditer(r'packets\s+(\d+)\s+bytes\s+(\d+)', out_nft):
+            pkts += int(m.group(1))
+            bytes_total += int(m.group(2))
+        base["packets_processed"] = pkts
+        base["bytes_processed"] = bytes_total
+
+    return base
+
+
+# ─── ENDPOINTS ───────────────────────────────────────────────────────────────
+
+@router.get("/status")
+async def get_zapret_status(user=Depends(get_current_user)):
+    """Status real-time Zapret dari host OS."""
+    return await _get_realtime_status()
+
+
+@router.post("/start")
+async def start_zapret(user=Depends(require_write)):
+    ok, out = await _run_host_sh("PATH=/usr/sbin:/sbin:/usr/bin:/bin systemctl start zapret 2>&1")
+    if not ok:
+        raise HTTPException(500, f"Failed to start Zapret: {out}")
+    await asyncio.sleep(1)
+    return {"message": "Zapret started", "status": await _get_realtime_status()}
+
+
+@router.post("/stop")
+async def stop_zapret(user=Depends(require_write)):
+    ok, out = await _run_host_sh("PATH=/usr/sbin:/sbin:/usr/bin:/bin systemctl stop zapret 2>&1")
+    if not ok:
+        raise HTTPException(500, f"Failed to stop Zapret: {out}")
+    await asyncio.sleep(1)
+    return {"message": "Zapret stopped", "status": await _get_realtime_status()}
+
+
+@router.post("/restart")
+async def restart_zapret(user=Depends(require_write)):
+    ok, out = await _run_host_sh("PATH=/usr/sbin:/sbin:/usr/bin:/bin systemctl restart zapret 2>&1")
+    if not ok:
+        raise HTTPException(500, f"Failed to restart Zapret: {out}")
+    await asyncio.sleep(2)
+    return {"message": "Zapret restarted", "status": await _get_realtime_status()}
+
 
 @router.get("/config")
 async def get_zapret_config(user=Depends(get_current_user)):
-    ok, out = await _run_host_sh("cat /opt/zapret/config 2>&1")
+    """Baca konfigurasi Zapret dari host."""
+    ok, out = await _run_host_sh("cat /opt/zapret/config 2>/dev/null")
     if not ok or not out.strip():
-        return {"config": DEFAULT_ZAPRET_CONFIG, "is_default": True}
+        return {"config": _build_config("universal"), "is_default": True}
     return {"config": out, "is_default": False}
+
 
 @router.put("/config")
 async def save_zapret_config(body: dict = Body(...), user=Depends(require_write)):
+    """Simpan konfigurasi via base64 (aman dari karakter special)."""
     new_config = body.get("config", "")
-    if not new_config:
+    if not new_config.strip():
         raise HTTPException(400, "Config content cannot be empty")
+    if "MODE=" not in new_config:
+        raise HTTPException(400, "Invalid config: missing MODE= directive")
 
-    # Pastikan direktori ada di host
+    encoded = base64.b64encode(new_config.encode()).decode()
     await _run_host_sh("mkdir -p /opt/zapret")
-
-    # Escape single quotes dan tulis via printf untuk keamanan
-    escaped = new_config.replace("'", "'\"'\"'")
-    ok_w, out_w = await _run_host_sh(f"printf '%s' '{escaped}' > /opt/zapret/config")
+    ok_w, out_w = await _run_host_sh(f"echo '{encoded}' | base64 -d > /opt/zapret/config")
     if not ok_w:
         raise HTTPException(500, f"Failed to write config: {out_w}")
 
-    ok_res, out_res = await _run_host_sh("systemctl restart zapret 2>&1 || true")
-    return {"message": "Configuration saved", "restart_output": out_res}
+    ok_res, out_res = await _run_host_sh("PATH=/usr/sbin:/sbin:/usr/bin:/bin systemctl restart zapret 2>&1")
+    await asyncio.sleep(2)
+    return {
+        "message": "Configuration saved and Zapret restarted",
+        "restart_ok": ok_res,
+        "restart_output": out_res,
+        "status": await _get_realtime_status()
+    }
+
+
+@router.get("/strategies")
+async def get_strategies(user=Depends(get_current_user)):
+    """Daftar semua ISP strategy preset yang tersedia."""
+    return {
+        "strategies": [
+            {"key": k, **v} for k, v in ISP_STRATEGIES.items()
+        ]
+    }
+
+
+@router.post("/strategies/apply")
+async def apply_strategy(body: dict = Body(...), user=Depends(require_write)):
+    """
+    Terapkan ISP strategy preset ke konfigurasi Zapret.
+    body: { strategy_key, enable_udp, enable_auto_hostlist }
+    """
+    strategy_key = body.get("strategy_key", "universal")
+    enable_udp = body.get("enable_udp", True)
+    enable_auto_hostlist = body.get("enable_auto_hostlist", False)
+
+    if strategy_key not in ISP_STRATEGIES:
+        raise HTTPException(400, f"Unknown strategy: {strategy_key}. Available: {list(ISP_STRATEGIES.keys())}")
+
+    new_config = _build_config(strategy_key, enable_udp, enable_auto_hostlist)
+    encoded = base64.b64encode(new_config.encode()).decode()
+
+    await _run_host_sh("mkdir -p /opt/zapret")
+    ok_w, out_w = await _run_host_sh(f"echo '{encoded}' | base64 -d > /opt/zapret/config")
+    if not ok_w:
+        raise HTTPException(500, f"Failed to write config: {out_w}")
+
+    ok_res, out_res = await _run_host_sh("PATH=/usr/sbin:/sbin:/usr/bin:/bin systemctl restart zapret 2>&1")
+    await asyncio.sleep(2)
+    return {
+        "message": f"Strategy '{ISP_STRATEGIES[strategy_key]['name']}' applied",
+        "strategy": ISP_STRATEGIES[strategy_key],
+        "restart_ok": ok_res,
+        "restart_output": out_res,
+        "status": await _get_realtime_status()
+    }
+
+
+@router.get("/hostlist")
+async def get_hostlist(user=Depends(get_current_user)):
+    """Baca daftar domain di hostlist."""
+    ok, out = await _run_host_sh("cat /opt/zapret/hostlist.txt 2>/dev/null || echo ''")
+    domains = [d.strip() for d in out.splitlines() if d.strip() and not d.startswith("#")]
+    return {"domains": domains, "count": len(domains)}
+
+
+@router.put("/hostlist")
+async def save_hostlist(body: dict = Body(...), user=Depends(require_write)):
+    """
+    Simpan daftar domain ke hostlist.
+    body: { domains: ["example.com", "google.com", ...] }
+    """
+    domains = body.get("domains", [])
+    if not isinstance(domains, list):
+        raise HTTPException(400, "domains must be a list")
+
+    # Validasi dan deduplicate
+    clean = []
+    seen = set()
+    for d in domains:
+        d = d.strip().lower()
+        if d and d not in seen and not d.startswith("#"):
+            # Basic domain validation
+            if re.match(r'^[a-z0-9\.\-\*]+$', d):
+                clean.append(d)
+                seen.add(d)
+
+    content = "# Zapret Hostlist - dikelola oleh NOC Billing Pro\n"
+    content += "\n".join(clean)
+
+    encoded = base64.b64encode(content.encode()).decode()
+    await _run_host_sh("mkdir -p /opt/zapret")
+    ok_w, out_w = await _run_host_sh(f"echo '{encoded}' | base64 -d > /opt/zapret/hostlist.txt")
+    if not ok_w:
+        raise HTTPException(500, f"Failed to write hostlist: {out_w}")
+
+    return {"message": "Hostlist saved", "count": len(clean), "domains": clean}
+
+
+@router.get("/hostlist/auto")
+async def get_auto_hostlist(user=Depends(get_current_user)):
+    """Baca auto-hostlist yang dibangun otomatis oleh Zapret."""
+    ok, out = await _run_host_sh("cat /opt/zapret/hostlist-auto.txt 2>/dev/null || echo ''")
+    domains = [d.strip() for d in out.splitlines() if d.strip() and not d.startswith("#")]
+    return {"domains": domains, "count": len(domains)}
+
+
+@router.delete("/hostlist/auto")
+async def clear_auto_hostlist(user=Depends(require_write)):
+    """Hapus auto-hostlist (reset deteksi otomatis)."""
+    ok, out = await _run_host_sh("rm -f /opt/zapret/hostlist-auto.txt && echo CLEARED")
+    return {"message": "Auto hostlist cleared"}
+
+
+@router.post("/blockcheck")
+async def run_blockcheck(body: dict = Body(...), user=Depends(require_write)):
+    """
+    Test apakah domain tertentu bisa diakses dengan strategy saat ini.
+    Menggunakan curl untuk test konektivitas ke domain.
+    body: { domain: "youtube.com", timeout: 5 }
+    """
+    domain = body.get("domain", "").strip().lower()
+    timeout = min(int(body.get("timeout", 5)), 30)
+
+    if not domain:
+        raise HTTPException(400, "domain is required")
+
+    # Validasi domain
+    if not re.match(r'^[a-z0-9\.\-]+$', domain):
+        raise HTTPException(400, "Invalid domain format")
+
+    results = {}
+
+    # Test HTTP
+    ok_http, out_http = await _run_host_sh(
+        f"curl -s -o /dev/null -w '%{{http_code}}' --max-time {timeout} http://{domain}/ 2>&1",
+        timeout=timeout + 5
+    )
+    results["http"] = {
+        "ok": ok_http and out_http.strip() in ["200", "301", "302", "307", "308"],
+        "http_code": out_http.strip(),
+        "reachable": ok_http
+    }
+
+    # Test HTTPS
+    ok_https, out_https = await _run_host_sh(
+        f"curl -s -o /dev/null -w '%{{http_code}}' --max-time {timeout} -L https://{domain}/ 2>&1",
+        timeout=timeout + 5
+    )
+    results["https"] = {
+        "ok": ok_https and out_https.strip() in ["200", "301", "302", "307", "308"],
+        "http_code": out_https.strip(),
+        "reachable": ok_https
+    }
+
+    # Test DNS resolution
+    ok_dns, out_dns = await _run_host_sh(
+        f"dig +short {domain} A 2>/dev/null | head -3 || nslookup {domain} 2>/dev/null | grep Address | tail -1",
+        timeout=10
+    )
+    results["dns"] = {
+        "resolved": ok_dns and bool(out_dns.strip()),
+        "addresses": [ip.strip() for ip in out_dns.strip().splitlines() if ip.strip()] if ok_dns else []
+    }
+
+    # Cek apakah service zapret aktif
+    ok_svc, out_svc = await _run_host_sh("systemctl is-active zapret 2>/dev/null")
+    results["zapret_active"] = ok_svc and out_svc.strip() == "active"
+
+    # Overall assessment
+    if results["https"]["ok"]:
+        results["verdict"] = "bypass_success"
+        results["verdict_text"] = f"✅ {domain} dapat diakses via HTTPS"
+    elif results["http"]["ok"]:
+        results["verdict"] = "http_only"
+        results["verdict_text"] = f"⚠️ {domain} hanya bisa via HTTP (HTTPS gagal)"
+    elif not results["dns"]["resolved"]:
+        results["verdict"] = "dns_blocked"
+        results["verdict_text"] = f"❌ {domain} diblokir di level DNS"
+    else:
+        results["verdict"] = "blocked"
+        results["verdict_text"] = f"❌ {domain} terblokir (DNS resolved tapi koneksi gagal)"
+
+    return {"domain": domain, **results}
+
 
 @router.get("/logs")
-async def get_zapret_logs(user=Depends(get_current_user)):
-    ok, out = await _run_host_sh("journalctl -u zapret -n 50 --no-pager 2>&1")
-    if not ok:
-        return {"logs": f"Failed to fetch logs: {out}"}
+async def get_zapret_logs(lines: int = 100, user=Depends(get_current_user)):
+    """Ambil log Zapret dari journalctl."""
+    ok, out = await _run_host_sh(
+        f"journalctl -u zapret -n {min(lines, 500)} --no-pager --output=short 2>/dev/null"
+    )
+    if not ok or not out.strip():
+        ok2, out2 = await _run_host_sh(f"grep zapret /var/log/syslog 2>/dev/null | tail -{min(lines, 500)}")
+        if ok2 and out2.strip():
+            return {"logs": out2}
+        return {"logs": "No logs available."}
     return {"logs": out}
+
+
+@router.get("/diag")
+async def zapret_diag(user=Depends(require_write)):
+    """Diagnostik lengkap Zapret dan environment host."""
+    checks = {}
+
+    ok, out = await _run_host_sh("systemctl is-active zapret && systemctl is-enabled zapret 2>/dev/null")
+    checks["service"] = {"active": ok, "status": out}
+
+    ok, out = await _run_host_sh("ls /opt/zapret/nfq/nfqws 2>/dev/null && /opt/zapret/nfq/nfqws --version 2>&1 | head -2")
+    checks["nfqws_binary"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("cat /opt/zapret/config 2>/dev/null | grep -v '^#' | grep -v '^$'")
+    checks["config"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("which nft && nft list tables 2>/dev/null")
+    checks["nftables"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("nft list table inet zapret 2>/dev/null | head -20")
+    checks["zapret_nft_table"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("pgrep -af nfqws 2>/dev/null")
+    checks["nfqws_process"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("ls /opt/zapret/hostlist.txt 2>/dev/null && wc -l /opt/zapret/hostlist.txt")
+    checks["hostlist"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("ls /opt/zapret/hostlist-auto.txt 2>/dev/null && wc -l /opt/zapret/hostlist-auto.txt")
+    checks["auto_hostlist"] = {"ok": ok, "out": out}
+
+    ok, out = await _run_host_sh("cat /proc/sys/net/ipv4/conf/all/forwarding 2>/dev/null")
+    checks["ip_forwarding"] = {"ok": ok, "enabled": out.strip() == "1"}
+
+    return checks
