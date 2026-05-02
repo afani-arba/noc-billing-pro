@@ -332,8 +332,7 @@ async def perform_update(user=Depends(require_admin)):
             logger.info(msg)
 
         try:
-            import shutil
-            is_docker = not shutil.which("git")
+            is_docker = Path("/.dockerenv").exists() or Path("/update-data").exists()
 
             # ── 1. Docker Mode: Trigger File via Shared Volume ──────────────────
             # noc-updater service (docker:cli container) membaca trigger ini
