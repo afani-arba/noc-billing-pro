@@ -36,7 +36,8 @@ NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
 
 export default function ZapretPage() {
     const [status, setStatus] = useState(null);
-    const [config, setConfig] = useState('');
+    // Tampilkan template default langsung, akan di-replace jika server punya config asli
+    const [config, setConfig] = useState(DEFAULT_ZAPRET_CONFIG);
     const [logs, setLogs] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
