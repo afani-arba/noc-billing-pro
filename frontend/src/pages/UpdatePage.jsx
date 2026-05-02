@@ -88,7 +88,7 @@ export default function UpdatePage() {
     setChangelogError(false);
     try {
       const r = await fetch(
-        "https://api.github.com/repos/afani-arba/noc-sentinel-v3/commits?per_page=8",
+        "https://api.github.com/repos/afani-arba/noc-billing-pro/commits?per_page=8",
         { headers: { "Accept": "application/vnd.github.v3+json" } }
       );
       if (!r.ok) throw new Error(`GitHub API: ${r.status}`);

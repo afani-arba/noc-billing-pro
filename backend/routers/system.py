@@ -84,9 +84,9 @@ async def check_update(user=Depends(require_admin)):
         # Ambil latest commit dari GitHub API agar jalan tanpa git CLI (Docker)
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                "https://api.github.com/repos/afani-arba/noc-sentinel-v3/commits?per_page=10",
+                "https://api.github.com/repos/afani-arba/noc-billing-pro/commits?per_page=10",
                 timeout=10,
-                headers={"User-Agent": "NOC-Sentinel-App"}
+                headers={"User-Agent": "NOC-Billing-Pro-App"}
             )
             
         latest_commit = "unknown"
@@ -251,9 +251,9 @@ async def perform_update(user=Depends(require_admin)):
                 # Strategi 2: Fallback — docker CLI langsung dari socket
                 elif Path("/var/run/docker.sock").exists():
                     _append("⚙️  /update-data tidak ada, mencoba Docker socket langsung...")
-                    _append("[1/3] Menjalankan: docker pull ghcr.io/afani-arba/noc-sentinel-v3-backend:latest")
+                    _append("[1/3] Menjalankan: docker pull ghcr.io/afani-arba/noc-billing-pro-backend:latest")
                     pull_be = subprocess.run(
-                        ["docker", "pull", "ghcr.io/afani-arba/noc-sentinel-v3-backend:latest"],
+                        ["docker", "pull", "ghcr.io/afani-arba/noc-billing-pro-backend:latest"],
                         capture_output=True, text=True, timeout=300
                     )
                     _append(pull_be.stdout[-800:] if pull_be.stdout else "(no output)")
@@ -262,9 +262,9 @@ async def perform_update(user=Depends(require_admin)):
                         _update_state.update({"running": False, "done": True, "success": False, "error": pull_be.stderr})
                         return
 
-                    _append("[2/3] Menjalankan: docker pull ghcr.io/afani-arba/noc-sentinel-v3-frontend:latest")
+                    _append("[2/3] Menjalankan: docker pull ghcr.io/afani-arba/noc-billing-pro-frontend:latest")
                     pull_fe = subprocess.run(
-                        ["docker", "pull", "ghcr.io/afani-arba/noc-sentinel-v3-frontend:latest"],
+                        ["docker", "pull", "ghcr.io/afani-arba/noc-billing-pro-frontend:latest"],
                         capture_output=True, text=True, timeout=300
                     )
                     _append(pull_fe.stdout[-800:] if pull_fe.stdout else "(no output)")
