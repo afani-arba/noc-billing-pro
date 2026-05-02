@@ -4,6 +4,36 @@ import { Play, Square, RotateCw, Save, RefreshCw, Shield, Activity, Cpu, HardDri
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+const DEFAULT_ZAPRET_CONFIG = `# ===================================================================
+# ZAPRET CONFIGURATION FOR INDONESIAN BROADBAND ISPs
+# ===================================================================
+
+# MODE: nfqws, tpws, tpws-socks, filter, custom
+MODE=nfqws
+DISABLE_IPV4=0
+DISABLE_IPV6=1
+FWTYPE=nftables
+
+# -------------------------------------------------------------------
+# DPI BYPASS STRATEGIES (Uncomment salah satu yang sesuai dengan ISP)
+# -------------------------------------------------------------------
+
+# 1. IndiHome / Indibiz / Telkomsel (Typical Telkom DPI)
+# NFQWS_OPT="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=8 --dpi-desync-fooling=md5sig"
+
+# 2. Iconnet / PLN
+# NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2"
+
+# 3. Starlink Indonesia
+# NFQWS_OPT="--dpi-desync=split2 --dpi-desync-split-pos=1"
+
+# 4. Biznet / MyRepublic / FirstMedia
+# NFQWS_OPT="--dpi-desync=fake,split2 --dpi-desync-ttl=4"
+
+# 5. Default Universal (Lebih aman untuk berbagai ISP)
+NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
+`;
+
 export default function ZapretPage() {
     const [status, setStatus] = useState(null);
     const [config, setConfig] = useState('');
@@ -21,12 +51,14 @@ export default function ZapretPage() {
             const [statusRes, configRes, logsRes] = await Promise.all([
                 axios.get(`${API_URL}/api/zapret/status`, { headers }),
                 axios.get(`${API_URL}/api/zapret/config`, { headers }).catch(() => ({ data: { config: '' } })),
-                axios.get(`${API_URL}/api/zapret/logs`, { headers })
+                axios.get(`${API_URL}/api/zapret/logs`, { headers }).catch(() => ({ data: { logs: '' } }))
             ]);
             
             setStatus(statusRes.data);
             if (!isEditing) {
-                setConfig(configRes.data.config);
+                // Jika config kosong dari server, gunakan DEFAULT template
+                const rawConfig = configRes.data.config || '';
+                setConfig(rawConfig.trim() || DEFAULT_ZAPRET_CONFIG);
             }
             setLogs(logsRes.data.logs);
         } catch (error) {
