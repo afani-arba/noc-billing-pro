@@ -2061,12 +2061,12 @@ async def save_bgp_settings(payload: dict = Body(...), user=Depends(require_writ
 """
     try:
         subprocess.run(
-            ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "bash", "-c", "cat > /etc/gobgpd/gobgpd.conf"],
+            ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "bash", "-c", "mkdir -p /etc/gobgpd && cat > /etc/gobgpd/gobgpd.conf"],
             input=config_text,
             text=True,
             check=True
         )
-        subprocess.run(["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "systemctl", "restart", "gobgpd"], check=True)
+        subprocess.run(["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "systemctl", "restart", "gobgpd"], check=False)
     except Exception as e:
         raise HTTPException(500, f"Gagal update config host: {e}")
         
