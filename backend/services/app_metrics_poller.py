@@ -64,16 +64,14 @@ async def _get_active_platform_names() -> list[str]:
         return []
 
 
-async def _list_simple_queues_rest(device: dict) -> list[dict]:
+async def _list_simple_queues_compat(device: dict) -> list[dict]:
     """
-    Tarik daftar Simple Queue dari MikroTik via REST API.
-    Return list of dicts (sesuai format RouterOS REST).
+    Tarik daftar Simple Queue dari MikroTik (ROS6 & ROS7 kompatibel).
     """
     try:
         from mikrotik_api import get_api_client
         mt = get_api_client(device)
-        # REST API endpoint: /queue/simple
-        result = await mt._async_req("GET", "queue/simple")
+        result = await mt.list_simple_queues()
         return result if isinstance(result, list) else []
     except Exception as e:
         host = device.get("ip_address", "?")
@@ -86,7 +84,7 @@ async def poll_device_app_traffic(device: dict, platform_names: list[str]) -> di
     Poll traffic stats untuk device tertentu.
     Return: {platform_name: {"bytes_rx": int, "bytes_tx": int}}
     """
-    queues = await _list_simple_queues_rest(device)
+    queues = await _list_simple_queues_compat(device)
     if not queues:
         return {}
 

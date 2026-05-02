@@ -39,6 +39,70 @@ async def _get_device(device_id: str) -> dict:
     return dev
 
 
+# ── Helper: abstraksi ROS6 (Legacy API) vs ROS7 (REST API) ───────────────────
+# Semua operasi di network_tuning harus melalui fungsi-fungsi ini agar
+# kompatibel dengan kedua versi RouterOS tanpa memanggil _async_req langsung.
+
+import asyncio as _asyncio
+
+def _is_legacy(mt) -> bool:
+    """Deteksi apakah client ini adalah LegacyAPI (ROS6) atau RestAPI (ROS7)."""
+    return hasattr(mt, '_list_resource') and not hasattr(mt, 'base_url')
+
+async def _mt_get(mt, path: str) -> list:
+    """GET resource — ROS6: _list_resource, ROS7: _async_req GET."""
+    if _is_legacy(mt):
+        items = await _asyncio.to_thread(mt._list_resource, f"/{path}")
+        return mt._normalize_items(items) if items else []
+    result = await mt._async_req("GET", path)
+    return result if isinstance(result, list) else ([result] if result else [])
+
+async def _mt_get_one(mt, path: str) -> dict:
+    """GET single resource/settings — ROS6 & ROS7."""
+    if _is_legacy(mt):
+        items = await _asyncio.to_thread(mt._list_resource, f"/{path}")
+        normalized = mt._normalize_items(items) if items else []
+        return normalized[0] if normalized else {}
+    result = await mt._async_req("GET", path)
+    if isinstance(result, list):
+        return result[0] if result else {}
+    return result if isinstance(result, dict) else {}
+
+async def _mt_add(mt, path: str, data: dict) -> dict:
+    """ADD resource — ROS6: _add_resource, ROS7: PUT."""
+    if _is_legacy(mt):
+        return await _asyncio.to_thread(mt._add_resource, f"/{path}", data)
+    return await mt._async_req("PUT", path, data)
+
+async def _mt_set(mt, path: str, mt_id: str, data: dict) -> dict:
+    """UPDATE resource by id — ROS6: _set_resource, ROS7: PATCH."""
+    if _is_legacy(mt):
+        return await _asyncio.to_thread(mt._set_resource, f"/{path}", mt_id, data)
+    return await mt._async_req("PATCH", f"{path}/{mt_id}", data)
+
+async def _mt_delete(mt, path: str, mt_id: str) -> dict:
+    """DELETE resource by id — ROS6: _remove_resource, ROS7: DELETE."""
+    if _is_legacy(mt):
+        return await _asyncio.to_thread(mt._remove_resource, f"/{path}", mt_id)
+    return await mt._async_req("DELETE", f"{path}/{mt_id}")
+
+async def _mt_post(mt, path: str, data: dict = None) -> dict:
+    """POST/call command — ROS6: execute via _execute, ROS7: POST."""
+    if _is_legacy(mt):
+        # ROS6: panggil command via API resource
+        def _cb(api):
+            parts = path.split("/")
+            resource_path = "/" + "/".join(parts[:-1])
+            cmd = parts[-1]
+            resource = api.get_resource(resource_path)
+            return resource.call(cmd, **(data or {}))
+        try:
+            return await _asyncio.to_thread(mt._execute, _cb)
+        except Exception:
+            return {}
+    return await mt._async_req("POST", path, data)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. SMART QUEUE (SQM) MANAGER
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -102,27 +166,21 @@ async def apply_sqm(body: SqmApplyRequest, user=Depends(require_write)):
     try:
         # 1. Cek/buat queue type
         try:
-            existing_types = await mt._async_req("GET", "queue/type")
-            existing_names = {t.get("name", "") for t in existing_types} if isinstance(existing_types, list) else set()
+            existing_types = await _mt_get(mt, "queue/type")
+            existing_names = {t.get("name", "") for t in existing_types}
         except Exception:
             existing_names = set()
 
         if down_name not in existing_names:
             try:
-                await mt._async_req("PUT", "queue/type", {
-                    "name": down_name,
-                    "kind": qt_name,
-                })
+                await _mt_add(mt, "queue/type", {"name": down_name, "kind": qt_name})
             except Exception as e:
                 if "already" not in str(e).lower():
                     logger.warning(f"Gagal buat queue type {down_name}: {e}")
 
         if up_name not in existing_names:
             try:
-                await mt._async_req("PUT", "queue/type", {
-                    "name": up_name,
-                    "kind": qt_name,
-                })
+                await _mt_add(mt, "queue/type", {"name": up_name, "kind": qt_name})
             except Exception as e:
                 if "already" not in str(e).lower():
                     logger.warning(f"Gagal buat queue type {up_name}: {e}")
@@ -179,27 +237,14 @@ async def get_conntrack_status(device_id: str, user=Depends(get_current_user)):
 
     try:
         # Baca conntrack settings
-        ct_settings = await mt._async_req("GET", "ip/firewall/connection/tracking")
-        if isinstance(ct_settings, list):
-            ct_settings = ct_settings[0] if ct_settings else {}
+        ct_settings = await _mt_get_one(mt, "ip/firewall/connection/tracking")
 
         # Hitung total koneksi aktif
         try:
-            ct_count_resp = await mt._async_req("POST", "ip/firewall/connection/print", {
-                ".query": ["count-only="]
-            })
-            if isinstance(ct_count_resp, dict):
-                total_connections = int(ct_count_resp.get("ret", 0))
-            else:
-                # Fallback: ambil list dan count
-                connections = await mt._async_req("GET", "ip/firewall/connection")
-                total_connections = len(connections) if isinstance(connections, list) else 0
+            connections = await _mt_get(mt, "ip/firewall/connection")
+            total_connections = len(connections)
         except Exception:
-            try:
-                connections = await mt._async_req("GET", "ip/firewall/connection")
-                total_connections = len(connections) if isinstance(connections, list) else 0
-            except Exception:
-                total_connections = 0
+            total_connections = 0
 
         max_entries = int(ct_settings.get("max-entries", 16384))
         usage_pct = round(total_connections / max_entries * 100, 1) if max_entries > 0 else 0
@@ -234,7 +279,7 @@ async def optimize_conntrack(body: ConntrackOptimizeRequest, user=Depends(requir
     mt = get_api_client(dev)
 
     try:
-        await mt._async_req("POST", "ip/firewall/connection/tracking/set", {
+        await _mt_post(mt, "ip/firewall/connection/tracking/set", {
             "max-entries": str(body.max_entries),
             "tcp-established-timeout": body.tcp_established_timeout,
             "tcp-close-timeout": body.tcp_close_timeout,
@@ -267,9 +312,7 @@ async def get_mss_status(device_id: str, user=Depends(get_current_user)):
     mt = get_api_client(dev)
 
     try:
-        rules = await mt._async_req("GET", "ip/firewall/mangle")
-        if not isinstance(rules, list):
-            rules = []
+        rules = await _mt_get(mt, "ip/firewall/mangle")
 
         mss_rule = None
         for r in rules:
@@ -301,27 +344,21 @@ async def apply_mss(body: MssToggleRequest, user=Depends(require_write)):
     mt = get_api_client(dev)
 
     try:
-        # Cek existing rule
-        rules = await mt._async_req("GET", "ip/firewall/mangle")
+        rules = await _mt_get(mt, "ip/firewall/mangle")
         existing = None
-        if isinstance(rules, list):
-            for r in rules:
-                if MSS_COMMENT in str(r.get("comment", "")):
-                    existing = r
-                    break
+        for r in rules:
+            if MSS_COMMENT in str(r.get("comment", "")):
+                existing = r
+                break
 
         if body.enable:
             if existing:
-                # Sudah ada — pastikan enabled
                 if existing.get("disabled", "false") == "true":
-                    await mt._async_req("PATCH", f"ip/firewall/mangle/{existing['.id']}", {
-                        "disabled": "false"
-                    })
+                    await _mt_set(mt, "ip/firewall/mangle", existing[".id"], {"disabled": "false"})
                     return {"message": "MSS Clamping rule sudah ada, berhasil di-enable kembali"}
                 return {"message": "MSS Clamping sudah aktif"}
             else:
-                # Buat rule baru
-                await mt._async_req("PUT", "ip/firewall/mangle", {
+                await _mt_add(mt, "ip/firewall/mangle", {
                     "chain": "forward",
                     "protocol": "tcp",
                     "tcp-flags": "syn",
@@ -332,9 +369,8 @@ async def apply_mss(body: MssToggleRequest, user=Depends(require_write)):
                 })
                 return {"message": "MSS Clamping berhasil diterapkan"}
         else:
-            # Disable
             if existing:
-                await mt._async_req("DELETE", f"ip/firewall/mangle/{existing['.id']}")
+                await _mt_delete(mt, "ip/firewall/mangle", existing[".id"])
                 return {"message": "MSS Clamping berhasil dihapus"}
             return {"message": "MSS Clamping belum diterapkan"}
 
@@ -419,9 +455,7 @@ async def get_raw_firewall_status(device_id: str, user=Depends(get_current_user)
     mt = get_api_client(dev)
 
     try:
-        rules = await mt._async_req("GET", "ip/firewall/raw")
-        if not isinstance(rules, list):
-            rules = []
+        rules = await _mt_get(mt, "ip/firewall/raw")
 
         # Ambil CPU usage
         resource = await mt.get_system_resource()
@@ -476,19 +510,17 @@ async def apply_raw_firewall(body: RawFirewallRequest, user=Depends(require_writ
     mt = get_api_client(dev)
 
     try:
-        rules = await mt._async_req("GET", "ip/firewall/raw")
+        rules = await _mt_get(mt, "ip/firewall/raw")
         existing_comments = set()
-        if isinstance(rules, list):
-            for r in rules:
-                c = str(r.get("comment", ""))
-                if c.startswith("NOC-RAW-"):
-                    existing_comments.add(c)
-                    if not body.enable_all:
-                        # Delete rule
-                        try:
-                            await mt._async_req("DELETE", f"ip/firewall/raw/{r['.id']}")
-                        except Exception:
-                            pass
+        for r in rules:
+            c = str(r.get("comment", ""))
+            if c.startswith("NOC-RAW-"):
+                existing_comments.add(c)
+                if not body.enable_all:
+                    try:
+                        await _mt_delete(mt, "ip/firewall/raw", r[".id"])
+                    except Exception:
+                        pass
 
         if not body.enable_all:
             return {"message": "Semua NOC Raw Firewall rules telah dihapus"}
@@ -501,13 +533,12 @@ async def apply_raw_firewall(body: RawFirewallRequest, user=Depends(require_writ
                 skipped += 1
                 continue
             try:
-                await mt._async_req("PUT", "ip/firewall/raw", rule_def["config"])
+                await _mt_add(mt, "ip/firewall/raw", rule_def["config"])
                 added += 1
             except Exception as e:
-                # Coba fallback config (misal jika in-interface-list tidak ada)
                 if rule_def.get("fallback_config"):
                     try:
-                        await mt._async_req("PUT", "ip/firewall/raw", rule_def["fallback_config"])
+                        await _mt_add(mt, "ip/firewall/raw", rule_def["fallback_config"])
                         added += 1
                     except Exception:
                         logger.warning(f"Gagal apply rule {comment}: {e}")
@@ -716,27 +747,25 @@ async def get_qos_priority_status(device_id: str, user=Depends(get_current_user)
 
     try:
         # Cek Mangle
-        mangles = await mt._async_req("GET", "ip/firewall/mangle")
+        mangles = await _mt_get(mt, "ip/firewall/mangle")
         applied_mangle = False
         mangle_count = 0
-        if isinstance(mangles, list):
-            for m in mangles:
-                if QOS_COMMENT in str(m.get("comment", "")):
-                    applied_mangle = True
-                    mangle_count += 1
+        for m in mangles:
+            if QOS_COMMENT in str(m.get("comment", "")):
+                applied_mangle = True
+                mangle_count += 1
 
         # Cek Simple Queue
-        queues = await mt._async_req("GET", "queue/simple")
+        queues = await _mt_get(mt, "queue/simple")
         applied_queue = False
         queue_id = ""
         disabled = False
-        if isinstance(queues, list):
-            for q in queues:
-                if QOS_COMMENT in str(q.get("comment", "")) or q.get("name") == QOS_SIMPLE_QUEUE["name"]:
-                    applied_queue = True
-                    queue_id = q.get(".id", "")
-                    disabled = q.get("disabled", "false") == "true"
-                    break
+        for q in queues:
+            if QOS_COMMENT in str(q.get("comment", "")) or q.get("name") == QOS_SIMPLE_QUEUE["name"]:
+                applied_queue = True
+                queue_id = q.get(".id", "")
+                disabled = q.get("disabled", "false") == "true"
+                break
 
         return {
             "device_id": device_id,
@@ -764,44 +793,38 @@ async def apply_qos_priority(body: QosPriorityRequest, user=Depends(require_writ
     mt = get_api_client(dev)
 
     try:
-        # Get existing rules
-        mangles = await mt._async_req("GET", "ip/firewall/mangle")
-        queues = await mt._async_req("GET", "queue/simple")
-        
-        existing_mangles = [m for m in (mangles if isinstance(mangles, list) else []) if QOS_COMMENT in str(m.get("comment", ""))]
-        existing_queues = [q for q in (queues if isinstance(queues, list) else []) if QOS_COMMENT in str(q.get("comment", "")) or q.get("name") == QOS_SIMPLE_QUEUE["name"]]
+        mangles = await _mt_get(mt, "ip/firewall/mangle")
+        queues = await _mt_get(mt, "queue/simple")
+
+        existing_mangles = [m for m in mangles if QOS_COMMENT in str(m.get("comment", ""))]
+        existing_queues = [q for q in queues if QOS_COMMENT in str(q.get("comment", "")) or q.get("name") == QOS_SIMPLE_QUEUE["name"]]
 
         if body.enable:
             # 1. Apply Mangle
             if len(existing_mangles) < len(QOS_MANGLE_RULES):
-                # Hapus yang lama dulu jika tidak lengkap
                 for m in existing_mangles:
                     try:
-                        await mt._async_req("DELETE", f"ip/firewall/mangle/{m['.id']}")
+                        await _mt_delete(mt, "ip/firewall/mangle", m[".id"])
                     except Exception: pass
-                # Tambah baru
                 for r in QOS_MANGLE_RULES:
-                    await mt._async_req("PUT", "ip/firewall/mangle", r)
+                    await _mt_add(mt, "ip/firewall/mangle", r)
             elif existing_mangles and existing_mangles[0].get("disabled", "false") == "true":
-                # Enable jika disable
                 for m in existing_mangles:
-                    await mt._async_req("PATCH", f"ip/firewall/mangle/{m['.id']}", {"disabled": "false"})
+                    await _mt_set(mt, "ip/firewall/mangle", m[".id"], {"disabled": "false"})
 
             # 2. Apply Simple Queue
             if not existing_queues:
-                # Tambah baru dan berusaha letakkan di paling atas jika bisa
-                await mt._async_req("PUT", "queue/simple", QOS_SIMPLE_QUEUE)
+                await _mt_add(mt, "queue/simple", QOS_SIMPLE_QUEUE)
             elif existing_queues[0].get("disabled", "false") == "true":
-                await mt._async_req("PATCH", f"queue/simple/{existing_queues[0]['.id']}", {"disabled": "false"})
+                await _mt_set(mt, "queue/simple", existing_queues[0][".id"], {"disabled": "false"})
 
             return {"message": "QoS Priority (Gaming & Ping) berhasil diaktifkan. Pastikan posisi Queue berada di urutan paling atas (di atas PPPoE user)!"}
-        
+
         else:
-            # Disable / Remove
             for m in existing_mangles:
-                await mt._async_req("DELETE", f"ip/firewall/mangle/{m['.id']}")
+                await _mt_delete(mt, "ip/firewall/mangle", m[".id"])
             for q in existing_queues:
-                await mt._async_req("DELETE", f"queue/simple/{q['.id']}")
+                await _mt_delete(mt, "queue/simple", q[".id"])
 
             return {"message": "QoS Priority berhasil dihapus"}
 

@@ -56,8 +56,8 @@ async def _poll_device_interfaces(dev: dict) -> dict:
     alerts = []
 
     try:
-        # 1. Ambil semua interface + statistik
-        ifaces = await mt._async_req("GET", "interface")
+        # 1. Ambil semua interface + statistik (kompatibel ROS6 & ROS7)
+        ifaces = await mt.list_interfaces()
         if not isinstance(ifaces, list):
             ifaces = []
 
@@ -159,59 +159,57 @@ async def _poll_device_interfaces(dev: dict) -> dict:
                     "value": 0,
                 })
 
-        # 2. SFP monitoring (jika ada)
+        # 2. SFP monitoring (jika ada, hanya ROS7 REST API yang support monitor command)
         try:
-            # Cari interface ethernet yang bertipe sfp
-            eth_list = await mt._async_req("GET", "interface/ethernet")
-            if isinstance(eth_list, list):
-                for eth in eth_list:
-                    eth_name = eth.get("name", "")
-                    sfp_present = eth.get("sfp-rate", "") or eth.get("sfp-type", "")
-                    if not sfp_present and "sfp" not in eth_name.lower():
-                        continue
+            if hasattr(mt, '_async_req'):  # Hanya untuk ROS7 REST API
+                eth_list = await mt._async_req("GET", "interface/ethernet")
+                if isinstance(eth_list, list):
+                    for eth in eth_list:
+                        eth_name = eth.get("name", "")
+                        sfp_present = eth.get("sfp-rate", "") or eth.get("sfp-type", "")
+                        if not sfp_present and "sfp" not in eth_name.lower():
+                            continue
 
-                    # Monitor SFP
-                    try:
-                        mon = await mt._async_req("POST", "interface/ethernet/monitor", {
-                            ".id": eth.get(".id", eth_name),
-                            "once": True,
-                        })
-                        if isinstance(mon, list) and mon:
-                            mon = mon[0]
-                        if isinstance(mon, dict):
-                            sfp_temp = mon.get("sfp-temperature", "")
-                            sfp_tx = mon.get("sfp-tx-power", "")
-                            sfp_rx = mon.get("sfp-rx-power", "")
-                            link_speed = mon.get("rate", mon.get("speed", ""))
+                        try:
+                            mon = await mt._async_req("POST", "interface/ethernet/monitor", {
+                                ".id": eth.get(".id", eth_name),
+                                "once": True,
+                            })
+                            if isinstance(mon, list) and mon:
+                                mon = mon[0]
+                            if isinstance(mon, dict):
+                                sfp_temp = mon.get("sfp-temperature", "")
+                                sfp_tx = mon.get("sfp-tx-power", "")
+                                sfp_rx = mon.get("sfp-rx-power", "")
+                                link_speed = mon.get("rate", mon.get("speed", ""))
 
-                            sfp_data = {
-                                "interface": eth_name,
-                                "temperature": sfp_temp,
-                                "tx_power": sfp_tx,
-                                "rx_power": sfp_rx,
-                                "rate": link_speed,
-                                "status": mon.get("status", ""),
-                            }
-                            sfp_info.append(sfp_data)
+                                sfp_data = {
+                                    "interface": eth_name,
+                                    "temperature": sfp_temp,
+                                    "tx_power": sfp_tx,
+                                    "rx_power": sfp_rx,
+                                    "rate": link_speed,
+                                    "status": mon.get("status", ""),
+                                }
+                                sfp_info.append(sfp_data)
 
-                            # Alert: SFP RX power low
-                            try:
-                                rx_val = float(str(sfp_rx).replace("dBm", "").strip())
-                                if rx_val < -25:
-                                    alerts.append({
-                                        "type": "sfp_low_power",
-                                        "severity": "warning",
-                                        "interface": eth_name,
-                                        "message": f"SFP RX power rendah: {sfp_rx} pada {eth_name}",
-                                        "value": rx_val,
-                                    })
-                            except (ValueError, TypeError):
-                                pass
+                                try:
+                                    rx_val = float(str(sfp_rx).replace("dBm", "").strip())
+                                    if rx_val < -25:
+                                        alerts.append({
+                                            "type": "sfp_low_power",
+                                            "severity": "warning",
+                                            "interface": eth_name,
+                                            "message": f"SFP RX power rendah: {sfp_rx} pada {eth_name}",
+                                            "value": rx_val,
+                                        })
+                                except (ValueError, TypeError):
+                                    pass
 
-                    except Exception:
-                        pass  # Monitor mungkin tidak support di device ini
+                        except Exception:
+                            pass
         except Exception:
-            pass  # Ethernet list tidak tersedia
+            pass
 
     except Exception as e:
         logger.warning(f"Interface health poll error for {device_name}: {e}")
