@@ -114,6 +114,8 @@ export default function UpdatePage() {
       const r = await api.get("/system/check-update");
       setUpdateInfo(r.data);
       setStatus("idle");
+      // Refresh Versi Terpasang karena _read_git_commit di backend mungkin baru saja memperbaiki version.txt
+      fetchAppInfo();
     } catch (e) {
       setUpdateInfo({ has_update: false, message: "Gagal mengecek update: " + (e.response?.data?.detail || e.message) });
       setStatus("idle");
