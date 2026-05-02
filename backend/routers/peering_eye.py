@@ -2058,6 +2058,8 @@ async def save_bgp_settings(payload: dict = Body(...), user=Depends(require_writ
     config_text = f"""[global.config]
   as = {update.get("local_as", 65000)}
   router-id = "{update.get("router_id", "")}"
+  port = 179
+  local-address-list = ["0.0.0.0"]
 """
     try:
         subprocess.run(
