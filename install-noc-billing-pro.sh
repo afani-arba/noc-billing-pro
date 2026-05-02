@@ -208,13 +208,15 @@ ok "  Firewall dikonfigurasi."
 
 # GenieACS CSS
 info "  Menyiapkan file konfigurasi GenieACS..."
-if [ ! -f "genieacs/app-custom.css" ]; then
+if [ ! -s "genieacs/app-custom.css" ]; then
     if [ -f "genieacs/app-original.css" ]; then
         cp genieacs/app-original.css genieacs/app-custom.css
     else
         mkdir -p genieacs && touch genieacs/app-custom.css
     fi
-    ok "  genieacs/app-custom.css siap."
+    ok "  genieacs/app-custom.css siap (disalin dari template)."
+else
+    ok "  genieacs/app-custom.css sudah ada dan memiliki isian."
 fi
 
 # Build & Run
