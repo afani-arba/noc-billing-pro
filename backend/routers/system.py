@@ -47,6 +47,38 @@ _update_state = {
 }
 
 
+def _read_git_commit(git_dir: str = "/app-host") -> str:
+    """
+    Baca commit hash dari filesystem .git secara langsung.
+    TIDAK memerlukan git binary dan TIDAK ada masalah safe.directory.
+    Bekerja bahkan saat /app-host di-mount dari host dengan ownership berbeda.
+    """
+    try:
+        head_path = Path(git_dir) / ".git" / "HEAD"
+        if not head_path.exists():
+            return ""
+        head_content = head_path.read_text(encoding="utf-8").strip()
+        if head_content.startswith("ref: "):
+            # Normal branch, e.g. "ref: refs/heads/main"
+            ref_rel = head_content[5:]  # "refs/heads/main"
+            ref_path = Path(git_dir) / ".git" / ref_rel
+            if ref_path.exists():
+                sha = ref_path.read_text(encoding="utf-8").strip()
+                return sha[:7] if sha else ""
+            # Coba juga packed-refs
+            packed = Path(git_dir) / ".git" / "packed-refs"
+            if packed.exists():
+                for line in packed.read_text(encoding="utf-8").splitlines():
+                    if line.endswith(ref_rel):
+                        return line.split()[0][:7]
+        else:
+            # Detached HEAD — langsung SHA
+            return head_content[:7]
+    except Exception:
+        pass
+    return ""
+
+
 @router.get("/bgp-diag")
 async def bgp_diag(user=Depends(require_admin)):
     """Meticulous Diagnostic: Runs GoBGP commands on host via nsenter."""
@@ -124,50 +156,52 @@ async def check_update(user=Depends(require_admin)):
         logger.warning(f"GitHub API error: {gh_err}")
 
     # ── 2. Deteksi commit yang sedang berjalan ───────────────────────────────
-    # PRIORITAS: git -C /app-host (paling akurat) → version.txt → env var
+    # PRIORITAS: .git/HEAD file (paling akurat, tanpa git binary, tanpa safe.directory)
+    #            → version.txt → APP_VERSION_COMMIT env
     current_commit = "docker"
     current_msg = ""
 
-    # a) UTAMA: Coba git dari /app-host (selalu akurat setelah git pull)
-    #    Ini yang paling penting — tidak bergantung pada version.txt
-    try:
-        _r = subprocess.run(
-            ["git", "-C", "/app-host", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=5
-        )
-        if _r.returncode == 0 and _r.stdout.strip():
-            current_commit = _r.stdout.strip()
-            _m = subprocess.run(
-                ["git", "-C", "/app-host", "log", "-1", "--pretty=%s"],
+    # a) UTAMA: Baca .git/HEAD langsung dari /app-host (selalu akurat setelah git pull)
+    #    Tidak butuh git binary, tidak ada masalah safe.directory
+    _sha = _read_git_commit("/app-host")
+    if _sha:
+        current_commit = _sha
+        # Update version.txt agar konsisten dengan git state
+        try:
+            with open("/update-data/version.txt", "w") as _vf:
+                _vf.write(current_commit)
+        except Exception:
+            pass
+
+    # b) Juga coba git binary dengan safe.directory workaround (untuk mendapat commit message)
+    if current_commit != "docker":
+        try:
+            _r = subprocess.run(
+                ["git", "-C", "/app-host", "-c", "safe.directory=/app-host", "log", "-1", "--pretty=%s"],
                 capture_output=True, text=True, timeout=5
             )
-            current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
-            # Selalu sinkronkan version.txt dengan realita git
-            try:
-                with open("/update-data/version.txt", "w") as _vf:
-                    _vf.write(current_commit)
-            except Exception:
-                pass
-    except Exception:
-        pass
+            if _r.returncode == 0:
+                current_msg = _r.stdout.strip()
+        except Exception:
+            pass
 
-    # b) Fallback: version.txt (jika git tidak tersedia di container)
+    # c) Fallback: version.txt (jika /app-host tidak di-mount)
     if current_commit == "docker":
         try:
             with open("/update-data/version.txt", "r") as _vf:
                 _v = _vf.read().strip()
-                if _v:
+                if _v and _v != "docker":
                     current_commit = _v
         except Exception:
             pass
 
-    # c) Fallback: build-arg env var (APP_COMMIT_SHA via Dockerfile ARG)
+    # d) Fallback: build-arg env var (APP_COMMIT_SHA via Dockerfile ARG)
     if current_commit == "docker":
         _env_commit = os.environ.get("APP_VERSION_COMMIT", "")
         if _env_commit and _env_commit not in ("docker", ""):
             current_commit = _env_commit
 
-    # d) Source mode: git native langsung di container (bare metal)
+    # e) Source mode: git native langsung di container (bare metal)
     if shutil.which("git") and current_commit == "docker":
         _r = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -511,33 +545,30 @@ async def app_info():
     try:
         import shutil
         if not shutil.which("git"):
-            # Docker mode: cek /app-host git DULU (selalu akurat), lalu version.txt
-            current_commit = "docker"
+            # Docker mode: baca .git/HEAD langsung (paling akurat, tanpa safe.directory)
+            current_commit = _read_git_commit("/app-host") or ""
             current_msg = "Docker Deployment"
 
-            # 1) git -C /app-host (paling akurat)
-            try:
-                _r = subprocess.run(
-                    ["git", "-C", "/app-host", "rev-parse", "--short", "HEAD"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if _r.returncode == 0 and _r.stdout.strip():
-                    current_commit = _r.stdout.strip()
+            if current_commit:
+                # Dapat commit message via git dengan safe.directory flag
+                try:
                     _m = subprocess.run(
-                        ["git", "-C", "/app-host", "log", "-1", "--pretty=%s"],
+                        ["git", "-C", "/app-host", "-c", "safe.directory=/app-host",
+                         "log", "-1", "--pretty=%s"],
                         capture_output=True, text=True, timeout=5
                     )
-                    current_msg = _m.stdout.strip() if _m.returncode == 0 else "Docker Deployment"
-                    try:
-                        with open("/update-data/version.txt", "w") as _vf:
-                            _vf.write(current_commit)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # 2) Fallback: version.txt
-            if current_commit == "docker":
+                    if _m.returncode == 0:
+                        current_msg = _m.stdout.strip() or "Docker Deployment"
+                except Exception:
+                    pass
+                # Sync version.txt
+                try:
+                    with open("/update-data/version.txt", "w") as _vf:
+                        _vf.write(current_commit)
+                except Exception:
+                    pass
+            else:
+                # Fallback: version.txt
                 try:
                     with open("/update-data/version.txt", "r") as f:
                         _v = f.read().strip()
@@ -545,12 +576,12 @@ async def app_info():
                             current_commit = _v
                 except Exception:
                     pass
+                # Fallback: build-arg env
+                if not current_commit:
+                    current_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
 
-            # 3) Fallback: build-arg env
-            if current_commit == "docker":
-                current_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
-
-            return {"commit": current_commit, "message": current_msg, "date": "-", "version": "v3.0", "service_name": svc_name}
+            return {"commit": current_commit or "docker", "message": current_msg,
+                    "date": "-", "version": "v3.0", "service_name": svc_name}
 
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=APP_DIR, timeout=5
