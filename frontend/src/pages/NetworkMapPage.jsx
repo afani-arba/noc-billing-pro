@@ -136,11 +136,18 @@ export default function NetworkMapPage() {
         fetch(`${API}/api/network-map/tree`, { headers: h() }),
         fetch(`${API}/api/network-map/stats`, { headers: h() }),
       ]);
-      setNodes(await nRes.json());
-      setLinks(await lRes.json());
-      setTree(await tRes.json());
-      setStats(await sRes.json());
-    } catch (e) { console.error(e); }
+      // Always ensure arrays to prevent "s.filter is not a function" crash
+      const [nData, lData, tData, sData] = await Promise.all([
+        nRes.ok ? nRes.json() : [],
+        lRes.ok ? lRes.json() : [],
+        tRes.ok ? tRes.json() : [],
+        sRes.ok ? sRes.json() : null,
+      ]);
+      setNodes(Array.isArray(nData) ? nData : []);
+      setLinks(Array.isArray(lData) ? lData : []);
+      setTree(Array.isArray(tData) ? tData : []);
+      setStats(sData && typeof sData === 'object' && !Array.isArray(sData) ? sData : null);
+    } catch (e) { console.error('NetworkMap fetchAll error:', e); }
     setLoading(false);
   }, []);
 

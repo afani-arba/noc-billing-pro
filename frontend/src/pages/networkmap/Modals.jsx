@@ -125,13 +125,15 @@ export function NodeModal({ node, initialData, onClose, onSaved }) {
 }
 
 /* ─── Link Modal ─────────────────────────────────────────────────── */
-export function LinkModal({ sourceNode, nodes, onClose, onSaved }) {
+export function LinkModal({ sourceNode, nodes: nodesProp, onClose, onSaved }) {
   const [targetId, setTargetId] = useState('');
   const [linkType, setLinkType] = useState('fo_core');
   const [label, setLabel] = useState('');
   const [meta, setMeta] = useState({ cable_type: '', core_count: '', distance_m: '', loss_db: '' });
   const [saving, setSaving] = useState(false);
 
+  // Defensive: ensure nodes is always an array
+  const nodes = Array.isArray(nodesProp) ? nodesProp : [];
   const others = nodes.filter(n => n.id !== sourceNode.id);
 
   const save = async () => {

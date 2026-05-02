@@ -38,8 +38,12 @@ function MapClickHandler({ onMapClick }) {
 }
 
 export default function NetworkMapLeaflet({
-  nodes, links, selectedNode, onSelectNode, onMapClick, onMoveNode
+  nodes: nodesProp, links: linksProp, selectedNode, onSelectNode, onMapClick, onMoveNode
 }) {
+  // Defensive: ensure arrays regardless of props type
+  const nodes = Array.isArray(nodesProp) ? nodesProp : [];
+  const links = Array.isArray(linksProp) ? linksProp : [];
+
   // Default center: Indonesia
   const center = useMemo(() => {
     const geoNodes = nodes.filter(n => n.lat && n.lng);
@@ -51,6 +55,7 @@ export default function NetworkMapLeaflet({
 
   // Build node lookup for lines
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
+
 
   // Polylines for links between placed nodes
   const polylines = useMemo(() => links
