@@ -56,11 +56,37 @@ async def restart_zapret(user=Depends(require_write)):
         raise HTTPException(500, f"Failed to restart Zapret: {out}")
     return {"message": "Zapret restarted"}
 
-DEFAULT_ZAPRET_CONFIG = """# MODE: nfqws, tpws, tpws-socks, filter, custom
+DEFAULT_ZAPRET_CONFIG = """# ===================================================================
+# ZAPRET CONFIGURATION FOR INDONESIAN BROADBAND ISPs
+# ===================================================================
+
+# MODE: nfqws, tpws, tpws-socks, filter, custom
 MODE=nfqws
 DISABLE_IPV4=0
 DISABLE_IPV6=1
 FWTYPE=nftables
+
+# -------------------------------------------------------------------
+# DPI BYPASS STRATEGIES (Uncomment salah satu yang sesuai dengan ISP)
+# -------------------------------------------------------------------
+
+# 1. IndiHome / Indibiz / Telkomsel (Typical Telkom DPI)
+# Sering kali membutuhkan disorder atau split pada posisi host
+# NFQWS_OPT="--dpi-desync=fake,disorder2 --dpi-desync-split-pos=1 --dpi-desync-ttl=8 --dpi-desync-fooling=md5sig"
+
+# 2. Iconnet / PLN
+# Biasanya cukup dengan split sederhana atau disorder
+# NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2"
+
+# 3. Starlink Indonesia
+# Starlink global routing umumnya tidak ketat, tapi jika ada pemblokiran lokal:
+# NFQWS_OPT="--dpi-desync=split2 --dpi-desync-split-pos=1"
+
+# 4. Biznet / MyRepublic / FirstMedia
+# Cenderung menggunakan DNS filtering + SNI sniffing ringan
+# NFQWS_OPT="--dpi-desync=fake,split2 --dpi-desync-ttl=4"
+
+# 5. Default Universal (Lebih aman untuk berbagai ISP)
 NFQWS_OPT="--dpi-desync=disorder2 --dpi-desync-split-pos=2 --dpi-desync-ttl=4"
 """
 
