@@ -201,19 +201,36 @@ async def check_update(user=Depends(require_admin)):
         if _env_commit and _env_commit not in ("docker", ""):
             current_commit = _env_commit
 
-    # e) Source mode: git native langsung di container (bare metal)
+    # e) Source mode: git native langsung di container (bare metal/dev)
+    #    Catatan: APP_DIR di Docker = '/' bukan /app-host, jadi skip jika bukan bare metal
     if shutil.which("git") and current_commit == "docker":
+        # Coba /app-host dulu (Docker dengan volume mount)
         _r = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            ["git", "-C", "/app-host", "-c", "safe.directory=/app-host",
+             "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
         )
         if _r.returncode == 0 and _r.stdout.strip():
             current_commit = _r.stdout.strip()
-        _m = subprocess.run(
-            ["git", "log", "-1", "--pretty=%s"],
-            capture_output=True, text=True, cwd=APP_DIR, timeout=5
-        )
-        current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
+            _m = subprocess.run(
+                ["git", "-C", "/app-host", "-c", "safe.directory=/app-host",
+                 "log", "-1", "--pretty=%s"],
+                capture_output=True, text=True, timeout=5
+            )
+            current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
+        elif Path(APP_DIR).joinpath(".git").exists():
+            # Bare metal: git ada di APP_DIR langsung
+            _r = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            )
+            if _r.returncode == 0:
+                current_commit = _r.stdout.strip()
+            _m = subprocess.run(
+                ["git", "log", "-1", "--pretty=%s"],
+                capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            )
+            current_msg = _m.stdout.strip() if _m.returncode == 0 else ""
 
     # ── 3. Bandingkan & return ───────────────────────────────────────────────
     if latest_commit == "unknown":
@@ -543,64 +560,77 @@ async def app_info():
     """Return current app version info (commit hash, message, date)."""
     svc_name = os.environ.get("NOC_SERVICE_NAME", "noc-backend")
     try:
-        import shutil
-        if not shutil.which("git"):
-            # Docker mode: baca .git/HEAD langsung (paling akurat, tanpa safe.directory)
-            current_commit = _read_git_commit("/app-host") or ""
-            current_msg = "Docker Deployment"
+        # 1) Baca .git/HEAD langsung (tidak perlu git binary, tidak ada safe.directory issue)
+        current_commit = _read_git_commit("/app-host") or ""
+        current_msg = ""
 
-            if current_commit:
-                # Dapat commit message via git dengan safe.directory flag
-                try:
+        if current_commit:
+            # Punya SHA dari .git/HEAD, coba dapatkan commit message
+            try:
+                import shutil
+                if shutil.which("git"):
                     _m = subprocess.run(
                         ["git", "-C", "/app-host", "-c", "safe.directory=/app-host",
                          "log", "-1", "--pretty=%s"],
                         capture_output=True, text=True, timeout=5
                     )
                     if _m.returncode == 0:
-                        current_msg = _m.stdout.strip() or "Docker Deployment"
-                except Exception:
-                    pass
-                # Sync version.txt
-                try:
-                    with open("/update-data/version.txt", "w") as _vf:
-                        _vf.write(current_commit)
-                except Exception:
-                    pass
-            else:
-                # Fallback: version.txt
-                try:
-                    with open("/update-data/version.txt", "r") as f:
-                        _v = f.read().strip()
-                        if _v:
-                            current_commit = _v
-                except Exception:
-                    pass
-                # Fallback: build-arg env
-                if not current_commit:
-                    current_commit = os.environ.get("APP_VERSION_COMMIT", "docker")
-
-            return {"commit": current_commit or "docker", "message": current_msg,
+                        current_msg = _m.stdout.strip()
+            except Exception:
+                pass
+            # Sync version.txt
+            try:
+                with open("/update-data/version.txt", "w") as _vf:
+                    _vf.write(current_commit)
+            except Exception:
+                pass
+            return {"commit": current_commit, "message": current_msg or "Docker Deployment",
                     "date": "-", "version": "v3.0", "service_name": svc_name}
 
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=APP_DIR, timeout=5
-        )
-        msg = subprocess.run(
-            ["git", "log", "-1", "--pretty=%s"], capture_output=True, text=True, cwd=APP_DIR, timeout=5
-        )
-        date = subprocess.run(
-            ["git", "log", "-1", "--pretty=%ci"], capture_output=True, text=True, cwd=APP_DIR, timeout=5
-        )
-        return {
-            "commit": commit.stdout.strip() if commit.returncode == 0 else "unknown",
-            "message": msg.stdout.strip() if msg.returncode == 0 else "",
-            "date": date.stdout.strip()[:19] if date.returncode == 0 else "",
-            "version": "v3.0",
-            "service_name": svc_name,
-        }
+        # 2) Fallback: version.txt
+        try:
+            with open("/update-data/version.txt", "r") as f:
+                _v = f.read().strip()
+                if _v and _v not in ("docker", ""):
+                    return {"commit": _v, "message": "Docker Deployment",
+                            "date": "-", "version": "v3.0", "service_name": svc_name}
+        except Exception:
+            pass
+
+        # 3) Fallback: build-arg env var
+        _env = os.environ.get("APP_VERSION_COMMIT", "")
+        if _env and _env not in ("docker", ""):
+            return {"commit": _env, "message": "Docker Deployment",
+                    "date": "-", "version": "v3.0", "service_name": svc_name}
+
+        # 4) Git native di container (bare metal: .git di APP_DIR)
+        import shutil
+        if shutil.which("git") and Path(APP_DIR).joinpath(".git").exists():
+            commit = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            )
+            msg_r = subprocess.run(
+                ["git", "log", "-1", "--pretty=%s"],
+                capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            )
+            date_r = subprocess.run(
+                ["git", "log", "-1", "--pretty=%ci"],
+                capture_output=True, text=True, cwd=APP_DIR, timeout=5
+            )
+            return {
+                "commit": commit.stdout.strip() if commit.returncode == 0 else "docker",
+                "message": msg_r.stdout.strip() if msg_r.returncode == 0 else "",
+                "date": date_r.stdout.strip()[:19] if date_r.returncode == 0 else "",
+                "version": "v3.0",
+                "service_name": svc_name,
+            }
+
+        return {"commit": "docker", "message": "Docker Deployment",
+                "date": "-", "version": "v3.0", "service_name": svc_name}
     except Exception:
         return {"commit": "docker", "message": "Docker Build", "date": "-", "version": "v3.0", "service_name": svc_name}
+
 
 
 @router.get("/service-name")
