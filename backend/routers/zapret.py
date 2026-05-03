@@ -235,17 +235,32 @@ async def _get_realtime_status() -> dict:
     if ok_hl and out_hl.strip().isdigit():
         base["hostlist_count"] = int(out_hl.strip())
 
-    # 7. Packet stats dari nft
+    # 7. Packet stats dari nft / iptables
+    pkts = bytes_total = 0
     ok_nft, out_nft = await _run_host_sh(
         "nft list table inet zapret 2>/dev/null | grep -E 'packets|bytes' | head -4"
     )
     if ok_nft and out_nft:
-        pkts = bytes_total = 0
         for m in re.finditer(r'packets\s+(\d+)\s+bytes\s+(\d+)', out_nft):
             pkts += int(m.group(1))
             bytes_total += int(m.group(2))
-        base["packets_processed"] = pkts
-        base["bytes_processed"] = bytes_total
+    else:
+        # Fallback to iptables mangle NFQUEUE rules
+        ok_ipt, out_ipt = await _run_host_sh(
+            "iptables -t mangle -L POSTROUTING -v -x -n 2>/dev/null | grep NFQUEUE"
+        )
+        if ok_ipt and out_ipt:
+            for line in out_ipt.strip().splitlines():
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        pkts += int(parts[0])
+                        bytes_total += int(parts[1])
+                    except ValueError:
+                        pass
+
+    base["packets_processed"] = pkts
+    base["bytes_processed"] = bytes_total
 
     return base
 
