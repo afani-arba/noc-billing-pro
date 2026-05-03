@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config';
+import api from '@/lib/api';
+import { useAuth } from '@/App';
 
 const CollectorPortal = () => {
   const { user } = useAuth();
@@ -19,8 +18,8 @@ const CollectorPortal = () => {
     setLoading(true);
     try {
       const [invRes, sumRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/collector/invoices`),
-        axios.get(`${API_BASE_URL}/collector/summary`)
+        api.get("/collector/invoices"),
+        api.get("/collector/summary")
       ]);
       if (invRes.data.ok) setInvoices(invRes.data.data);
       if (sumRes.data.ok) setSummary(sumRes.data.data);
@@ -34,7 +33,7 @@ const CollectorPortal = () => {
   const handlePay = async (payment_method) => {
     if (!window.confirm(`Tandai Lunas via ${payment_method.toUpperCase()}?`)) return;
     try {
-      await axios.post(`${API_BASE_URL}/collector/invoices/${selectedInvoice.id}/pay`, { payment_method, notes: note });
+      await api.post(`/collector/invoices/${selectedInvoice.id}/pay`, { payment_method, notes: note });
       alert("Pembayaran berhasil!");
       setSelectedInvoice(null);
       setNote('');
@@ -47,7 +46,7 @@ const CollectorPortal = () => {
   const handleAddNote = async () => {
     if(!note) return alert("Isi catatan terlebih dahulu");
     try {
-      await axios.post(`${API_BASE_URL}/collector/invoices/${selectedInvoice.id}/note`, { notes: note });
+      await api.post(`/collector/invoices/${selectedInvoice.id}/note`, { notes: note });
       alert("Catatan disimpan");
       setNote('');
       fetchData();

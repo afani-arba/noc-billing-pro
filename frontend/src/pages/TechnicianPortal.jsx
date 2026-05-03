@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config';
+import api from '@/lib/api';
+import { useAuth } from '@/App';
 
 const TechnicianPortal = () => {
   const { user } = useAuth();
@@ -23,7 +22,7 @@ const TechnicianPortal = () => {
 
   const fetchWorkOrders = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/technician/work-orders`);
+      const res = await api.get("/technician/work-orders");
       if (res.data.ok) setWorkOrders(res.data.data);
     } catch (err) {
       console.error(err);
@@ -35,8 +34,8 @@ const TechnicianPortal = () => {
   const fetchOptions = async () => {
     try {
       const [pkgRes, devRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/billing/packages`),
-        axios.get(`${API_BASE_URL}/devices`)
+        api.get("/billing/packages"),
+        api.get("/devices")
       ]);
       setPackages(pkgRes.data);
       setDevices(devRes.data);
@@ -47,7 +46,7 @@ const TechnicianPortal = () => {
 
   const updateStatus = async (wo_id, status) => {
     try {
-      await axios.patch(`${API_BASE_URL}/technician/work-orders/${wo_id}`, { status });
+      await api.patch(`/technician/work-orders/${wo_id}`, { status });
       fetchWorkOrders();
       if(selectedWO && selectedWO.id === wo_id) setSelectedWO({...selectedWO, status});
       alert(`Status diperbarui menjadi ${status}`);
@@ -59,7 +58,7 @@ const TechnicianPortal = () => {
   const handleProvision = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_BASE_URL}/technician/provision`, {
+      await api.post("/technician/provision", {
         ...provisionData,
         name: selectedWO?.customer_name || 'Pelanggan Baru',
         phone: selectedWO?.customer_phone || '',
