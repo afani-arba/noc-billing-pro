@@ -58,7 +58,7 @@ body, html {
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
 }
 #header > nav {
-  bottom: 0px !important;
+  /* removed bottom: 0px !important; to prevent nav from stretching and covering the whole screen */
 }
 
 /* Headings over everything */
@@ -93,7 +93,7 @@ h1, h2, h3, h4, th, .label {
 }
 
 /* Panels, Cards, and Graphs */
-.panel, .card, .chart-container, .wrapper {
+.panel, .card, .chart-container {
   background-color: var(--grafana-panel-bg) !important;
   border: 1px solid var(--grafana-border) !important;
   border-radius: 8px !important;
