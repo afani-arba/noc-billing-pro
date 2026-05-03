@@ -35,7 +35,6 @@ class NodeCreate(BaseModel):
     y: float = 0
     lat: Optional[float] = None
     lng: Optional[float] = None
-    address: str = ""
     meta: dict = {}
     color: str = ""
     icon: str = ""
@@ -50,7 +49,6 @@ class NodeUpdate(BaseModel):
     y: Optional[float] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
-    address: Optional[str] = None
     meta: Optional[dict] = None
     color: Optional[str] = None
     icon: Optional[str] = None
@@ -80,15 +78,18 @@ class LinkCreate(BaseModel):
 async def list_nodes(
     type: str = Query("", description="Filter by node type"),
     parent_id: str = Query("", description="Filter by parent"),
+    mikrotik_device_id: str = Query("", description="Filter by MikroTik device ID (lock per device)"),
     user=Depends(get_current_user),
 ):
-    """List all nodes, optionally filtered by type or parent."""
+    """List all nodes, optionally filtered by type, parent, or MikroTik device."""
     db = get_db()
     query = {}
     if type:
         query["type"] = type
     if parent_id:
         query["parent_id"] = parent_id
+    if mikrotik_device_id:
+        query["meta.mikrotik_device_id"] = mikrotik_device_id
 
     nodes = await db.network_map_nodes.find(query, {"_id": 0}).to_list(5000)
     return nodes
@@ -245,11 +246,20 @@ async def delete_link(link_id: str, user=Depends(get_current_user)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/tree")
-async def get_tree(user=Depends(get_current_user)):
+async def get_tree(
+    mikrotik_device_id: str = Query("", description="Filter tree by MikroTik device ID"),
+    user=Depends(get_current_user),
+):
     """Get hierarchical tree of all nodes."""
     db = get_db()
-    nodes = await db.network_map_nodes.find({}, {"_id": 0}).to_list(5000)
-    links = await db.network_map_links.find({}, {"_id": 0}).to_list(10000)
+    node_query = {}
+    if mikrotik_device_id:
+        node_query["meta.mikrotik_device_id"] = mikrotik_device_id
+    nodes = await db.network_map_nodes.find(node_query, {"_id": 0}).to_list(5000)
+    # Filter links to only include those between filtered nodes
+    node_ids = {n["id"] for n in nodes}
+    all_links = await db.network_map_links.find({}, {"_id": 0}).to_list(10000)
+    links = [l for l in all_links if l["source_id"] in node_ids and l["target_id"] in node_ids]
 
     # Build adjacency from links
     children_map = {}
@@ -292,11 +302,19 @@ async def get_tree(user=Depends(get_current_user)):
 
 
 @router.get("/stats")
-async def get_stats(user=Depends(get_current_user)):
+async def get_stats(
+    mikrotik_device_id: str = Query("", description="Filter stats by MikroTik device ID"),
+    user=Depends(get_current_user),
+):
     """Get statistics about the network map."""
     db = get_db()
-    nodes = await db.network_map_nodes.find({}, {"_id": 0, "type": 1, "meta": 1}).to_list(5000)
-    links = await db.network_map_links.find({}, {"_id": 0, "link_type": 1}).to_list(10000)
+    node_query = {}
+    if mikrotik_device_id:
+        node_query["meta.mikrotik_device_id"] = mikrotik_device_id
+    nodes = await db.network_map_nodes.find(node_query, {"_id": 0, "type": 1, "meta": 1}).to_list(5000)
+    node_ids = {n.get("id") for n in nodes}
+    all_links = await db.network_map_links.find({}, {"_id": 0, "link_type": 1, "source_id": 1, "target_id": 1}).to_list(10000)
+    links = [l for l in all_links if not mikrotik_device_id or (l["source_id"] in node_ids and l["target_id"] in node_ids)]
 
     type_counts = {}
     for n in nodes:

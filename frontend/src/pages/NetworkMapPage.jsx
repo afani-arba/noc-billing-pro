@@ -1,22 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { MapPin, Plus, Link2, Trash2, Edit2, RefreshCw, Download, Upload, ChevronRight, Activity, BarChart2, Layers } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { MapPin, Plus, Link2, Trash2, Edit2, RefreshCw, Download, ChevronRight, BarChart2, Layers, Lock, Unlock, Navigation } from 'lucide-react';
 import { NODE_TYPES, LINK_TYPES } from './networkmap/constants';
 import { NodeModal, LinkModal } from './networkmap/Modals';
 import MapView from './networkmap/MapView';
 
 const API = import.meta.env.VITE_API_URL || '';
 const h = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
-
-/* ─── Stat Card ──────────────────────────────────────────────────── */
-function StatCard({ icon: Icon, label, value, color = 'blue' }) {
-  const colors = { blue:'text-blue-400 bg-blue-500/10', purple:'text-purple-400 bg-purple-500/10', amber:'text-amber-400 bg-amber-500/10', emerald:'text-emerald-400 bg-emerald-500/10', cyan:'text-cyan-400 bg-cyan-500/10' };
-  return (
-    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex items-center gap-3">
-      <div className={`p-2 rounded-lg ${colors[color]}`}><Icon className="w-5 h-5" /></div>
-      <div><div className="text-xl font-bold text-white">{value}</div><div className="text-xs text-slate-500">{label}</div></div>
-    </div>
-  );
-}
 
 /* ─── Tree Node (Sidebar) ────────────────────────────────────────── */
 function TreeItem({ node, depth = 0, selected, onClick }) {
@@ -62,10 +51,8 @@ function NodeDetail({ node, onEdit, onConnect, onDelete }) {
         </div>
       </div>
       {node.label && <p className="text-sm text-slate-400">{node.label}</p>}
-      {node.address && <p className="text-xs text-slate-500">📍 {node.address}</p>}
       {(node.lat && node.lng) && <p className="text-xs font-mono text-slate-600">{node.lat.toFixed(6)}, {node.lng.toFixed(6)}</p>}
 
-      {/* Capacity bar */}
       {cap !== null && (
         <div>
           <div className="flex justify-between text-xs text-slate-500 mb-1">
@@ -77,7 +64,6 @@ function NodeDetail({ node, onEdit, onConnect, onDelete }) {
         </div>
       )}
 
-      {/* Meta info */}
       {node.type === 'olt' && node.meta?.brand && (
         <div className="text-xs space-y-1 bg-slate-800 rounded-lg p-3">
           <p className="text-slate-400">Brand: <span className="text-white">{node.meta.brand} {node.meta.model}</span></p>
@@ -121,22 +107,59 @@ export default function NetworkMapPage() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeModal, setNodeModal] = useState(null);
   const [linkModal, setLinkModal] = useState(null);
-  const [placing, setPlacing] = useState(null); // pending node awaiting map click
+  const [placing, setPlacing] = useState(null);
   const [addType, setAddType] = useState('olt');
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState('tree'); // 'tree' | 'stats'
+  const [tab, setTab] = useState('tree');
   const [importLoading, setImportLoading] = useState('');
 
+  // ── Device Lock ────────────────────────────────────────────────────
+  const [devices, setDevices] = useState([]);         // daftar MikroTik dari Device Hub
+  const [lockedDeviceId, setLockedDeviceId] = useState('');  // '' = semua
+  const [lockedDeviceName, setLockedDeviceName] = useState('');
+
+  // ── Geolocation ref ────────────────────────────────────────────────
+  const geoDetectedRef = useRef(false);
+  const [geoCenter, setGeoCenter] = useState(null); // [lat, lng] deteksi wilayah
+
+  // Fetch daftar device MikroTik
+  useEffect(() => {
+    fetch(`${API}/api/devices`, { headers: h() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const arr = Array.isArray(data) ? data : [];
+        setDevices(arr.filter(d => d.device_type === 'MikroTik' || !d.device_type));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Deteksi wilayah via Geolocation browser — hanya sekali saat mount
+  useEffect(() => {
+    if (geoDetectedRef.current) return;
+    if (!navigator.geolocation) return;
+    geoDetectedRef.current = true;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setGeoCenter([pos.coords.latitude, pos.coords.longitude]);
+      },
+      () => {
+        // Gagal deteksi → tetap default Indonesia
+      },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  }, []);
+
+  // Fetch nodes/links/tree/stats — filter by lockedDeviceId jika ada
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      const qs = lockedDeviceId ? `?mikrotik_device_id=${lockedDeviceId}` : '';
       const [nRes, lRes, tRes, sRes] = await Promise.all([
-        fetch(`${API}/api/network-map/nodes`, { headers: h() }),
+        fetch(`${API}/api/network-map/nodes${qs}`, { headers: h() }),
         fetch(`${API}/api/network-map/links`, { headers: h() }),
-        fetch(`${API}/api/network-map/tree`, { headers: h() }),
-        fetch(`${API}/api/network-map/stats`, { headers: h() }),
+        fetch(`${API}/api/network-map/tree${qs}`, { headers: h() }),
+        fetch(`${API}/api/network-map/stats${qs}`, { headers: h() }),
       ]);
-      // Always ensure arrays to prevent "s.filter is not a function" crash
       const [nData, lData, tData, sData] = await Promise.all([
         nRes.ok ? nRes.json() : [],
         lRes.ok ? lRes.json() : [],
@@ -149,14 +172,13 @@ export default function NetworkMapPage() {
       setStats(sData && typeof sData === 'object' && !Array.isArray(sData) ? sData : null);
     } catch (e) { console.error('NetworkMap fetchAll error:', e); }
     setLoading(false);
-  }, []);
+  }, [lockedDeviceId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const handleMapClick = useCallback(async (latlng) => {
     if (!placing) return;
-    // Open node form pre-filled with lat/lng
-    setNodeModal({ type: placing.type, name: '', label: '', address: '', lat: latlng.lat.toFixed(6), lng: latlng.lng.toFixed(6), notes: '', meta: {} });
+    setNodeModal({ type: placing.type, name: '', label: '', lat: latlng.lat.toFixed(6), lng: latlng.lng.toFixed(6), notes: '', meta: {} });
     setPlacing(null);
   }, [placing]);
 
@@ -198,7 +220,15 @@ export default function NetworkMapPage() {
     setImportLoading('');
   };
 
+  const handleLockDevice = (deviceId) => {
+    setLockedDeviceId(deviceId);
+    const dev = devices.find(d => d.id === deviceId);
+    setLockedDeviceName(dev?.name || '');
+    setSelectedNode(null);
+  };
+
   const unplacedNodes = nodes.filter(n => !n.lat || !n.lng);
+  const isLocked = !!lockedDeviceId;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-slate-950 overflow-hidden">
@@ -210,6 +240,44 @@ export default function NetworkMapPage() {
             <MapPin className="w-5 h-5 text-blue-400" /> Network Map
           </h1>
           <p className="text-slate-500 text-xs mt-1">FTTH Topology Visualizer</p>
+        </div>
+
+        {/* ── Device Lock Selector ─────────────────────────────────── */}
+        <div className="p-3 border-b border-slate-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Tampilan Per Device</p>
+            {isLocked && (
+              <button
+                onClick={() => handleLockDevice('')}
+                title="Tampilkan semua"
+                className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-200"
+              >
+                <Unlock className="w-3 h-3" /> Reset
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={lockedDeviceId}
+              onChange={e => handleLockDevice(e.target.value)}
+              className="flex-1 bg-slate-800 border border-slate-700 text-white text-xs rounded-lg px-2 py-1.5"
+            >
+              <option value="">🌐 Semua Device</option>
+              {devices.map(d => (
+                <option key={d.id} value={d.id}>🖥️ {d.name}</option>
+              ))}
+            </select>
+            {isLocked && (
+              <div className="flex items-center px-2 bg-amber-500/20 rounded-lg border border-amber-500/40">
+                <Lock className="w-3 h-3 text-amber-400" />
+              </div>
+            )}
+          </div>
+          {isLocked && (
+            <p className="text-xs text-amber-400 flex items-center gap-1">
+              <Lock className="w-3 h-3" /> Terkunci: {lockedDeviceName}
+            </p>
+          )}
         </div>
 
         {/* Add Node */}
@@ -226,8 +294,10 @@ export default function NetworkMapPage() {
             </button>
           </div>
           {placing && <p className="text-xs text-amber-400 animate-pulse">👆 Klik lokasi di peta untuk menempatkan node</p>}
-          <button onClick={() => setNodeModal({ type: addType, name: '', label: '', address: '', lat: '', lng: '', notes: '', meta: {} })}
-            className="w-full text-xs text-slate-500 hover:text-white py-1">
+          <button
+            onClick={() => setNodeModal({ type: addType, name: '', label: '', lat: '', lng: '', notes: '', meta: {} })}
+            className="w-full text-xs text-slate-500 hover:text-white py-1"
+          >
             + Tambah tanpa koordinat
           </button>
         </div>
@@ -277,7 +347,10 @@ export default function NetworkMapPage() {
             <div className="p-2 space-y-0.5">
               {loading && <p className="text-xs text-slate-600 text-center py-4">Memuat...</p>}
               {!loading && tree.length === 0 && (
-                <p className="text-xs text-slate-600 text-center py-6">Belum ada node.<br/>Tambah node atau import dari Device Hub.</p>
+                <p className="text-xs text-slate-600 text-center py-6">
+                  Belum ada node.<br />
+                  {isLocked ? `Tidak ada node untuk device "${lockedDeviceName}".` : 'Tambah node atau import dari Device Hub.'}
+                </p>
               )}
               {tree.map(n => <TreeItem key={n.id} node={n} selected={selectedNode} onClick={setSelectedNode} />)}
             </div>
@@ -352,6 +425,22 @@ export default function NetworkMapPage() {
           ))}
         </div>
 
+        {/* Lock badge overlay */}
+        {isLocked && (
+          <div className="absolute top-3 left-3 z-[999] flex items-center gap-2 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
+            <Lock className="w-3 h-3" />
+            <span>Peta: {lockedDeviceName}</span>
+          </div>
+        )}
+
+        {/* Geolocation detected badge */}
+        {geoCenter && !isLocked && (
+          <div className="absolute top-3 left-3 z-[999] flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
+            <Navigation className="w-3 h-3" />
+            <span>Lokasi terdeteksi</span>
+          </div>
+        )}
+
         {/* Node detail overlay */}
         {selectedNode && (
           <div className="absolute bottom-4 left-4 z-[999] w-72 bg-slate-900/95 border border-slate-700 rounded-xl backdrop-blur-sm shadow-2xl overflow-hidden">
@@ -377,6 +466,7 @@ export default function NetworkMapPage() {
           onSelectNode={setSelectedNode}
           onMapClick={handleMapClick}
           onMoveNode={handleMoveNode}
+          geoCenter={geoCenter}
         />
       </div>
 
@@ -387,6 +477,7 @@ export default function NetworkMapPage() {
           initialData={nodeModal}
           onClose={() => setNodeModal(null)}
           onSaved={handleNodeSaved}
+          lockedDeviceId={lockedDeviceId}
         />
       )}
       {linkModal && (

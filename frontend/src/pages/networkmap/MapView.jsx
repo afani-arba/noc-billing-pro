@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
+import { useMemo, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { NODE_TYPES, LINK_TYPES } from './constants';
@@ -28,7 +28,7 @@ function makeIcon(type, selected = false) {
       box-shadow:0 2px 8px rgba(0,0,0,0.5);
       transition:all 0.2s;
     ">${cfg.emoji}</div>`;
-  return L.divIcon({ html, className: '', iconSize: [size, size], iconAnchor: [size/2, size/2] });
+  return L.divIcon({ html, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
 }
 
 // Click-to-place handler
@@ -37,25 +37,39 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
+// Auto-fly to geolocation center when detected (hanya jika belum ada node)
+function GeoLocator({ geoCenter, hasNodes }) {
+  const map = useMap();
+  useEffect(() => {
+    if (geoCenter && !hasNodes) {
+      map.flyTo(geoCenter, 13, { animate: true, duration: 1.5 });
+    }
+  }, [geoCenter, hasNodes, map]);
+  return null;
+}
+
 export default function NetworkMapLeaflet({
-  nodes: nodesProp, links: linksProp, selectedNode, onSelectNode, onMapClick, onMoveNode
+  nodes: nodesProp, links: linksProp, selectedNode, onSelectNode, onMapClick, onMoveNode, geoCenter
 }) {
   // Defensive: ensure arrays regardless of props type
   const nodes = Array.isArray(nodesProp) ? nodesProp : [];
   const links = Array.isArray(linksProp) ? linksProp : [];
 
-  // Default center: Indonesia
+  const geoNodes = nodes.filter(n => n.lat && n.lng);
+
+  // Default center: prioritize node centroid → geoCenter → Indonesia
   const center = useMemo(() => {
-    const geoNodes = nodes.filter(n => n.lat && n.lng);
-    if (!geoNodes.length) return [-2.5, 118.0];
-    const lat = geoNodes.reduce((s, n) => s + n.lat, 0) / geoNodes.length;
-    const lng = geoNodes.reduce((s, n) => s + n.lng, 0) / geoNodes.length;
-    return [lat, lng];
-  }, [nodes]);
+    if (geoNodes.length) {
+      const lat = geoNodes.reduce((s, n) => s + n.lat, 0) / geoNodes.length;
+      const lng = geoNodes.reduce((s, n) => s + n.lng, 0) / geoNodes.length;
+      return [lat, lng];
+    }
+    if (geoCenter) return geoCenter;
+    return [-2.5, 118.0];
+  }, [geoNodes, geoCenter]);
 
   // Build node lookup for lines
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
-
 
   // Polylines for links between placed nodes
   const polylines = useMemo(() => links
@@ -67,12 +81,10 @@ export default function NetworkMapLeaflet({
     })
     .filter(Boolean), [links, nodeMap]);
 
-  const geoNodes = nodes.filter(n => n.lat && n.lng);
-
   return (
     <MapContainer
       center={center}
-      zoom={geoNodes.length ? 13 : 5}
+      zoom={geoNodes.length ? 13 : (geoCenter ? 13 : 5)}
       className="w-full h-full rounded-xl"
       style={{ background: '#1e293b' }}
     >
@@ -81,6 +93,9 @@ export default function NetworkMapLeaflet({
         attribution='&copy; <a href="https://carto.com/">CARTO</a>'
       />
       <MapClickHandler onMapClick={onMapClick} />
+
+      {/* Fly to geo-detected area hanya jika belum ada node */}
+      <GeoLocator geoCenter={geoCenter} hasNodes={geoNodes.length > 0} />
 
       {/* Polylines (cables) */}
       {polylines.map(lnk => {
@@ -121,7 +136,6 @@ export default function NetworkMapLeaflet({
             <div className="text-xs space-y-1 min-w-[160px]">
               <p className="font-bold text-sm">{NODE_TYPES[node.type]?.emoji} {node.name}</p>
               {node.label && <p className="text-gray-500">{node.label}</p>}
-              {node.address && <p>📍 {node.address}</p>}
               {node.type === 'ont' && node.meta?.customer_name && <p>👤 {node.meta.customer_name}</p>}
               {node.type === 'ont' && node.meta?.pppoe_username && <p>🔑 {node.meta.pppoe_username}</p>}
               {node.type === 'ont' && node.meta?.rx_power && (

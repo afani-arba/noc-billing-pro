@@ -111,7 +111,13 @@ async def lifespan(app: FastAPI):
         await db.traffic_history.create_index([("timestamp", -1)], background=True)
         await db.traffic_snapshots.create_index([("device_id", 1)], background=True)
         await db.devices.create_index([("id", 1)], unique=True, background=True)
-        logger.info("MongoDB indexes verified.")
+        # ── Network Map FTTH indexes ───────────────────────────────────────────
+        await db.network_map_nodes.create_index([("id", 1)], unique=True, background=True, name="idx_nm_node_id")
+        await db.network_map_nodes.create_index([("type", 1)], background=True, name="idx_nm_node_type")
+        await db.network_map_nodes.create_index([("meta.mikrotik_device_id", 1)], background=True, name="idx_nm_device_id")
+        await db.network_map_links.create_index([("id", 1)], unique=True, background=True, name="idx_nm_link_id")
+        await db.network_map_links.create_index([("source_id", 1), ("target_id", 1)], background=True, name="idx_nm_link_src_tgt")
+        logger.info("MongoDB indexes verified (incl. Network Map FTTH).")
 
         ga_cfg = await db.system_settings.find_one({"_id": "genieacs_config"})
         if not ga_cfg:
