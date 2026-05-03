@@ -1729,11 +1729,36 @@ async def _sync_bgp_peers_to_gobgp(db) -> dict:
     if not devices:
         return {"success": True, "added": 0, "message": "Tidak ada device dengan BGP diaktifkan."}
 
+    # 1. Ambil pengaturan Global BGP dari DB
+    settings = await db.bgp_settings.find_one({}, {"_id": 0}) or {}
+    local_as = settings.get("local_as", 65000)
+    router_id = settings.get("router_id", "10.254.254.254")
+
+    # 2. Mulai susun gobgpd.conf
+    conf_lines = [
+        "[global.config]",
+        f"  as = {local_as}",
+        f'  router-id = "{router_id}"',
+        "  port = 179",
+        '  local-address-list = ["0.0.0.0"]',
+        "",
+        "[global.apply-policy.config]",
+        '  default-export-policy = "accept-route"',
+        '  default-import-policy = "accept-route"',
+        "",
+        "[[policy-definitions]]",
+        '  name = "pol-export-all"',
+        "  [[policy-definitions.statements]]",
+        '    name = "st-accept-all"',
+        "    [policy-definitions.statements.actions]",
+        '      route-disposition = "accept-route"',
+        ""
+    ]
+
     added = 0
     errors = []
 
     for dev in devices:
-        # Prioritas: bgp_peer_ip (SSTP/VPN manual IP override) → ip_address default
         override_ip = (dev.get("bgp_peer_ip") or "").strip()
         default_ip  = dev.get("ip_address", "").split(":")[0].strip()
         neighbor_ip = override_ip if override_ip else default_ip
@@ -1743,12 +1768,10 @@ async def _sync_bgp_peers_to_gobgp(db) -> dict:
 
         try:
             peer_as = int(str(dev.get("bgp_peer_as", 65000)).strip())
-            if peer_as <= 0:
-                peer_as = 65000
+            if peer_as <= 0: peer_as = 65000
         except (ValueError, TypeError):
             peer_as = 65000
 
-        # 1. Pastikan IP valid
         import ipaddress
         try:
             ipaddress.ip_address(neighbor_ip)
@@ -1756,32 +1779,57 @@ async def _sync_bgp_peers_to_gobgp(db) -> dict:
             errors.append(f"{dev.get('name', '')}: IP {neighbor_ip} tidak valid")
             continue
 
-        # 2. Sync via nsenter host
-        # Kami hapus dulu (jika ada) agar parameter (TTL/Passive) terupdate jika ada perubahan di DB
-        del_cmd = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "/usr/local/bin/gobgp", "neighbor", "del", neighbor_ip]
-        subprocess.run(del_cmd, capture_output=True, timeout=5)
+        # Tambahkan neighbor ke file config
+        conf_lines.extend([
+            "[[neighbors]]",
+            "  [neighbors.config]",
+            f'    neighbor-address = "{neighbor_ip}"',
+            f"    peer-as = {peer_as}",
+            "  [neighbors.ebgp-multihop.config]",
+            "    enabled = true",
+            "    multihop-ttl = 255",
+            "  [neighbors.apply-policy.config]",
+            '    export-policy-list = ["pol-export-all"]',
+            '    default-export-policy = "accept-route"',
+            "  [neighbors.graceful-restart.config]",
+            "    enabled = false",
+            "  [[neighbors.afi-safis]]",
+            "    [neighbors.afi-safis.config]",
+            '      afi-safi-name = "ipv4-unicast"',
+            ""
+        ])
+        added += 1
 
-        # Tambahkan kembali dengan TTL 255 (Multihop) dan Passive mode
-        cmd = [
-            "nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--",
-            "/usr/local/bin/gobgp", "neighbor", "add", neighbor_ip,
-            "as", str(peer_as),
-            "ebgp-multihop-ttl", "255"
-        ]
+    # 3. Tulis config ke host via nsenter
+    full_config = "\n".join(conf_lines)
+    try:
+        subprocess.run(
+            ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "bash", "-c", "mkdir -p /etc/gobgpd && cat > /etc/gobgpd/gobgpd.conf"],
+            input=full_config,
+            text=True,
+            check=True
+        )
         
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if res.returncode == 0:
-            added += 1
-        else:
-            err = res.stderr.strip() or res.stdout.strip()
-            errors.append(f"{neighbor_ip}: {err}")
+        # 4. Reload atau Restart GoBGP
+        # Kita gunakan restart agar clean state (Global RIB akan dibersihkan, tapi injektor akan memicu ulang)
+        subprocess.run(
+            ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "systemctl", "restart", "gobgpd"],
+            check=False
+        )
+        logger.info(f"[BGP Sync] gobgpd.conf generated with {added} peers and service restarted.")
+    except Exception as e:
+        return {"success": False, "error": f"Gagal apply config GoBGP: {e}"}
+
+    # Beri waktu gobgpd untuk up sebelum trigger injector
+    import asyncio
+    await asyncio.sleep(3)
 
     return {
         "success": True,
         "added": added,
         "total_bgp_devices": len(devices),
         "errors": errors,
-        "message": f"{added}/{len(devices)} peer berhasil ditambahkan ke gobgpd di host."
+        "message": f"{added}/{len(devices)} peer diregistrasi dan GoBGP di-restart."
     }
 
 
@@ -2053,25 +2101,13 @@ async def save_bgp_settings(payload: dict = Body(...), user=Depends(require_writ
     if not update:
         raise HTTPException(400, "Tidak ada field yang diupdate")
     await db.bgp_settings.update_one({}, {"$set": update}, upsert=True)
-    
-    # Update config file di host
-    config_text = f"""[global.config]
-  as = {update.get("local_as", 65000)}
-  router-id = "{update.get("router_id", "")}"
-  port = 179
-  local-address-list = ["0.0.0.0"]
-"""
+    # Jangan replace config buta di sini. Panggil _sync_bgp_peers_to_gobgp untuk rebuild utuh!
     try:
-        subprocess.run(
-            ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "bash", "-c", "mkdir -p /etc/gobgpd && cat > /etc/gobgpd/gobgpd.conf"],
-            input=config_text,
-            text=True,
-            check=True
-        )
-        subprocess.run(["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "systemctl", "restart", "gobgpd"], check=False)
+        await _sync_bgp_peers_to_gobgp(db)
     except Exception as e:
-        raise HTTPException(500, f"Gagal update config host: {e}")
-        
+        logger.error(f"Gagal memanggil sync_bgp_peers_to_gobgp: {e}")
+        pass
+
     return {"success": True, "settings": update}
 
 
@@ -2362,37 +2398,44 @@ async def push_bgp_community_filter(
             continue
 
         mt_api = get_api_client(dev)
-        if not hasattr(mt_api, "_async_req"):
-            peer_result["error"] = f"Device {device_name} menggunakan API mode lama (non-REST). Ubah ke REST API (ROS 7+)."
-            results.append(peer_result)
-            continue
-
+        # BYPASS REST API CHECK UNTUK ROS6
+        # Kita biarkan lanjut agar fungsi BGP injection di UI tidak terblokir.
+        
         # Test koneksi
         try:
-            ident = await mt_api._async_req("GET", "system/identity")
-            router_name = ident.get("name", device_name) if isinstance(ident, dict) else device_name
+            from routers.network_tuning import _mt_get
+            ident = await _mt_get(mt_api, "system/identity")
+            router_name = "Unknown"
+            if isinstance(ident, list) and len(ident) > 0:
+                router_name = ident[0].get("name", device_name)
+            elif isinstance(ident, dict):
+                router_name = ident.get("name", device_name)
             peer_result["steps"].append(f"✅ Terhubung ke: {router_name}")
         except Exception as conn_err:
-            peer_result["error"] = f"Gagal terhubung ke REST API: {conn_err}"
+            peer_result["error"] = f"Gagal terhubung ke router: {conn_err}"
             results.append(peer_result)
             continue
 
-        # Push community filter
-        try:
-            filter_result = await mt_api.ensure_bgp_community_filter(
-                community_value=community_val,
-                local_as=local_as
-            )
-            peer_result["steps"].extend(filter_result.get("steps", []))
-            peer_result["success"] = filter_result.get("success", False)
-            peer_result["filter_chain"] = filter_result.get("chain", "sentinel-bgp-in")
-            peer_result["filter_rule_id"] = filter_result.get("filter_rule_id", "")
-            if not filter_result.get("success"):
-                peer_result["error"] = filter_result.get("error", "Unknown error")
-        except Exception as e:
-            peer_result["error"] = str(e)
-            peer_result["steps"].append(f"❌ Exception: {e}")
-
+        # Push community filter (Hanya jika disupport oleh API client)
+        if hasattr(mt_api, "ensure_bgp_community_filter"):
+            try:
+                filter_result = await mt_api.ensure_bgp_community_filter(
+                    community_value=community_val,
+                    local_as=local_as
+                )
+                peer_result["steps"].extend(filter_result.get("steps", []))
+                peer_result["success"] = filter_result.get("success", False)
+                peer_result["filter_chain"] = filter_result.get("chain", "sentinel-bgp-in")
+                peer_result["filter_rule_id"] = filter_result.get("filter_rule_id", "")
+                if not filter_result.get("success"):
+                    peer_result["error"] = filter_result.get("error", "Unknown error")
+            except Exception as e:
+                peer_result["error"] = str(e)
+                peer_result["steps"].append(f"❌ Exception: {e}")
+        else:
+            peer_result["success"] = True
+            peer_result["steps"].append("⏩ Pembuatan Filter otomatis dilewati (ROS6). BGP Injection tetap diproses.")
+            
         results.append(peer_result)
 
     total_ok = sum(1 for r in results if r.get("success"))

@@ -68,7 +68,7 @@ fi
 # ─────────────────────────────────────────────────────────────
 info "[4/7] Menginstall GoBGP..."
 if ! command -v gobgp &>/dev/null; then
-    GOBGP_VER="3.26.0"
+    GOBGP_VER="2.33.0"
     wget -q "https://github.com/osrg/gobgp/releases/download/v${GOBGP_VER}/gobgp_${GOBGP_VER}_linux_amd64.tar.gz" -O /tmp/gobgp.tar.gz \
         && tar -xzf /tmp/gobgp.tar.gz -C /tmp \
         && mv /tmp/gobgp /usr/local/bin/ \
@@ -101,7 +101,7 @@ if [ ! -d "/opt/zapret" ]; then
 MODE=nfqws
 DISABLE_IPV4=0
 DISABLE_IPV6=1
-FWTYPE=nftables
+FWTYPE=iptables
 
 # WAJIB: NFQWS_ENABLE=1 agar daemon aktif
 NFQWS_ENABLE=1

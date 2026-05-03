@@ -106,7 +106,7 @@ NFQWS_OPT_EXTRA_ARGS=\"--hostlist-auto=/opt/zapret/hostlist-auto.txt --hostlist-
 MODE=nfqws
 DISABLE_IPV4=0
 DISABLE_IPV6=1
-FWTYPE=nftables
+FWTYPE=iptables
 
 # ─── NFQWS Settings ───────────────────────────────────────────────
 # WAJIB: NFQWS_ENABLE=1 agar daemon aktif
