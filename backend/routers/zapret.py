@@ -227,6 +227,14 @@ async def _get_realtime_status() -> dict:
                 base["quic_enabled"] = True
             elif "hostlist-auto" in line.lower() and not line.startswith("#"):
                 base["auto_hostlist_enabled"] = True
+        
+        # Determine active strategy key based on parsed nfqws_opt
+        base["active_strategy_key"] = "unknown"
+        if base.get("nfqws_opt"):
+            for k, v in ISP_STRATEGIES.items():
+                if v["nfqws_opt"] == base["nfqws_opt"]:
+                    base["active_strategy_key"] = k
+                    break
 
     # 6. Hitung jumlah domain di hostlist
     ok_hl, out_hl = await _run_host_sh(

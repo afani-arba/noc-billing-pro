@@ -451,21 +451,32 @@ export default function ZapretPage() {
                                     <p className="text-slate-400 text-sm mb-4">Setiap ISP menggunakan metode Deep Packet Inspection yang berbeda. Pilih strategi yang paling sesuai dengan ISP yang Anda gunakan.</p>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                                        {strategies.map(s => (
-                                            <div 
-                                                key={s.key} 
-                                                onClick={() => setSelectedStrategy(s.key)}
-                                                className={`p-4 rounded-xl border-2 cursor-pointer transition ${
-                                                    selectedStrategy === s.key 
-                                                        ? 'bg-slate-800 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
-                                                        : 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600'
-                                                }`}
-                                            >
-                                                <div className="text-2xl mb-2">{s.icon}</div>
-                                                <div className="font-semibold text-white mb-1">{s.name}</div>
-                                                <div className="text-xs text-slate-400 line-clamp-3">{s.description}</div>
-                                            </div>
-                                        ))}
+                                        {strategies.map(s => {
+                                            const isActive = status?.active_strategy_key === s.key;
+                                            const isSelected = selectedStrategy === s.key;
+                                            return (
+                                                <div 
+                                                    key={s.key} 
+                                                    onClick={() => setSelectedStrategy(s.key)}
+                                                    className={`p-4 rounded-xl border-2 cursor-pointer transition relative overflow-hidden ${
+                                                        isSelected 
+                                                            ? 'bg-slate-800 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                                                            : isActive
+                                                                ? 'bg-indigo-900/20 border-indigo-500/50 hover:border-indigo-500/70'
+                                                                : 'bg-slate-800/50 border-slate-700/50 hover:border-slate-600'
+                                                    }`}
+                                                >
+                                                    {isActive && (
+                                                        <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
+                                                            ACTIVE
+                                                        </div>
+                                                    )}
+                                                    <div className="text-2xl mb-2">{s.icon}</div>
+                                                    <div className="font-semibold text-white mb-1">{s.name}</div>
+                                                    <div className="text-xs text-slate-400 line-clamp-3">{s.description}</div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-6 p-4 bg-slate-900/50 rounded-lg border border-slate-800">
