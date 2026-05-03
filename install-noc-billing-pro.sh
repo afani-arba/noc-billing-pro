@@ -121,16 +121,39 @@ ZAPRETEOF
         cd /opt/zapret
         if [ -f "install_bin.sh" ]; then
             chmod +x install_bin.sh
-            ./install_bin.sh || true
         fi
 
         if [ -f "init.d/systemd/zapret.service" ]; then
             cp init.d/systemd/zapret.service /etc/systemd/system/
-            systemctl daemon-reload
-            systemctl enable zapret || true
-            systemctl start zapret || true
         fi
-        ok "Zapret berhasil dikonfigurasi."
+        
+        # Generate init script
+        bash /opt/zapret/install_bin.sh 2>&1 >/dev/null
+
+        # Fix Asymmetric Routing & Intercept Rules Permanently
+        info "Konfigurasi Firewall & Routing untuk Zapret..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get install -y iptables-persistent >/dev/null 2>&1
+        
+        # 1. Allow FORWARD traffic (UFW by default drops it)
+        iptables -I FORWARD 1 -j ACCEPT
+        
+        # 2. Fix Asymmetric Routing using MASQUERADE
+        # We find the default internet interface (usually ens18 or eth0)
+        DEF_IFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
+        if [ ! -z "$DEF_IFACE" ]; then
+            iptables -t nat -I POSTROUTING 1 -o $DEF_IFACE -j MASQUERADE
+            
+            # 3. Intercept HTTP/HTTPS leaving the server for Zapret
+            iptables -t mangle -I POSTROUTING 1 -o $DEF_IFACE -p tcp -m multiport --dports 80,443 -j NFQUEUE --queue-num 200 --queue-bypass
+            iptables -t mangle -I POSTROUTING 2 -o $DEF_IFACE -p udp --dport 443 -j NFQUEUE --queue-num 200 --queue-bypass
+        fi
+
+        # Save rules permanently
+        netfilter-persistent save >/dev/null 2>&1
+        systemctl enable zapret >/dev/null 2>&1
+        systemctl restart zapret >/dev/null 2>&1
+        ok "Zapret terinstall dan Firewall di-patch."
     fi
 else
     ok "Zapret sudah terinstall di /opt/zapret."
