@@ -61,6 +61,8 @@ const IntegrationSettingsPage = lazy(() => import("@/pages/IntegrationSettingsPa
 const ClientLogin             = lazy(() => import("@/pages/ClientPortal/ClientLogin"));
 const ClientDashboard         = lazy(() => import("@/pages/ClientPortal/ClientDashboard"));
 const ServerSetup             = lazy(() => import("@/pages/ClientPortal/ServerSetup"));
+const TechnicianPortal        = lazy(() => import("@/pages/TechnicianPortal"));
+const CollectorPortal         = lazy(() => import("@/pages/CollectorPortal"));
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
@@ -199,6 +201,24 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <WallDisplayPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* ── Field Operations Portals ─────────────────────────── */}
+                <Route
+                  path="/teknisi"
+                  element={
+                    <ProtectedRoute>
+                      <TechnicianPortal />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/kolektor"
+                  element={
+                    <ProtectedRoute>
+                      <CollectorPortal />
                     </ProtectedRoute>
                   }
                 />

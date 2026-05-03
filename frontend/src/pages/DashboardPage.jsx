@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/App";
 import api from "@/lib/api";
 import useDeviceEvents from "@/hooks/useDeviceEvents";
 import {
@@ -43,8 +45,19 @@ function formatBwTooltip(v) {
 
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { theme } = useTheme();
   const isCyber = theme === "cyber";
+
+  useEffect(() => {
+    if (user?.role === 'teknisi') {
+      navigate('/teknisi', { replace: true });
+    } else if (user?.role === 'kolektor') {
+      navigate('/kolektor', { replace: true });
+    }
+  }, [user, navigate]);
+
   const [stats, setStats] = useState(null);
   const [devices, setDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState("all");

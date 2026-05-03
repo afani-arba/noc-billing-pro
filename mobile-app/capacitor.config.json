@@ -1,0 +1,6 @@
+{
+  "appId": "com.arba.nocfield",
+  "appName": "NOC Field Ops",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

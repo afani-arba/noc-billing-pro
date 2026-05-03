@@ -31,9 +31,16 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post("/auth/login", { username, password });
-      login(res.data.token, res.data.user);
+      const user = res.data.user;
+      login(res.data.token, user);
       toast.success("Login successful");
-      navigate("/");
+      if (user.role === 'teknisi') {
+        navigate("/teknisi");
+      } else if (user.role === 'kolektor') {
+        navigate("/kolektor");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || "Invalid credentials");
     }

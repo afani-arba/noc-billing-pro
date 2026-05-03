@@ -89,6 +89,10 @@ from routers.zapret import router as zapret_router
 from routers.network_tuning import router as network_tuning_router
 # Network Map (FTTH Topology: MikroTik → OLT → ODC → ODP → ONT)
 from routers.network_map import router as network_map_router
+# Technician App
+from routers.technician import router as technician_router
+# Collector App
+from routers.collector import router as collector_router
 
 _background_tasks: list = []
 
@@ -575,6 +579,8 @@ api.include_router(peering_eye_router)
 api.include_router(zapret_router)
 api.include_router(network_tuning_router)
 api.include_router(network_map_router)
+api.include_router(technician_router)
+api.include_router(collector_router)
 
 # ── 12. Pengaturan Platform ────────────────────────────────────────────────
 api.include_router(system_router)

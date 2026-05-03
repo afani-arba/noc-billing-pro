@@ -41,7 +41,7 @@ if not JWT_SECRET:
         )
 
 # ── Role Constants ─────────────────────────────────────────────────────────
-VALID_ROLES = ["super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"]
+VALID_ROLES = ["super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer", "teknisi", "kolektor"]
 
 # Groups untuk kemudahan pengecekan
 # ADMIN_ROLES: bisa akses User Management (super_admin & administrator saja)
@@ -50,7 +50,7 @@ ADMIN_ROLES      = {"super_admin", "administrator"}
 FULL_ACCESS_ROLES = {"super_admin", "administrator", "admin"}
 NOC_ROLES        = {"super_admin", "administrator", "admin", "branch_admin", "noc_engineer"}
 BILLING_ROLES    = {"super_admin", "administrator", "admin", "branch_admin", "billing_staff"}
-READONLY_ROLES   = {"super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer"}
+READONLY_ROLES   = {"super_admin", "administrator", "admin", "branch_admin", "noc_engineer", "billing_staff", "helpdesk", "viewer", "teknisi", "kolektor"}
 
 # Services yang bisa di-assign per user (disesuaikan dgn NOC Billing Pro berjalan)
 ALL_SERVICES = [
@@ -91,6 +91,8 @@ ROLE_DEFAULT_SERVICES = {
     "viewer":         [
         "dashboard", "wallboard", "reports"
     ],
+    "teknisi":        [],
+    "kolektor":       [],
 }
 
 
