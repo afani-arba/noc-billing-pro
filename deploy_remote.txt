@@ -1,0 +1,25 @@
+echo 123123 | sudo -S sh -c '
+echo "=== Starting Deployment ==="
+cd /opt/noc-billing-pro
+git config --global --add safe.directory /opt/noc-billing-pro
+git fetch origin main
+git reset --hard origin/main
+
+echo "=== Injecting Backend Files ==="
+docker cp backend/core/auth.py noc-billing-pro-backend:/app/core/auth.py
+docker cp backend/server.py noc-billing-pro-backend:/app/server.py
+docker cp backend/routers/technician.py noc-billing-pro-backend:/app/routers/technician.py
+docker cp backend/routers/collector.py noc-billing-pro-backend:/app/routers/collector.py
+
+echo "=== Restarting Backend ==="
+docker restart noc-billing-pro-backend
+
+echo "=== Building Frontend in Docker ==="
+docker run --rm -v /opt/noc-billing-pro/frontend:/app -w /app node:20-alpine sh -c "rm -rf build && npm install && npm run build"
+
+echo "=== Injecting Frontend Files ==="
+docker cp frontend/build/. noc-billing-pro-frontend:/usr/share/nginx/html/
+docker exec noc-billing-pro-frontend nginx -s reload
+
+echo "=== Deployment Completed ==="
+'
