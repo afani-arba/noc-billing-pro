@@ -905,9 +905,48 @@ async def send_chat_message(data: ChatMessageRequest, customer=Depends(get_curre
                                     f"https://api.telegram.org/bot{telegram_token}/sendMessage",
                                     json={"chat_id": telegram_chat_id, "text": alert_msg, "parse_mode": "Markdown"}
                                 )
-                            ai_reply += "\n\n📡 Tim NOC kami sudah mendapat notifikasi dan segera memeriksa kondisi jaringan di lokasi Anda."
                         except Exception:
                             pass
+                            
+                    # OTOMATIS BUAT INCIDENT & WORK ORDER (POOL)
+                    import uuid
+                    inc_id = f"INC-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+                    wo_id = f"WO-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+                    
+                    await db.incidents.insert_one({
+                        "id": inc_id,
+                        "title": f"Gangguan Fisik Kabel/LOS: {customer.get('name')}",
+                        "description": data.message,
+                        "device_id": customer.get("device_id", ""),
+                        "device_name": "CPE",
+                        "severity": "high",
+                        "status": "open",
+                        "assignee": "",
+                        "site": customer.get("address", ""),
+                        "created_at": now,
+                        "updated_at": now,
+                        "resolved_at": None,
+                        "created_by": "AI System",
+                        "comments": [],
+                        "timeline": [{"action": "created", "by": "AI", "at": now, "note": "Dibuat otomatis oleh AI (Deteksi CABLE_ISSUE)"}]
+                    })
+                    
+                    await db.work_orders.insert_one({
+                        "id": wo_id,
+                        "incident_id": inc_id,
+                        "customer_id": customer.get("id"),
+                        "customer_name": customer.get("name"),
+                        "customer_address": customer.get("address"),
+                        "customer_phone": customer.get("phone"),
+                        "status": "pending",
+                        "created_at": now,
+                        "updated_at": now,
+                        "assigned_to": "", # Masuk Pool Antrean
+                        "task_type": "troubleshooting",
+                        "notes": "Keluhan Fisik (Lampu Merah/Kabel LOS):\n" + data.message
+                    })
+                    
+                    ai_reply += "\n\n📡 Tim teknisi NOC kami sudah mendapat tugas pengecekan otomatis dan segera memeriksa kondisi jaringan Anda."
 
                 elif "[NEEDS_CS]" in ai_reply:
                     action_taken = "needs_cs"
@@ -918,6 +957,46 @@ async def send_chat_message(data: ChatMessageRequest, customer=Depends(get_curre
                             {"id": ticket["id"]},
                             {"$set": {"status": "escalated"}}
                         )
+                        
+                    # OTOMATIS BUAT INCIDENT & WORK ORDER (POOL)
+                    import uuid
+                    inc_id = f"INC-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+                    wo_id = f"WO-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid.uuid4())[:6].upper()}"
+                    
+                    await db.incidents.insert_one({
+                        "id": inc_id,
+                        "title": f"Eskalasi Gangguan: {customer.get('name')}",
+                        "description": data.message,
+                        "device_id": customer.get("device_id", ""),
+                        "device_name": "CPE",
+                        "severity": "medium",
+                        "status": "open",
+                        "assignee": "",
+                        "site": customer.get("address", ""),
+                        "created_at": now,
+                        "updated_at": now,
+                        "resolved_at": None,
+                        "created_by": "AI System",
+                        "comments": [],
+                        "timeline": [{"action": "created", "by": "AI", "at": now, "note": "Dibuat otomatis oleh AI (Eskalasi CS)"}]
+                    })
+                    
+                    await db.work_orders.insert_one({
+                        "id": wo_id,
+                        "incident_id": inc_id,
+                        "customer_id": customer.get("id"),
+                        "customer_name": customer.get("name"),
+                        "customer_address": customer.get("address"),
+                        "customer_phone": customer.get("phone"),
+                        "status": "pending",
+                        "created_at": now,
+                        "updated_at": now,
+                        "assigned_to": "", # Masuk Pool Antrean
+                        "task_type": "troubleshooting",
+                        "notes": "Eskalasi Lanjutan (Cek Koneksi / Keluhan Lain):\n" + data.message
+                    })
+                    
+                    ai_reply += "\n\n📡 Laporan Anda sudah kami terima dan sedang diteruskan ke Tim Teknisi & CS kami untuk tindak lanjut pengecekan."
 
         except Exception as ai_err:
             pass  # AI gagal — lanjut tanpa reply

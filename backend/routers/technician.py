@@ -40,18 +40,68 @@ async def list_work_orders(
     user=Depends(get_current_technician)
 ):
     db = get_db()
-    query = {"assigned_to": user["username"]}
+    
+    # 1. My Orders (assigned to me)
+    my_query = {"assigned_to": user["username"]}
     if status:
-        query["status"] = status
+        my_query["status"] = status
         
+    my_orders = await db.work_orders.find(my_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # 2. Pool Orders (unassigned, pending)
+    pool_query = {"assigned_to": "", "status": "pending"}
+    pool_orders = await db.work_orders.find(pool_query, {"_id": 0}).sort("created_at", 1).to_list(100) # FIFO: oldest first
+
     # Also allow super admins to see all
     if user.get("role") in ["super_admin", "administrator"]:
-        query = {}
+        admin_query = {}
         if status:
-            query["status"] = status
+            admin_query["status"] = status
+        all_orders = await db.work_orders.find(admin_query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        return {"ok": True, "data": all_orders, "my_orders": my_orders, "pool_orders": pool_orders}
 
-    orders = await db.work_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return {"ok": True, "data": orders}
+    return {"ok": True, "data": my_orders, "my_orders": my_orders, "pool_orders": pool_orders}
+
+@router.post("/work-orders/{wo_id}/claim")
+async def claim_work_order(wo_id: str, user=Depends(get_current_technician)):
+    db = get_db()
+    
+    # Check current active tasks
+    active_count = await db.work_orders.count_documents({
+        "assigned_to": user["username"],
+        "status": {"$in": ["pending", "on_the_way", "working"]}
+    })
+    
+    if active_count >= 2:
+        raise HTTPException(400, "Anda sudah memiliki batas maksimal (2) tugas aktif yang belum diselesaikan.")
+        
+    wo = await db.work_orders.find_one({"id": wo_id})
+    if not wo:
+        raise HTTPException(404, "Work Order tidak ditemukan")
+    if wo.get("assigned_to"):
+        raise HTTPException(400, "Work Order ini sudah diambil oleh teknisi lain")
+        
+    now = datetime.now(timezone.utc).isoformat()
+    await db.work_orders.update_one(
+        {"id": wo_id},
+        {"$set": {"assigned_to": user["username"], "updated_at": now}}
+    )
+    
+    # Update incident timeline if linked
+    if wo.get("incident_id"):
+        await db.incidents.update_one(
+            {"id": wo["incident_id"]},
+            {"$push": {
+                "timeline": {
+                    "action": "assigned",
+                    "by": user["username"],
+                    "at": now,
+                    "note": f"Tiket diambil (claim) oleh teknisi {user['username']}"
+                }
+            }, "$set": {"assignee": user["username"], "updated_at": now}}
+        )
+        
+    return {"ok": True, "message": "Tugas berhasil diklaim!"}
 
 @router.get("/work-orders/{wo_id}")
 async def get_work_order(wo_id: str, user=Depends(get_current_technician)):
